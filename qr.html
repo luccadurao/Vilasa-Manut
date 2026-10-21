@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apontamento de Turno / Horímetro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between p-4">
+
+  <!-- Cabeçalho Limpo -->
+  <header class="text-center py-2">
+    <div class="inline-flex items-center gap-2 bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700 text-sm text-amber-400 font-semibold shadow">
+      <i class="fa-solid fa-qrcode"></i> Diário de Bordo Operacional
+    </div>
+  </header>
+
+  <!-- Card Principal -->
+  <main class="w-full max-w-md mx-auto bg-slate-800/90 backdrop-blur border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-5">
+    
+    <!-- Identificação do Equipamento -->
+    <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 text-center">
+      <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">Equipamento Identificado</span>
+      <h1 id="tagEquipamento" class="text-2xl font-black text-amber-400 mt-1">Carregando...</h1>
+      <p id="nomeEquipamento" class="text-xs text-slate-300 mt-0.5">Aguarde a leitura do QR Code...</p>
+      <div class="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-800">
+        <i class="fa-solid fa-clock-rotate-left"></i> Último Horímetro: <strong id="horimetroAtualTxt">---</strong>
+      </div>
+    </div>
+
+    <!-- Status de Turno em Aberto -->
+    <div id="alertaTurnoAberto" class="hidden bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg text-xs text-amber-300 space-y-1">
+      <p class="font-bold flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Turno anterior em aberto!</p>
+      <p id="txtTurnoAberto">Operador anterior: <span class="font-semibold" id="nomeOpAnterior">---</span></p>
+      <p class="text-[11px] text-amber-400/80">Ao registrar seu início, o turno anterior será finalizado automaticamente com o horímetro informado.</p>
+    </div>
+
+    <!-- Formulário de Apontamento -->
+    <form id="formHorimetro" class="space-y-4" onsubmit="event.preventDefault(); submeterApontamento();">
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Seu Nome / Matrícula</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-user"></i></span>
+          <input type="text" id="campoOperador" required placeholder="Ex: João da Silva ou 1045"
+            class="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Horímetro Atual no Painel</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-gauge-high"></i></span>
+          <input type="number" step="0.1" id="campoHorimetro" required placeholder="0.0"
+            class="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-lg font-bold text-amber-400 placeholder-slate-600 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+        <p class="text-[10px] text-slate-400 mt-1">Digite o valor com os decimais exibidos no horímetro da cabine.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">PIN de Operação (4 dígitos)</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-lock"></i></span>
+          <input type="password" maxlength="4" id="campoPin" required placeholder="****"
+            class="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-center tracking-widest text-base font-mono text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+      </div>
+
+      <!-- Alertas de Diagnóstico / Validação -->
+      <div id="mensagemFeedback" class="hidden p-3 rounded-lg text-xs font-medium"></div>
+
+      <!-- Botões de Ação -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button type="button" onclick="submeterApontamento('inicio')" id="btnInicio"
+          class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-1">
+          <i class="fa-solid fa-play text-sm"></i>
+          <span class="text-xs uppercase tracking-wider">Iniciar Turno</span>
+        </button>
+        <button type="button" onclick="submeterApontamento('fim')" id="btnFim"
+          class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-1">
+          <i class="fa-solid fa-flag-checkered text-sm"></i>
+          <span class="text-xs uppercase tracking-wider">Finalizar Turno</span>
+        </button>
+      </div>
+    </form>
+  </main>
+
+  <!-- Rodapé com Fallback para Código Curto -->
+  <footer class="w-full max-w-md mx-auto text-center py-3 text-xs text-slate-500 space-y-1">
+    <p>Adesivo com problema? <button onclick="digitarCodigoCurtoManual()" class="text-amber-400 underline hover:text-amber-300">Digitar código da máquina</button></p>
+    <p class="text-[10px] text-slate-600">CMMS Manutenção Industrial &bull; Hora oficial do servidor ativa</p>
+  </footer>
+
+  <script>
+    let maquinaAtual = null;
+    let turnoAbertoAtual = null;
+    let deltaMaximoConfig = 24;
+
+    // Pega o token da URL (ex: qr.html?token=UUID ou qr.html?tag=ESC01)
+    async function inicializarTela() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const tagManual = params.get('tag');
+
+      if (!token && !tagManual) {
+        exibirFeedback("Nenhum equipamento escaneado. Use o botão abaixo para digitar o código.", "bg-amber-900/40 text-amber-300 border border-amber-700");
+        document.getElementById('tagEquipamento').innerText = "CÓDIGO NÃO INFORMADO";
+        return;
+      }
+
+      try {
+        let query = db.from('equipamentos').select('*').eq('ativo', true);
+        if (token) query = query.eq('qr_token', token);
+        else if (tagManual) query = query.or(`tag.eq.${tagManual},codigo_curto.eq.${tagManual}`);
+
+        const { data, error } = await query.single();
+        if (error || !data) {
+          exibirFeedback("Equipamento não encontrado ou QR Code desativado.", "bg-rose-900/40 text-rose-300 border border-rose-700");
+          document.getElementById('tagEquipamento').innerText = "ERRO 404";
+          return;
+        }
+
+        maquinaAtual = data;
+        document.getElementById('tagEquipamento').innerText = data.tag;
+        document.getElementById('nomeEquipamento').innerText = `${data.nome} (${data.setor})`;
+        document.getElementById('horimetroAtualTxt').innerText = `${parseFloat(data.horimetro_atual).toFixed(1)} h`;
+        document.getElementById('campoHorimetro').placeholder = parseFloat(data.horimetro_atual).toFixed(1);
+
+        // Busca configurações do sistema
+        const { data: config } = await db.from('configuracoes_sistema').select('*').eq('id', 1).single();
+        if (config) deltaMaximoConfig = parseFloat(config.delta_maximo_horimetro) || 24;
+
+        // Verifica se há turno aberto para este equipamento
+        verificarTurnoAberto();
+      } catch (err) {
+        console.error(err);
+        exibirFeedback("Falha na conexão com o banco de dados.", "bg-rose-900/40 text-rose-300 border border-rose-700");
+      }
+    }
+
+    async function verificarTurnoAberto() {
+      const { data } = await db.from('diario_horimetro')
+        .select('*')
+        .eq('equipamento_id', maquinaAtual.id)
+        .eq('status_turno', 'aberto')
+        .order('inicio_turno_em', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        turnoAbertoAtual = data[0];
+        document.getElementById('alertaTurnoAberto').classList.remove('hidden');
+        document.getElementById('nomeOpAnterior').innerText = turnoAbertoAtual.nome_operador;
+      } else {
+        turnoAbertoAtual = null;
+        document.getElementById('alertaTurnoAberto').classList.add('hidden');
+      }
+    }
+
+    async function submeterApontamento(tipoAcao) {
+      if (!maquinaAtual) return alert("Aguarde a identificação do equipamento!");
+
+      const nomeOp = document.getElementById('campoOperador').value.trim();
+      const horimetro = parseFloat(document.getElementById('campoHorimetro').value);
+      const pin = document.getElementById('campoPin').value.trim();
+
+      if (!nomeOp) return alert("Por favor, digite seu nome ou matrícula!");
+      if (isNaN(horimetro)) return alert("Por favor, digite o horímetro correto!");
+      if (!pin) return alert("Digite o PIN de 4 dígitos!");
+
+      // 1. Validação de PIN
+      const { data: config } = await db.from('configuracoes_sistema').select('pin_operacao').eq('id', 1).single();
+      if (!config || config.pin_operacao !== pin) {
+        return exibirFeedback("PIN de operação incorreto! Verifique com o encarregado.", "bg-rose-900/40 text-rose-300 border border-rose-700");
+      }
+
+      // 2. Trava Matemática (Anti-erro de digitação)
+      const ultimoHorimetro = parseFloat(maquinaAtual.horimetro_atual);
+      if (horimetro < ultimoHorimetro) {
+        return exibirFeedback(`Horímetro inválido! O valor digitado (${horimetro}) é menor que o último registrado (${ultimoHorimetro}).`, "bg-rose-900/40 text-rose-300 border border-rose-700");
+      }
+
+      if (horimetro - ultimoHorimetro > deltaMaximoConfig) {
+        return exibirFeedback(`Alerta de salto: a diferença é maior que ${deltaMaximoConfig} horas. Confira se não digitou um zero a mais.`, "bg-rose-900/40 text-rose-300 border border-rose-700");
+      }
+
+      // 3. Captura de GPS (Opcional)
+      let lat = null, lon = null;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000 }));
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        } catch (e) { /* Segue sem GPS se negado */ }
+      }
+
+      try {
+        if (tipoAcao === 'inicio') {
+          // Se havia turno aberto de outro operador, fecha automaticamente
+          if (turnoAbertoAtual) {
+            await db.from('diario_horimetro').update({
+              horimetro_final: horimetro,
+              fim_turno_em: new Date().toISOString(),
+              status_turno: 'fechado_automatico_troca_turno'
+            }).eq('id', turnoAbertoAtual.id);
+          }
+
+          // Abre o novo turno
+          const { error } = await db.from('diario_horimetro').insert([{
+            equipamento_id: maquinaAtual.id,
+            nome_operador: nomeOp,
+            horimetro_inicial: horimetro,
+            latitude: lat,
+            longitude: lon,
+            status_turno: 'aberto'
+          }]);
+          if (error) throw error;
+
+          // Atualiza o horímetro atual da máquina
+          await db.from('equipamentos').update({ horimetro_atual: horimetro, updated_at: new Date().toISOString() }).eq('id', maquinaAtual.id);
+
+          exibirFeedback("✅ Início de turno registrado com sucesso! Boa operação.", "bg-emerald-900/40 text-emerald-300 border border-emerald-700");
+        } else if (tipoAcao === 'fim') {
+          // Finaliza o turno atual
+          let queryFim = db.from('diario_horimetro').update({
+            horimetro_final: horimetro,
+            fim_turno_em: new Date().toISOString(),
+            status_turno: 'fechado'
+          });
+
+          if (turnoAbertoAtual) {
+            await queryFim.eq('id', turnoAbertoAtual.id);
+          } else {
+            // Se fechou sem ter aberto antes, cria um registro fechado direto
+            await db.from('diario_horimetro').insert([{
+              equipamento_id: maquinaAtual.id,
+              nome_operador: nomeOp,
+              horimetro_inicial: ultimoHorimetro,
+              horimetro_final: horimetro,
+              fim_turno_em: new Date().toISOString(),
+              latitude: lat,
+              longitude: lon,
+              status_turno: 'fechado'
+            }]);
+          }
+
+          // Atualiza o horímetro atual da máquina
+          await db.from('equipamentos').update({ horimetro_atual: horimetro, updated_at: new Date().toISOString() }).eq('id', maquinaAtual.id);
+
+          exibirFeedback("🏁 Turno finalizado com sucesso! Horímetro gravado.", "bg-blue-900/40 text-blue-300 border border-blue-700");
+        }
+
+        // Limpa campos e atualiza tela
+        document.getElementById('campoHorimetro').value = '';
+        document.getElementById('campoPin').value = '';
+        maquinaAtual.horimetro_atual = horimetro;
+        document.getElementById('horimetroAtualTxt').innerText = `${horimetro.toFixed(1)} h`;
+        verificarTurnoAberto();
+      } catch (err) {
+        console.error(err);
+        exibirFeedback("Erro ao gravar dados no servidor. Verifique sua conexão.", "bg-rose-900/40 text-rose-300 border border-rose-700");
+      }
+    }
+
+    function exibirFeedback(texto, classes) {
+      const div = document.getElementById('mensagemFeedback');
+      div.className = `p-3 rounded-lg text-xs font-medium ${classes}`;
+      div.innerText = texto;
+      div.classList.remove('hidden');
+    }
+
+    function digitarCodigoCurtoManual() {
+      const codigo = prompt("Digite a TAG (ex: ESC-01) ou o código curto da máquina:");
+      if (codigo) window.location.search = `?tag=${encodeURIComponent(codigo.trim().toUpperCase())}`;
+    }
+
+    window.onload = inicializarTela;
+  </script>
+</body>
+</html>
