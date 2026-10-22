@@ -10,6 +10,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="config.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @media print {
+      body { background: #ffffff !important; color: #000000 !important; }
+      .no-print { display: none !important; }
+      .print-box { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; }
+    }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
@@ -57,7 +64,7 @@
   <div id="appPrincipal" class="hidden min-h-screen flex flex-col md:flex-row">
 
     <!-- Menu Lateral (Sidebar) -->
-    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between shrink-0 print:hidden">
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between shrink-0 no-print">
       <div>
         <div class="p-4 border-b border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-2.5">
@@ -94,14 +101,14 @@
             <i class="fa-solid fa-chart-line w-4 text-center"></i> KPIs & Relatórios
           </button>
           <button onclick="navegarPara('admin')" id="nav-admin" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-users-gear w-4 text-center"></i> Admin & Backup
+            <i class="fa-solid fa-users-gear w-4 text-center"></i> Admin, Edição & Base
           </button>
         </nav>
       </div>
 
       <div class="hidden md:block p-3 border-t border-slate-800 text-[11px] text-slate-400">
         <div class="flex items-center gap-1.5 text-emerald-400 font-medium">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sistema Online (V2)
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sistema Completo (V3)
         </div>
       </div>
     </aside>
@@ -110,20 +117,20 @@
     <main class="flex-1 p-4 md:p-6 overflow-y-auto space-y-6">
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 1: ORDENS DE SERVIÇO (LOCALIZAÇÃO + MULTI-EXECUTANTES)     -->
+      <!-- MÓDULO 1: ORDENS DE SERVIÇO                                       -->
       <!-- ================================================================= -->
       <section id="sec-os" class="modulo-section space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 no-print">
           <div>
             <h2 class="text-lg font-bold text-white">Ordens de Serviço (Campo & Oficina)</h2>
-            <p class="text-xs text-slate-400">Registro com localização, solicitante e atribuição de múltiplos executantes no fechamento</p>
+            <p class="text-xs text-slate-400">Abertura rápida com localização e fechamento com múltiplos executantes</p>
           </div>
           <button onclick="abrirModalNovaOS()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
             <i class="fa-solid fa-plus"></i> Abrir Nova OS
           </button>
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 no-print">
           <button onclick="carregarOrdensServico('ativas')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700">
             Fila da Oficina (Abertas / Em Execução)
           </button>
@@ -159,7 +166,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-bold text-white">Controle de Preventivas Acumulativas (PCM)</h2>
-            <p class="text-xs text-slate-400">Ciclos múltiplos (Ex: 250 &rarr; 500 &rarr; 750 &rarr; 1000) em Horas ou KM onde o maior soma as tarefas do menor</p>
+            <p class="text-xs text-slate-400">Ciclos múltiplos (250 &rarr; 500 &rarr; 750 &rarr; 1000) em Horas ou KM</p>
           </div>
           <button onclick="abrirModalPlanoPreventiva()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
             <i class="fa-solid fa-plus"></i> Configurar Plano Acumulativo
@@ -176,11 +183,10 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-bold text-white">Almoxarifado, Equivalências e Notas Fiscais</h2>
-            <p class="text-xs text-slate-400">Controle de múltiplos fabricantes (Part Numbers), Entrada rastreada por NF e Saída Avulsa</p>
+            <p class="text-xs text-slate-400">Controle de múltiplos fabricantes (Part Numbers), Entrada por NF e Saída Avulsa</p>
           </div>
-          <!-- 3 Botões Separados conforme solicitado -->
           <div class="flex flex-wrap gap-2">
-            <button onclick="document.getElementById('modalPeca').classList.remove('hidden')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5">
+            <button onclick="abrirModalNovaPeca()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5">
               <i class="fa-solid fa-box"></i> 1. Cadastrar Item Novo
             </button>
             <button onclick="abrirModalEntradaNF()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow">
@@ -192,14 +198,12 @@
           </div>
         </div>
 
-        <!-- Busca Rápida por Equivalência / Fabricante / Máquina -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-2">
           <i class="fa-solid fa-magnifying-glass text-slate-400 pl-2"></i>
           <input type="text" id="buscaEstoqueInput" oninput="filtrarTabelaEstoque()" placeholder="Buscar peça por Código, Part Number Equivalente (CAT, Donaldson, Tecfil...), Nome ou Máquina..."
             class="w-full bg-transparent text-xs text-white focus:outline-none" />
         </div>
 
-        <!-- Baixas Pendentes vindas das OS -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
           <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
             <i class="fa-solid fa-clock"></i> Peças Requisitadas nas OS (Pendentes de Confirmação)
@@ -207,13 +211,11 @@
           <div id="listaBaixasPendentes" class="space-y-2 text-xs"></div>
         </div>
 
-        <!-- Catálogo de Peças e Equivalências -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
           <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Saldo em Estoque e Part Numbers Equivalentes</h3>
           <div id="listaCatalogoPecas" class="overflow-x-auto"></div>
         </div>
 
-        <!-- Histórico Recente de Notas Fiscais e Saídas Avulsas -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
           <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Últimas Entradas (Notas Fiscais) e Saídas Diretas</h3>
           <div id="listaHistoricoMovimentos" class="overflow-x-auto text-xs"></div>
@@ -221,33 +223,225 @@
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 5: KPIs E RELATÓRIOS (SERÁ EXPANDIDO NO LOTE 3)            -->
+      <!-- MÓDULO 5: SUPER PAINEL DE KPIs E RELATÓRIOS (EXCEL & PDF)         -->
       <!-- ================================================================= -->
       <section id="sec-kpis" class="modulo-section hidden space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Indicadores de Manutenção (KPIs)</h2>
-            <p class="text-xs text-slate-400">Disponibilidade, MTBF, MTTR, Confiabilidade R(t) e Custos</p>
+            <h2 class="text-lg font-bold text-white">Painel Analítico de Indicadores (KPIs) & Relatórios</h2>
+            <p class="text-xs text-slate-400">Disponibilidade, Confiabilidade R(t), MTBF, MTTR, HH, Tempo Parado e Custos por Máquina</p>
+          </div>
+          <div class="flex flex-wrap gap-2 no-print">
+            <button onclick="exportarRelatorioKPIsExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-file-excel"></i> Exportar Relatório Excel (.xlsx)
+            </button>
+            <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-file-pdf"></i> Imprimir / Salvar PDF
+            </button>
           </div>
         </div>
-        <div id="containerResumoKPIs" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+
+        <!-- Barra de Filtros (Equipamento, Período e Tempo de Missão para Confiabilidade) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs no-print">
+          <div>
+            <label class="block text-slate-400 mb-1">Filtrar Equipamento</label>
+            <select id="kpiFiltroEquipamento" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-semibold">
+              <option value="TODOS">Todos os Equipamentos (Frota Geral)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Data Inicial</label>
+            <input type="date" id="kpiDataInicio" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Data Final</label>
+            <input type="date" id="kpiDataFim" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Missão Confiabilidade R(t)</label>
+            <select id="kpiTempoMissao" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-bold">
+              <option value="8">Turno de 8 Horas</option>
+              <option value="12">Turno de 12 Horas</option>
+              <option value="24" selected>Operação 24 Horas</option>
+              <option value="168">Semana (168 Horas)</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button onclick="calcularSuperKPIs()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-lg transition">
+              <i class="fa-solid fa-rotate"></i> Atualizar Indicadores
+            </button>
+          </div>
+        </div>
+
+        <!-- 8 Cards Principais de KPIs -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Disponibilidade Física (DF)</span>
+            <p id="kpiCardDF" class="text-2xl font-black text-emerald-400 mt-1">--%</p>
+            <span id="kpiSubDF" class="text-[11px] text-slate-500">Tempo disponível vs. parado</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Confiabilidade R(t)</span>
+            <p id="kpiCardConfiabilidade" class="text-2xl font-black text-cyan-400 mt-1">--%</p>
+            <span id="kpiSubConfiabilidade" class="text-[11px] text-slate-500">Probabilidade de operar sem falha</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">MTBF (Tempo Entre Falhas)</span>
+            <p id="kpiCardMTBF" class="text-2xl font-black text-blue-400 mt-1">-- h</p>
+            <span id="kpiSubMTBF" class="text-[11px] text-slate-500">Média de operação entre corretivas</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">MTTR (Tempo Médio de Reparo)</span>
+            <p id="kpiCardMTTR" class="text-2xl font-black text-amber-400 mt-1">-- h</p>
+            <span id="kpiSubMTTR" class="text-[11px] text-slate-500">Média de reparo por corretiva</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Total de Tempo Parado</span>
+            <p id="kpiCardTempoParado" class="text-2xl font-black text-rose-400 mt-1">-- h</p>
+            <span id="kpiSubTempoParado" class="text-[11px] text-slate-500">Soma das paradas no período</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Esforço Oficina (Homem-Hora)</span>
+            <p id="kpiCardHH" class="text-2xl font-black text-purple-400 mt-1">-- HH</p>
+            <span class="text-[11px] text-slate-500">Considerando múltiplos executantes</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Gasto Aplicado no Período</span>
+            <p id="kpiCardGastoPeriodo" class="text-2xl font-black text-rose-400 mt-1">R$ 0,00</p>
+            <span class="text-[11px] text-slate-500">Peças em OS + Saídas Avulsas</span>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl print-box">
+            <span class="text-xs text-slate-400">Capital Imobilizado (Estoque)</span>
+            <p id="kpiCardValorEstoque" class="text-2xl font-black text-emerald-400 mt-1">R$ 0,00</p>
+            <span class="text-[11px] text-slate-500">Valor total atual na prateleira</span>
+          </div>
+        </div>
+
+        <!-- Tabela Detalhada: Desempenho e Custo por Equipamento -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 print-box">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Ranking Detalhado por Equipamento (Paradas, MTBF, MTTR, Confiabilidade e Gasto Total)</h3>
+          <div id="tabelaKpisPorEquipamento" class="overflow-x-auto text-xs"></div>
+        </div>
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 6: ADMINISTRAÇÃO DE ACESSOS                                -->
+      <!-- MÓDULO 6: ADMIN (EDIÇÃO UNIVERSAL, IMPORTADOR E BACKUP/EXPURGO)   -->
       <!-- ================================================================= -->
       <section id="sec-admin" class="modulo-section hidden space-y-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Administração Geral</h2>
-            <p class="text-xs text-slate-400">Gestão de usuários, edição de registros e backups</p>
+            <h2 class="text-lg font-bold text-white">Central do Administrador (Controle Total, Importação e Backup)</h2>
+            <p class="text-xs text-slate-400">Modifique qualquer registro já lançado, importe planilhas e faça expurgo seguro da nuvem</p>
           </div>
           <button onclick="document.getElementById('modalUsuario').classList.remove('hidden')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
             <i class="fa-solid fa-user-plus"></i> Novo Usuário
           </button>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <!-- Abas Internas do Admin -->
+        <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+          <button onclick="AlternarAbaAdmin('editor')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 text-slate-950" id="btnAbaAdmin-editor">
+            <i class="fa-solid fa-pen-to-square"></i> 1. Editor Universal de Registros
+          </button>
+          <button onclick="AlternarAbaAdmin('importador')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800" id="btnAbaAdmin-importador">
+            <i class="fa-solid fa-file-import"></i> 2. Importar Base Existente (Excel/CSV)
+          </button>
+          <button onclick="AlternarAbaAdmin('backup')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800" id="btnAbaAdmin-backup">
+            <i class="fa-solid fa-cloud-arrow-down"></i> 3. Backup Geral & Expurgo da Nuvem
+          </button>
+          <button onclick="AlternarAbaAdmin('usuarios')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800" id="btnAbaAdmin-usuarios">
+            <i class="fa-solid fa-users"></i> 4. Gestão de Usuários
+          </button>
+        </div>
+
+        <!-- ABA ADMIN 1: EDITOR UNIVERSAL (MODO DEUS) -->
+        <div id="abaAdmin-editor" class="aba-admin-content bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-bold text-amber-400">Editor Universal (Modificar ou Excluir Entradas Já Feitas)</h3>
+              <p class="text-xs text-slate-400">Selecione a tabela abaixo para editar qualquer campo ou excluir lançamentos incorretos.</p>
+            </div>
+            <select id="selectTabelaEditorAdmin" onchange="carregarTabelaEditorAdmin()" class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold text-white">
+              <option value="equipamentos">Frota / Equipamentos</option>
+              <option value="ordens_servico">Ordens de Serviço (OS)</option>
+              <option value="diario_horimetro">Lançamentos de Horímetro / KM (Operadores)</option>
+              <option value="pecas_estoque">Catálogo de Peças (Almoxarifado)</option>
+              <option value="itens_os_estoque">Histórico de Notas Fiscais / Saídas de Estoque</option>
+              <option value="planos_preventiva">Planos de Preventiva (PCM)</option>
+            </select>
+          </div>
+          <div id="containerTabelaEditorAdmin" class="overflow-x-auto text-xs"></div>
+        </div>
+
+        <!-- ABA ADMIN 2: IMPORTADOR DE BASE EXISTENTE -->
+        <div id="abaAdmin-importador" class="aba-admin-content hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <h3 class="text-sm font-bold text-emerald-400"><i class="fa-solid fa-file-excel"></i> Importador Rápido de Base Existente (Excel / CSV)</h3>
+          <p class="text-xs text-slate-300">Você pode subir um arquivo <strong>.xlsx / .csv</strong> OU simplesmente copiar as linhas lá do seu Excel (Ctrl+C) e colar na caixa abaixo:</p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label class="block text-slate-400 mb-1">1. O que você deseja importar agora?</label>
+              <select id="importTipoDestino" onchange="atualizarInstrucoesImportacao()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-bold">
+                <option value="equipamentos">Frota de Equipamentos</option>
+                <option value="pecas_estoque">Catálogo de Peças do Almoxarifado</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">2. Ou selecione um arquivo Excel (.xlsx / .csv)</label>
+              <input type="file" id="importArquivoInput" accept=".xlsx,.xls,.csv" onchange="lerArquivoExcelImportacao(event)" class="w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-amber-400 file:font-bold" />
+            </div>
+          </div>
+
+          <div id="instrucoesColunasImport" class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300 font-mono">
+            Ordem das colunas (separadas por TAB ou Ponto e Vírgula):<br>
+            <strong class="text-amber-400">TAG ; DESCRIÇÃO ; MARCA ; MODELO ; Nº SÉRIE ; UNIDADE (HORAS ou KM) ; LEITURA ATUAL</strong>
+          </div>
+
+          <textarea id="importTextoColado" rows="6" placeholder="Cole aqui as linhas copiadas do seu Excel (sem o cabeçalho)..."
+            class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white"></textarea>
+
+          <div class="flex justify-end">
+            <button onclick="processarImportacaoEmMassa()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-lg text-xs shadow">
+              <i class="fa-solid fa-bolt"></i> Processar e Importar para o Banco
+            </button>
+          </div>
+        </div>
+
+        <!-- ABA ADMIN 3: BACKUP COMPLETO E EXPURGO PARA LIBERAR ESPAÇO NA NUVEM -->
+        <div id="abaAdmin-backup" class="aba-admin-content hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-5">
+          <div>
+            <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-database"></i> Backup Completo em Excel e Limpeza de Espaço (Expurgo da Nuvem)</h3>
+            <p class="text-xs text-slate-400 mt-1">Exporte toda a base de dados em um único arquivo Excel com várias abas e remova registros antigos para manter os 500 MB gratuitos sempre livres.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Passo 1: Download Obrigatório -->
+            <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Passo 1 (Segurança)</span>
+              <h4 class="text-sm font-bold text-white">Baixar Backup Completo da Base (.XLSX)</h4>
+              <p class="text-xs text-slate-400">Gera uma planilha Excel contendo todas as tabelas: Frota, Ordens de Serviço, Diários de Horímetro, Catálogo de Peças e Notas Fiscais/Movimentações.</p>
+              <button onclick="gerarBackupCompletoExcel()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 shadow">
+                <i class="fa-solid fa-download"></i> 1. Baixar Backup Completo Agora (.XLSX)
+              </button>
+            </div>
+
+            <!-- Passo 2: Expurgo Seguro -->
+            <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">Passo 2 (Liberação de Espaço)</span>
+              <h4 class="text-sm font-bold text-white">Expurgar Histórico Antigo da Nuvem</h4>
+              <div class="text-xs space-y-2">
+                <label class="block text-slate-400">Apagar OS Concluídas e Horímetros anteriores à data:</label>
+                <input type="date" id="dataCorteExpurgo" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+              </div>
+              <button id="btnExecutarExpurgo" disabled onclick="executarExpurgoNuvem()" class="w-full bg-rose-600/30 text-rose-300/50 cursor-not-allowed font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-trash-can"></i> 2. Faça o Backup no Passo 1 para Liberar este Botão
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA ADMIN 4: USUÁRIOS -->
+        <div id="abaAdmin-usuarios" class="aba-admin-content hidden bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Equipe Cadastrada</h3>
           <div id="listaUsuariosAdmin" class="overflow-x-auto"></div>
         </div>
@@ -257,14 +451,34 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAIS DO LOTE 2                                                      -->
+  <!-- MODAIS DE OPERAÇÃO E EDIÇÃO UNIVERSAL                                 -->
   <!-- ===================================================================== -->
 
-  <!-- Modal: Cadastrar / Editar Equipamento (Com Marca, Modelo, Série e Horas/KM) -->
+  <!-- Modal Universal do Admin para Editar Qualquer Registro (JSON/Campos Dinâmicos) -->
+  <div id="modalEditorUniversal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-lg space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-base font-bold text-amber-400"><i class="fa-solid fa-pen-to-square"></i> Editar Registro (Modo Admin)</h3>
+        <span id="labelTabelaEditorModal" class="text-xs font-mono text-slate-400"></span>
+      </div>
+      <input type="hidden" id="editorRegistroId" />
+      <div id="camposDinamicosEditor" class="space-y-3 text-xs overflow-y-auto pr-1 flex-1"></div>
+      <div class="flex justify-between gap-2 pt-3 border-t border-slate-800">
+        <button onclick="excluirRegistroModoDeus()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 px-3 py-2 rounded-lg text-xs font-bold">
+          <i class="fa-solid fa-trash"></i> Excluir Registro
+        </button>
+        <div class="flex gap-2">
+          <button onclick="document.getElementById('modalEditorUniversal').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
+          <button onclick="salvarEdicaoModoDeus()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastrar Equipamento -->
   <div id="modalEquipamento" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
       <h3 class="text-base font-bold text-white">Cadastro de Equipamento</h3>
-      <input type="hidden" id="eqIdEdicao" value="" />
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -281,7 +495,7 @@
         </div>
         <div>
           <label class="block text-slate-300 mb-1">Descrição do Equipamento *</label>
-          <input type="text" id="eqNome" placeholder="Ex: Escavadeira Hidráulica / Caminhão Basculante" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input type="text" id="eqNome" placeholder="Ex: Escavadeira Hidráulica / Caminhão" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -321,14 +535,14 @@
         <div id="qrcodeCanvas" class="flex justify-center py-3"></div>
         <p class="text-xs font-mono bg-slate-100 py-1 rounded border border-slate-300">TAG Manual: <strong id="qrModalCurto">---</strong></p>
       </div>
-      <div class="flex justify-between gap-2 print:hidden">
+      <div class="flex justify-between gap-2 no-print">
         <button onclick="document.getElementById('modalQrCode').classList.add('hidden')" class="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-200 text-slate-800">Fechar</button>
         <button onclick="window.print()" class="flex-1 py-2 rounded-lg text-xs font-bold bg-amber-500 text-slate-950"><i class="fa-solid fa-print"></i> Imprimir</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Abrir Nova OS (Sem Prioridade/Parada, Com Localização e Quem Abriu) -->
+  <!-- Modal: Abrir Nova OS -->
   <div id="modalNovaOS" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
       <h3 class="text-base font-bold text-white">Abrir Ordem de Serviço</h3>
@@ -366,7 +580,7 @@
     </div>
   </div>
 
-  <!-- Modal: Concluir OS e Atribuir Múltiplos Executantes -->
+  <!-- Modal: Concluir OS e Múltiplos Executantes -->
   <div id="modalConcluirOS" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
       <h3 class="text-base font-bold text-white">Finalizar Ordem de Serviço e Atribuir Equipe</h3>
@@ -375,10 +589,9 @@
 
       <div class="space-y-3 text-xs">
         <div>
-          <label class="block text-slate-300 font-semibold mb-1">Selecione TODOS os Mecânicos/Executantes que trabalharam nesta OS:</label>
+          <label class="block text-slate-300 font-semibold mb-1">Selecione TODOS os Executantes que trabalharam nesta OS:</label>
           <div id="listaCheckboxesMecanicos" class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-2"></div>
-          <p class="text-[10px] text-slate-400 mt-1">Você também pode adicionar nomes avulsos abaixo caso necessário:</p>
-          <input type="text" id="concluirExecutantesExtras" placeholder="Outros executantes (separados por vírgula)" class="w-full mt-1 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input type="text" id="concluirExecutantesExtras" placeholder="Outros nomes avulsos (separados por vírgula)" class="w-full mt-2 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
 
         <div>
@@ -396,21 +609,21 @@
     </div>
   </div>
 
-  <!-- Modal 1 Almoxarifado: Cadastrar Item Novo (Com Equivalências e Aplicações) -->
+  <!-- Modal 1 Almoxarifado: Cadastrar Item Novo -->
   <div id="modalPeca" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-lg space-y-4">
       <h3 class="text-base font-bold text-white">1. Cadastrar Novo Item no Catálogo</h3>
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-3 gap-3">
-          <div class="col-span-1">
+          <div>
             <label class="block text-slate-300 mb-1">Código Principal *</label>
             <input type="text" id="pecaCodigo" placeholder="Ex: FIL-001" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase font-bold" />
           </div>
-          <div class="col-span-1">
+          <div>
             <label class="block text-slate-300 mb-1">Unidade</label>
-            <input type="text" id="pecaUnidade" value="UN" placeholder="UN, L, M, KG" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
+            <input type="text" id="pecaUnidade" value="UN" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
           </div>
-          <div class="col-span-1">
+          <div>
             <label class="block text-slate-300 mb-1">Local / Prateleira</label>
             <input type="text" id="pecaLocal" placeholder="Ex: Prateleira B2" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
@@ -421,11 +634,11 @@
         </div>
         <div>
           <label class="block text-amber-400 font-semibold mb-1">Part Numbers Equivalentes (Fabricantes Diferentes / Similares)</label>
-          <input type="text" id="pecaEquivalentes" placeholder="Ex: CAT: 1R-1808 | Donaldson: P551808 | Tecfil: PSL283 | Mann: W950" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input type="text" id="pecaEquivalentes" placeholder="Ex: CAT: 1R-1808 | Donaldson: P551808 | Tecfil: PSL283" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div>
           <label class="block text-emerald-400 font-semibold mb-1">Equipamentos onde esta peça aplica (TAGs ou Modelos)</label>
-          <input type="text" id="pecaEquipamentos" placeholder="Ex: ESC-01, ESC-02, PA-01, Motores CAT C7" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input type="text" id="pecaEquipamentos" placeholder="Ex: ESC-01, ESC-02, PA-01" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>
@@ -449,7 +662,7 @@
     </div>
   </div>
 
-  <!-- Modal 2 Almoxarifado: Dar Entrada de Material (Com Nota Fiscal) -->
+  <!-- Modal 2 Almoxarifado: Entrada com Nota Fiscal -->
   <div id="modalEntradaNF" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
       <h3 class="text-base font-bold text-emerald-400"><i class="fa-solid fa-file-invoice-dollar"></i> 2. Entrada de Material (Nota Fiscal)</h3>
@@ -464,7 +677,7 @@
             <input type="text" id="nfNumero" placeholder="Ex: NF 45892" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Fornecedor / Marca Recebida</label>
+            <label class="block text-slate-300 mb-1">Fornecedor / Marca</label>
             <input type="text" id="nfFornecedor" placeholder="Ex: Sotreq / Donaldson" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
@@ -481,12 +694,12 @@
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalEntradaNF').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="confirmarEntradaNF()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Registrar Entrada e Somar Saldo</button>
+        <button onclick="confirmarEntradaNF()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Registrar Entrada</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal 3 Almoxarifado: Dar Saída Avulsa (Sem OS / Direto pela Nota ou Balcão) -->
+  <!-- Modal 3 Almoxarifado: Saída Avulsa -->
   <div id="modalSaidaAvulsa" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
       <h3 class="text-base font-bold text-rose-400"><i class="fa-solid fa-arrow-right-from-bracket"></i> 3. Saída Avulsa de Material (Fora de OS)</h3>
@@ -501,27 +714,27 @@
             <input type="number" step="0.01" id="saidaQuantidade" value="1" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Nº NF / Doc Referência (Opcional)</label>
-            <input type="text" id="saidaNF" placeholder="Ex: NF 45892 ou Balcão" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-slate-300 mb-1">Nº NF / Doc Referência</label>
+            <input type="text" id="saidaNF" placeholder="Ex: NF 45892 ou Direto" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
         <div>
-          <label class="block text-amber-400 font-semibold mb-1">Aplicado em qual Equipamento? (Para contabilizar no KPI da máquina)</label>
+          <label class="block text-amber-400 font-semibold mb-1">Aplicado em qual Equipamento? (Contabiliza no Gasto da Máquina)</label>
           <select id="saidaEquipamentoSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Quem retirou / Motivo</label>
-          <input type="text" id="saidaObservacao" placeholder="Ex: Retirado no campo / Nota chegou direto" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <label class="block text-slate-300 mb-1">Quem retirou / Observação</label>
+          <input type="text" id="saidaObservacao" placeholder="Ex: Aplicação direta no campo" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalSaidaAvulsa').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="confirmarSaidaAvulsa()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Confirmar Baixa no Estoque</button>
+        <button onclick="confirmarSaidaAvulsa()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Confirmar Saída</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Plano Preventivo Acumulativo (Cascata 250 / 500 / 1000) -->
+  <!-- Modal: Plano Preventivo Acumulativo -->
   <div id="modalPlanoPCM" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-lg space-y-4">
       <h3 class="text-base font-bold text-white">Configurar Plano Preventivo em Cascata (Acumulativo)</h3>
@@ -534,7 +747,7 @@
           <div>
             <label class="block text-slate-300 mb-1">Passo Base do Ciclo (H ou KM) *</label>
             <select id="pcmIntervaloBase" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-bold">
-              <option value="250">Ciclo de 250 em 250 (250 / 500 / 1000)</option>
+              <option value="250">Ciclo de 250h (250 / 500 / 1000)</option>
               <option value="5000">Ciclo KM de 5.000 (5.000 / 10.000 / 20.000)</option>
               <option value="10000">Ciclo KM de 10.000 (10.000 / 20.000 / 40.000)</option>
             </select>
@@ -546,20 +759,20 @@
         </div>
         <div>
           <label class="block text-emerald-400 font-semibold mb-1">Tarefas Base (Ex: 250h ou 5.000 km)</label>
-          <textarea id="pcmTarefas250" rows="2" placeholder="Ex: Trocar óleo motor, filtro de óleo motor, filtro combustível primário..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+          <textarea id="pcmTarefas250" rows="2" placeholder="Ex: Trocar óleo motor, filtro de óleo..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
         </div>
         <div>
-          <label class="block text-amber-400 font-semibold mb-1">Tarefas Adicionais de Médio Ciclo (Ex: +500h — Soma automaticamente com a de 250h)</label>
-          <textarea id="pcmTarefas500" rows="2" placeholder="Ex: + Filtro de ar secundário, filtro hidráulico, análise de óleo..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+          <label class="block text-amber-400 font-semibold mb-1">Tarefas Adicionais de Médio Ciclo (+500h / +10.000km)</label>
+          <textarea id="pcmTarefas500" rows="2" placeholder="Ex: + Filtro de ar secundário, filtro hidráulico..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
         </div>
         <div>
-          <label class="block text-rose-400 font-semibold mb-1">Tarefas Adicionais de Grande Ciclo (Ex: +1000h — Soma com 250h e 500h)</label>
-          <textarea id="pcmTarefas1000" rows="2" placeholder="Ex: + Troca de óleo hidráulico, óleo de transmissão/comando final, regulagem de válvulas..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+          <label class="block text-rose-400 font-semibold mb-1">Tarefas Adicionais de Grande Ciclo (+1000h / +20.000km)</label>
+          <textarea id="pcmTarefas1000" rows="2" placeholder="Ex: + Troca óleo hidráulico, transmissão..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalPlanoPCM').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="salvarPlanoPCM()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Salvar Plano em Cascata</button>
+        <button onclick="salvarPlanoPCM()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Salvar Plano</button>
       </div>
     </div>
   </div>
@@ -603,13 +816,15 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- JAVASCRIPT PRINCIPAL (LOTE 2)                                         -->
+  <!-- LÓGICA JAVASCRIPT COMPLETA (LOTE 3 FINAL)                             -->
   <!-- ===================================================================== -->
   <script>
     let usuarioLogado = null;
     let cacheEquipamentos = [];
     let cachePecas = [];
     let cacheUsuarios = [];
+    let cacheRegistrosEditorAdmin = [];
+    let ultimoRelatorioKPIs = [];
 
     const PERMISSOES_MODULOS = {
       encarregado: ['os'],
@@ -666,6 +881,12 @@
         else btn.classList.add('hidden');
       });
 
+      // Inicializa datas padrão do filtro de KPIs (últimos 30 dias)
+      const hoje = new Date();
+      const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 3600 * 1000));
+      document.getElementById('kpiDataFim').value = hoje.toISOString().split('T')[0];
+      document.getElementById('kpiDataInicio').value = trintaDiasAtras.toISOString().split('T')[0];
+
       navegarPara(permitidos[0]);
     }
 
@@ -685,15 +906,14 @@
       if (modulo === 'frota') carregarFrota();
       if (modulo === 'pcm') carregarPCM();
       if (modulo === 'estoque') carregarEstoque();
-      if (modulo === 'kpis') carregarResumoKPIs();
-      if (modulo === 'admin') carregarAdmin();
+      if (modulo === 'kpis') inicializarTelaKPIs();
+      if (modulo === 'admin') { carregarTabelaEditorAdmin(); carregarAdminUsuarios(); }
     }
 
     // =====================================================================
-    // MÓDULO 2: FROTA (MARCA, MODELO, Nº SÉRIE, HORAS OU KM)
+    // MÓDULO 2: FROTA
     // =====================================================================
     function abrirModalEquipamento() {
-      document.getElementById('eqIdEdicao').value = '';
       document.getElementById('eqTag').value = '';
       document.getElementById('eqNome').value = '';
       document.getElementById('eqMarca').value = '';
@@ -785,7 +1005,7 @@
     }
 
     // =====================================================================
-    // MÓDULO 1: ORDENS DE SERVIÇO (LOCALIZAÇÃO + MULTI-EXECUTANTES)
+    // MÓDULO 1: ORDENS DE SERVIÇO
     // =====================================================================
     async function abrirModalNovaOS() {
       const { data } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
@@ -849,7 +1069,7 @@
       let query = db.from('ordens_servico')
         .select('*, equipamentos(tag, nome, modelo)')
         .order('aberta_em', { ascending: false })
-        .limit(50);
+        .limit(60);
 
       if (filtro === 'ativas') query = query.in('status', ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros']);
       else query = query.in('status', ['concluida_oficina', 'auditada_pcm']);
@@ -976,13 +1196,13 @@
         extras.split(',').map(s => s.trim()).filter(Boolean).forEach(nome => selecionados.push(nome));
       }
 
-      if (selecionados.length === 0) return alert("Selecione pelo menos um executante que trabalhou na OS!");
+      if (selecionados.length === 0) return alert("Selecione pelo menos um executante!");
       if (!servico) return alert("Descreva o serviço executado!");
 
       const { data: osAtual } = await db.from('ordens_servico').select('*').eq('id', osId).single();
       const agora = new Date();
-      const inicio = osAtual.iniciada_em ? new Date(osAtual.iniciada_em) : new Date(osAtual.aberta_em);
-      const segundosParada = Math.max(60, Math.floor((agora - inicio) / 1000));
+      const abertura = new Date(osAtual.aberta_em);
+      const segundosParada = Math.max(60, Math.floor((agora - abertura) / 1000));
 
       await db.from('ordens_servico').update({
         status: 'concluida_oficina',
@@ -1069,7 +1289,6 @@
         const proxAlvo = ultimo + base;
         const falta = proxAlvo - atual;
 
-        // Descobre qual degrau da escadinha é o próximo (250, 500 ou 1000)
         let nivelRevisao = `${base}${sufixo}`;
         let checklistAcumulado = `[REVISÃO ${base}${sufixo}]: ${p.tarefas_250 || p.checklist_tarefas}`;
 
@@ -1130,8 +1349,19 @@
     }
 
     // =====================================================================
-    // MÓDULO 4: ALMOXARIFADO (EQUIVALÊNCIAS, ENTRADA NF E SAÍDA AVULSA)
+    // MÓDULO 4: ALMOXARIFADO
     // =====================================================================
+    function abrirModalNovaPeca() {
+      document.getElementById('pecaCodigo').value = '';
+      document.getElementById('pecaDescricao').value = '';
+      document.getElementById('pecaEquivalentes').value = '';
+      document.getElementById('pecaEquipamentos').value = '';
+      document.getElementById('pecaLocal').value = '';
+      document.getElementById('pecaSaldo').value = '0';
+      document.getElementById('pecaCusto').value = '0.00';
+      document.getElementById('modalPeca').classList.remove('hidden');
+    }
+
     async function salvarPecaEstoque() {
       const codigo = document.getElementById('pecaCodigo').value.trim().toUpperCase();
       const unidade = document.getElementById('pecaUnidade').value.trim().toUpperCase() || 'UN';
@@ -1176,7 +1406,14 @@
       if (!pecaId || !nf || qtd <= 0) return alert("Informe a Peça, o Número da Nota Fiscal e a Quantidade!");
 
       const peca = cachePecas.find(p => p.id === pecaId);
-      const novoSaldo = parseFloat(peca.saldo_atual || 0) + qtd;
+      const saldoAntigo = Math.max(0, parseFloat(peca.saldo_atual || 0));
+      const custoAntigo = parseFloat(peca.custo_unitario_atual || 0);
+      const novoSaldo = saldoAntigo + qtd;
+
+      // Cálculo de custo médio ponderado se custoNF > 0
+      const novoCustoMedio = (custoNF > 0 && novoSaldo > 0)
+        ? ((saldoAntigo * custoAntigo) + (qtd * custoNF)) / novoSaldo
+        : custoAntigo;
 
       await db.from('itens_os_estoque').insert([{
         peca_id: pecaId,
@@ -1192,7 +1429,7 @@
 
       await db.from('pecas_estoque').update({
         saldo_atual: novoSaldo,
-        custo_unitario_atual: custoNF > 0 ? custoNF : peca.custo_unitario_atual
+        custo_unitario_atual: novoCustoMedio
       }).eq('id', pecaId);
 
       document.getElementById('modalEntradaNF').classList.add('hidden');
@@ -1246,7 +1483,6 @@
     }
 
     async function carregarEstoque() {
-      // 1. Baixas Pendentes de OS
       const { data: pendentes } = await db.from('itens_os_estoque')
         .select('*, pecas_estoque(codigo, descricao, saldo_atual), ordens_servico(numero_os)')
         .eq('status_baixa', 'pendente_almoxarife');
@@ -1269,22 +1505,20 @@
         `).join('');
       }
 
-      // 2. Catálogo com Equivalências
       const { data: pecas } = await db.from('pecas_estoque').select('*').eq('ativo', true).order('codigo');
       cachePecas = pecas || [];
       renderizarTabelaCatalogo(cachePecas);
 
-      // 3. Histórico de Entradas NF e Saídas Avulsas
       const { data: movs } = await db.from('itens_os_estoque')
         .select('*, pecas_estoque(codigo, descricao), equipamentos(tag)')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(25);
 
       document.getElementById('listaHistoricoMovimentos').innerHTML = `
         <table class="w-full text-left">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
-              <th class="py-1.5">Data</th><th>Tipo</th><th>Peça</th><th>Qtd</th><th>NF / Fornecedor</th><th>Máquina</th>
+              <th class="py-1.5">Data</th><th>Tipo</th><th>Peça</th><th>Qtd</th><th>Custo Unit.</th><th>NF / Fornecedor</th><th>Máquina / Destino</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/50">
@@ -1294,6 +1528,7 @@
                 <td class="font-bold ${m.tipo_movimento === 'entrada_nf' ? 'text-emerald-400' : 'text-rose-400'}">${m.tipo_movimento.toUpperCase()}</td>
                 <td>${m.pecas_estoque?.codigo} - ${m.pecas_estoque?.descricao}</td>
                 <td class="font-bold">${m.quantidade}</td>
+                <td>R$ ${parseFloat(m.custo_unitario_congelado || 0).toFixed(2)}</td>
                 <td class="text-amber-300">${m.nota_fiscal || '-'} ${m.fornecedor ? '(' + m.fornecedor + ')' : ''}</td>
                 <td>${m.equipamentos?.tag || m.observacao || '-'}</td>
               </tr>
@@ -1308,7 +1543,7 @@
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
-              <th class="py-2">Código</th><th>Descrição</th><th>Part Numbers Equivalentes (Similares)</th><th>Aplicação (Máquinas)</th><th>Local</th><th>Saldo</th><th>Custo Unit.</th>
+              <th class="py-2">Código</th><th>Descrição</th><th>Part Numbers Equivalentes (Similares)</th><th>Aplicação (Máquinas)</th><th>Local</th><th>Saldo</th><th>Custo Médio</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/60">
@@ -1345,23 +1580,392 @@
       carregarEstoque();
     }
 
-    // Resumo rápido de KPIs (Lote 3 trará o painel analítico completo com filtros e PDF/Excel)
-    async function carregarResumoKPIs() {
+    // =====================================================================
+    // MÓDULO 5: SUPER PAINEL DE KPIs (COM FILTROS, R(t), EXCEL E PDF)
+    // =====================================================================
+    async function inicializarTelaKPIs() {
+      const { data: eqs } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
+      cacheEquipamentos = eqs || [];
+      const sel = document.getElementById('kpiFiltroEquipamento');
+      const valorAtual = sel.value || 'TODOS';
+      sel.innerHTML = `<option value="TODOS">Todos os Equipamentos (Frota Geral)</option>` +
+        cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('');
+      sel.value = valorAtual;
+
+      calcularSuperKPIs();
+    }
+
+    async function calcularSuperKPIs() {
+      const eqFiltro = document.getElementById('kpiFiltroEquipamento').value;
+      const dInicio = document.getElementById('kpiDataInicio').value;
+      const dFim = document.getElementById('kpiDataFim').value;
+      const tempoMissao = parseFloat(document.getElementById('kpiTempoMissao').value) || 24;
+
+      const inicioISO = dInicio ? `${dInicio}T00:00:00.000Z` : '2020-01-01T00:00:00.000Z';
+      const fimISO = dFim ? `${dFim}T23:59:59.999Z` : new Date().toISOString();
+
+      // Horas calendário do período selecionado
+      const horasCalendarioPorMaquina = Math.max(24, (new Date(fimISO) - new Date(inicioISO)) / 3600000);
+
+      // 1. Capital total imobilizado em estoque hoje
       const { data: pecas } = await db.from('pecas_estoque').select('saldo_atual, custo_unitario_atual').eq('ativo', true);
       const valorEstoque = (pecas || []).reduce((acc, p) => acc + (Math.max(0, parseFloat(p.saldo_atual)) * parseFloat(p.custo_unitario_atual)), 0);
+      document.getElementById('kpiCardValorEstoque').innerText = `R$ ${valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-      document.getElementById('containerResumoKPIs').innerHTML = `
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <span class="text-xs text-slate-400">Valor Total em Estoque</span>
-          <p class="text-2xl font-black text-emerald-400 mt-1">R$ ${valorEstoque.toFixed(2)}</p>
-        </div>
+      // 2. Busca OS e Movimentações no período
+      const { data: todasOS } = await db.from('ordens_servico')
+        .select('*')
+        .gte('aberta_em', inicioISO)
+        .lte('aberta_em', fimISO);
+
+      const { data: movsEstoque } = await db.from('itens_os_estoque')
+        .select('*, ordens_servico(equipamento_id)')
+        .in('tipo_movimento', ['saida_os', 'saida_avulsa'])
+        .gte('created_at', inicioISO)
+        .lte('created_at', fimISO);
+
+      const maquinasAnalisadas = eqFiltro === 'TODOS'
+        ? cacheEquipamentos
+        : cacheEquipamentos.filter(e => e.id === eqFiltro);
+
+      let somaHorasCalendario = 0;
+      let somaHorasParadas = 0;
+      let somaQtdCorretivas = 0;
+      let somaHH = 0;
+      let somaCustoPeriodo = 0;
+
+      ultimoRelatorioKPIs = maquinasAnalisadas.map(eq => {
+        const osDaMaquina = (todasOS || []).filter(o => o.equipamento_id === eq.id);
+        const corretivas = osDaMaquina.filter(o => o.tipo === 'corretiva');
+
+        // Calcula tempo parado em horas
+        let horasParadasEq = 0;
+        let hhEq = 0;
+        osDaMaquina.forEach(o => {
+          let segs = parseFloat(o.tempo_efetivo_segundos || 0);
+          if (segs === 0 && o.status !== 'concluida_oficina') {
+            segs = Math.max(0, (new Date() - new Date(o.aberta_em)) / 1000);
+          }
+          const h = segs / 3600;
+          horasParadasEq += h;
+          hhEq += h * Math.max(1, parseInt(o.quantidade_executantes || 1));
+        });
+
+        horasParadasEq = Math.min(horasCalendarioPorMaquina, horasParadasEq);
+        const horasOperandoDiponivel = Math.max(0, horasCalendarioPorMaquina - horasParadasEq);
+        const dfEq = (horasOperandoDiponivel / horasCalendarioPorMaquina) * 100;
+
+        // MTBF, MTTR e Confiabilidade R(t) = e^(-t / MTBF)
+        const qtdFalhas = corretivas.length;
+        const mtbfEq = qtdFalhas > 0 ? (horasOperandoDiponivel / qtdFalhas) : horasOperandoDiponivel;
+        const mttrEq = qtdFalhas > 0 ? (horasParadasEq / qtdFalhas) : 0;
+        const confiabilidadeEq = qtdFalhas > 0 ? (Math.exp(-tempoMissao / Math.max(0.1, mtbfEq)) * 100) : 100;
+
+        // Custo gasto no equipamento (OS + Saídas Avulsas)
+        const custoEq = (movsEstoque || []).reduce((acc, m) => {
+          const eqVinculado = m.equipamento_id || m.ordens_servico?.equipamento_id;
+          if (eqVinculado === eq.id) {
+            return acc + (parseFloat(m.quantidade || 0) * parseFloat(m.custo_unitario_congelado || 0));
+          }
+          return acc;
+        }, 0);
+
+        somaHorasCalendario += horasCalendarioPorMaquina;
+        somaHorasParadas += horasParadasEq;
+        somaQtdCorretivas += qtdFalhas;
+        somaHH += hhEq;
+        somaCustoPeriodo += custoEq;
+
+        return {
+          tag: eq.tag,
+          nome: eq.nome,
+          marca_modelo: `${eq.marca || ''} ${eq.modelo || ''}`.trim(),
+          leitura_atual: `${parseFloat(eq.horimetro_atual).toFixed(1)} ${eq.unidade_medida === 'KM' ? 'km' : 'h'}`,
+          qtd_corretivas: qtdFalhas,
+          horas_paradas: horasParadasEq,
+          hh_total: hhEq,
+          mtbf: mtbfEq,
+          mttr: mttrEq,
+          df: dfEq,
+          confiabilidade: confiabilidadeEq,
+          custo_total: custoEq
+        };
+      });
+
+      // Cálculos consolidados para os Cards do topo
+      const horasDispGlobal = Math.max(0, somaHorasCalendario - somaHorasParadas);
+      const dfGlobal = somaHorasCalendario > 0 ? (horasDispGlobal / somaHorasCalendario) * 100 : 100;
+      const mtbfGlobal = somaQtdCorretivas > 0 ? (horasDispGlobal / somaQtdCorretivas) : horasDispGlobal;
+      const mttrGlobal = somaQtdCorretivas > 0 ? (somaHorasParadas / somaQtdCorretivas) : 0;
+      const confGlobal = somaQtdCorretivas > 0 ? (Math.exp(-tempoMissao / Math.max(0.1, mtbfGlobal)) * 100) : 100;
+
+      document.getElementById('kpiCardDF').innerText = `${dfGlobal.toFixed(1)}%`;
+      document.getElementById('kpiCardConfiabilidade').innerText = `${confGlobal.toFixed(1)}%`;
+      document.getElementById('kpiSubConfiabilidade').innerText = `Para missão de ${tempoMissao}h sem falha`;
+      document.getElementById('kpiCardMTBF').innerText = `${mtbfGlobal.toFixed(1)} h`;
+      document.getElementById('kpiSubMTBF').innerText = `${somaQtdCorretivas} paradas corretivas no período`;
+      document.getElementById('kpiCardMTTR').innerText = `${mttrGlobal.toFixed(1)} h`;
+      document.getElementById('kpiCardTempoParado').innerText = `${somaHorasParadas.toFixed(1)} h`;
+      document.getElementById('kpiCardHH').innerText = `${somaHH.toFixed(1)} HH`;
+      document.getElementById('kpiCardGastoPeriodo').innerText = `R$ ${somaCustoPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      // Renderiza tabela detalhada por equipamento
+      document.getElementById('tabelaKpisPorEquipamento').innerHTML = `
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="py-2">Equipamento</th><th>Leitura Atual</th><th>Falhas</th><th>Tempo Parado</th><th>HH Oficina</th><th>MTBF</th><th>MTTR</th><th>Disp. (DF)</th><th>Confiab. R(${tempoMissao}h)</th><th>Gasto Total (R$)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60">
+            ${ultimoRelatorioKPIs.map(r => `
+              <tr>
+                <td class="py-2 font-bold text-amber-400">${r.tag} <span class="text-slate-400 font-normal">- ${r.nome}</span></td>
+                <td class="font-mono text-slate-300">${r.leitura_atual}</td>
+                <td class="font-bold">${r.qtd_corretivas}</td>
+                <td class="text-rose-400 font-bold">${r.horas_paradas.toFixed(1)} h</td>
+                <td class="text-purple-300">${r.hh_total.toFixed(1)} HH</td>
+                <td class="text-blue-400 font-bold">${r.mtbf.toFixed(1)} h</td>
+                <td class="text-amber-300 font-bold">${r.mttr.toFixed(1)} h</td>
+                <td class="font-bold ${r.df >= 85 ? 'text-emerald-400' : 'text-rose-400'}">${r.df.toFixed(1)}%</td>
+                <td class="font-bold text-cyan-400">${r.confiabilidade.toFixed(1)}%</td>
+                <td class="font-bold text-emerald-300">R$ ${r.custo_total.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       `;
     }
 
+    function exportarRelatorioKPIsExcel() {
+      if (!ultimoRelatorioKPIs || ultimoRelatorioKPIs.length === 0) return alert("Gere os indicadores primeiro!");
+      const ws = XLSX.utils.json_to_sheet(ultimoRelatorioKPIs);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "KPIs_Por_Equipamento");
+      XLSX.writeFile(wb, `Relatorio_KPIs_Vilasa_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
     // =====================================================================
-    // ADMINISTRAÇÃO DE USUÁRIOS
+    // MÓDULO 6: ADMIN (EDIÇÃO UNIVERSAL, IMPORTADOR E BACKUP/EXPURGO)
     // =====================================================================
-    async function carregarAdmin() {
+    function AlternarAbaAdmin(aba) {
+      document.querySelectorAll('.aba-admin-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`abaAdmin-${aba}`).classList.remove('hidden');
+
+      ['editor', 'importador', 'backup', 'usuarios'].forEach(item => {
+        const btn = document.getElementById(`btnAbaAdmin-${item}`);
+        if (item === aba) btn.className = "px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 text-slate-950";
+        else btn.className = "px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800";
+      });
+    }
+
+    // 6.1 EDITOR UNIVERSAL (MODO DEUS)
+    async function carregarTabelaEditorAdmin() {
+      const tabela = document.getElementById('selectTabelaEditorAdmin').value;
+      const { data, error } = await db.from(tabela).select('*').limit(100);
+      if (error) return;
+      cacheRegistrosEditorAdmin = data || [];
+
+      const container = document.getElementById('containerTabelaEditorAdmin');
+      if (cacheRegistrosEditorAdmin.length === 0) {
+        container.innerHTML = `<p class="text-slate-500 py-4">Nenhum registro encontrado na tabela ${tabela}.</p>`;
+        return;
+      }
+
+      const colunas = Object.keys(cacheRegistrosEditorAdmin[0]).slice(0, 7);
+      container.innerHTML = `
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              ${colunas.map(c => `<th class="py-2 pr-3 uppercase text-[10px]">${c}</th>`).join('')}
+              <th class="py-2 text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60">
+            ${cacheRegistrosEditorAdmin.map((reg, idx) => `
+              <tr class="hover:bg-slate-950/60">
+                ${colunas.map(c => `<td class="py-2 pr-3 truncate max-w-[160px]">${typeof reg[c] === 'object' ? JSON.stringify(reg[c]) : (reg[c] ?? '-')}</td>`).join('')}
+                <td class="py-2 text-right">
+                  <button onclick="abrirModalEditorUniversal(${idx})" class="bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold px-2.5 py-1 rounded text-[11px] transition">
+                    <i class="fa-solid fa-pen"></i> Modificar
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function abrirModalEditorUniversal(idx) {
+      const tabela = document.getElementById('selectTabelaEditorAdmin').value;
+      const reg = cacheRegistrosEditorAdmin[idx];
+      if (!reg) return;
+
+      document.getElementById('labelTabelaEditorModal').innerText = `Tabela: ${tabela}`;
+      document.getElementById('editorRegistroId').value = reg.id;
+
+      const camposIgnorados = ['id', 'created_at', 'updated_at', 'qr_token'];
+      const divCampos = document.getElementById('camposDinamicosEditor');
+
+      divCampos.innerHTML = Object.keys(reg).filter(k => !camposIgnorados.includes(k)).map(chave => {
+        const valor = reg[chave] === null || reg[chave] === undefined ? '' : (typeof reg[chave] === 'object' ? JSON.stringify(reg[chave]) : reg[chave]);
+        return `
+          <div>
+            <label class="block text-slate-400 font-mono text-[11px] mb-1">${chave}</label>
+            <input type="text" data-campo="${chave}" value="${String(valor).replace(/"/g, '&quot;')}"
+              class="input-editor-universal w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('modalEditorUniversal').classList.remove('hidden');
+    }
+
+    async function salvarEdicaoModoDeus() {
+      const tabela = document.getElementById('selectTabelaEditorAdmin').value;
+      const id = document.getElementById('editorRegistroId').value;
+      const inputs = document.querySelectorAll('.input-editor-universal');
+
+      const payload = {};
+      inputs.forEach(inp => {
+        const chave = inp.getAttribute('data-campo');
+        let val = inp.value.trim();
+        if (val === 'true') val = true;
+        else if (val === 'false') val = false;
+        else if (val === '') val = null;
+        else if (( val.startsWith('[') && val.endsWith(']') ) || ( val.startsWith('{') && val.endsWith('}') )) {
+          try { val = JSON.parse(val); } catch(e) {}
+        }
+        payload[chave] = val;
+      });
+
+      const { error } = await db.from(tabela).update(payload).eq('id', id);
+      if (error) return alert("Erro ao atualizar registro: " + error.message);
+
+      document.getElementById('modalEditorUniversal').classList.add('hidden');
+      carregarTabelaEditorAdmin();
+    }
+
+    async function excluirRegistroModoDeus() {
+      if (!confirm("Tem certeza que deseja excluir este registro permanentemente?")) return;
+      const tabela = document.getElementById('selectTabelaEditorAdmin').value;
+      const id = document.getElementById('editorRegistroId').value;
+
+      const { error } = await db.from(tabela).delete().eq('id', id);
+      if (error) return alert("Não foi possível excluir (pode haver vínculos em outras tabelas). Dica: Mude o campo 'ativo' para false! Detalhe: " + error.message);
+
+      document.getElementById('modalEditorUniversal').classList.add('hidden');
+      carregarTabelaEditorAdmin();
+    }
+
+    // 6.2 IMPORTADOR DE BASE EXISTENTE (EXCEL / CSV / COPIAR E COLAR)
+    function atualizarInstrucoesImportacao() {
+      const tipo = document.getElementById('importTipoDestino').value;
+      const div = document.getElementById('instrucoesColunasImport');
+      if (tipo === 'equipamentos') {
+        div.innerHTML = `Ordem das colunas para <strong>FROTA</strong> (separadas por TAB ou Ponto e Vírgula):<br><strong class="text-amber-400">TAG ; DESCRIÇÃO ; MARCA ; MODELO ; Nº SÉRIE ; UNIDADE (HORAS ou KM) ; LEITURA ATUAL</strong>`;
+      } else {
+        div.innerHTML = `Ordem das colunas para <strong>PEÇAS DO ALMOXARIFADO</strong> (separadas por TAB ou Ponto e Vírgula):<br><strong class="text-emerald-400">CÓDIGO ; DESCRIÇÃO ; PART NUMBERS EQUIVALENTES ; MÁQUINAS APLICÁVEIS ; LOCAL ; SALDO ATUAL ; CUSTO UNITÁRIO</strong>`;
+      }
+    }
+
+    function lerArquivoExcelImportacao(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const primeiraAba = workbook.SheetNames[0];
+        const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { header: 1 });
+        // Remove a primeira linha (cabeçalho) e joga na caixa de texto separado por ";"
+        const texto = linhas.slice(1).filter(r => r.length > 0).map(r => r.join(' ; ')).join('\n');
+        document.getElementById('importTextoColado').value = texto;
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function processarImportacaoEmMassa() {
+      const tipo = document.getElementById('importTipoDestino').value;
+      const texto = document.getElementById('importTextoColado').value.trim();
+      if (!texto) return alert("Cole os dados ou selecione uma planilha primeiro!");
+
+      const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+      let importados = 0;
+
+      for (const linha of linhas) {
+        const cols = linha.includes('\t') ? linha.split('\t') : linha.split(';');
+        const limpos = cols.map(c => c.trim());
+
+        if (tipo === 'equipamentos' && limpos[0]) {
+          const tag = limpos[0].toUpperCase();
+          const nome = limpos[1] || 'Equipamento Importado';
+          const marca = limpos[2] || '';
+          const modelo = limpos[3] || '';
+          const numero_serie = limpos[4] || '';
+          const unidade_medida = (limpos[5] || '').toUpperCase().includes('KM') ? 'KM' : 'HORAS';
+          const horimetro_atual = parseFloat((limpos[6] || '0').replace(',', '.')) || 0;
+          const codigo_curto = `${tag.replace(/[^A-Z0-9]/g, '')}-${Math.floor(10 + Math.random() * 89)}`;
+
+          const { error } = await db.from('equipamentos').upsert([{
+            tag, nome, marca, modelo, numero_serie, unidade_medida, setor: '', horimetro_atual, codigo_curto, ativo: true
+          }], { onConflict: 'tag' });
+          if (!error) importados++;
+        } else if (tipo === 'pecas_estoque' && limpos[0]) {
+          const codigo = limpos[0].toUpperCase();
+          const descricao = limpos[1] || 'Peça Importada';
+          const codigos_equivalentes = limpos[2] || '';
+          const equipamentos_aplicaveis = limpos[3] || '';
+          const localizacao = limpos[4] || '';
+          const saldo_atual = parseFloat((limpos[5] || '0').replace(',', '.')) || 0;
+          const custo_unitario_atual = parseFloat((limpos[6] || '0').replace(',', '.')) || 0;
+
+          const { error } = await db.from('pecas_estoque').upsert([{
+            codigo, descricao, codigos_equivalentes, equipamentos_aplicaveis, localizacao, saldo_atual, custo_unitario_atual, ativo: true
+          }], { onConflict: 'codigo' });
+          if (!error) importados++;
+        }
+      }
+
+      alert(`Importação concluída! ${importados} registros foram gravados/atualizados com sucesso.`);
+      document.getElementById('importTextoColado').value = '';
+    }
+
+    // 6.3 BACKUP COMPLETO (.XLSX) E EXPURGO SEGURO DA NUVEM
+    async function gerarBackupCompletoExcel() {
+      const wb = XLSX.utils.book_new();
+      const tabelas = ['equipamentos', 'ordens_servico', 'diario_horimetro', 'pecas_estoque', 'itens_os_estoque', 'planos_preventiva'];
+
+      for (const tab of tabelas) {
+        const { data } = await db.from(tab).select('*');
+        const ws = XLSX.utils.json_to_sheet(data || []);
+        XLSX.utils.book_append_sheet(wb, ws, tab.substring(0, 30));
+      }
+
+      XLSX.writeFile(wb, `Backup_Completo_Vilasa_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      // Destrava o botão de expurgo no Passo 2
+      const btnExpurgo = document.getElementById('btnExecutarExpurgo');
+      btnExpurgo.disabled = false;
+      btnExpurgo.className = "w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 shadow cursor-pointer";
+      btnExpurgo.innerHTML = `<i class="fa-solid fa-trash-can"></i> 2. Executar Limpeza de Registros Antigos na Nuvem`;
+    }
+
+    async function executarExpurgoNuvem() {
+      const dataCorte = document.getElementById('dataCorteExpurgo').value;
+      if (!dataCorte) return alert("Selecione a data limite para o expurgo!");
+      if (!confirm(`ATENÇÃO: Todas as OS concluídas e registros de horímetro anteriores a ${dataCorte} serão removidos da nuvem (você já baixou o backup em Excel). Confirmar?`)) return;
+
+      const corteISO = `${dataCorte}T23:59:59.999Z`;
+      await db.from('diario_horimetro').delete().lt('inicio_turno_em', corteISO);
+      await db.from('ordens_servico').delete().eq('status', 'concluida_oficina').lt('concluida_em', corteISO);
+
+      alert("Limpeza concluída! Espaço liberado no banco de dados da nuvem.");
+    }
+
+    // 6.4 USUÁRIOS
+    async function carregarAdminUsuarios() {
       const { data: usrs } = await db.from('perfis_usuarios').select('*').order('nome');
       document.getElementById('listaUsuariosAdmin').innerHTML = `
         <table class="w-full text-left text-xs">
@@ -1398,12 +2002,12 @@
 
       await db.from('perfis_usuarios').insert([{ matricula, senha_acesso, nome, cargo_base }]);
       document.getElementById('modalUsuario').classList.add('hidden');
-      carregarAdmin();
+      carregarAdminUsuarios();
     }
 
     async function alternarStatusUsuario(id, statusAtual) {
       await db.from('perfis_usuarios').update({ ativo: !statusAtual }).eq('id', id);
-      carregarAdmin();
+      carregarAdminUsuarios();
     }
 
     window.onload = () => {
