@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="config.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -22,7 +23,7 @@
           <i class="fa-solid fa-screwdriver-wrench"></i>
         </div>
         <h1 class="text-xl font-black tracking-tight text-white">VILASA MANUTENÇÃO</h1>
-        <p class="text-xs text-slate-400">Controle de Frota, Oficina, PCM e Estoque</p>
+        <p class="text-xs text-slate-400">Controle de Frota, Oficina, PCM e Almoxarifado</p>
       </div>
 
       <form onsubmit="event.preventDefault(); fazerLogin();" class="space-y-4">
@@ -44,7 +45,7 @@
 
       <div class="pt-3 border-t border-slate-800 text-center">
         <a href="qr.html" class="text-xs text-slate-400 hover:text-amber-400 inline-flex items-center gap-1.5">
-          <i class="fa-solid fa-qrcode"></i> Sou Operador (Lançar Horímetro via QR)
+          <i class="fa-solid fa-qrcode"></i> Sou Operador (Lançar Horímetro / KM)
         </a>
       </div>
     </div>
@@ -56,7 +57,7 @@
   <div id="appPrincipal" class="hidden min-h-screen flex flex-col md:flex-row">
 
     <!-- Menu Lateral (Sidebar) -->
-    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between shrink-0">
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between shrink-0 print:hidden">
       <div>
         <div class="p-4 border-b border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-2.5">
@@ -66,7 +67,6 @@
           <span id="badgeCargo" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">ADMIN</span>
         </div>
 
-        <!-- Dados do Usuário Logado -->
         <div class="px-4 py-3 bg-slate-950/40 border-b border-slate-800/70 flex items-center justify-between">
           <div class="truncate">
             <p id="txtNomeUsuario" class="text-xs font-bold text-slate-200 truncate">Administrador</p>
@@ -77,79 +77,74 @@
           </button>
         </div>
 
-        <!-- Botões de Navegação por Módulo (Controlados por RBAC) -->
         <nav class="p-2 flex md:flex-col gap-1 overflow-x-auto">
           <button onclick="navegarPara('os')" id="nav-os" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
             <i class="fa-solid fa-clipboard-list w-4 text-center"></i> Ordens de Serviço
           </button>
           <button onclick="navegarPara('frota')" id="nav-frota" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-truck-monster w-4 text-center"></i> Frota & QR Codes
+            <i class="fa-solid fa-truck-monster w-4 text-center"></i> Frota (H / KM)
           </button>
           <button onclick="navegarPara('pcm')" id="nav-pcm" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-calendar-check w-4 text-center"></i> PCM & Preventivas
+            <i class="fa-solid fa-calendar-check w-4 text-center"></i> PCM (250/500/1000)
           </button>
           <button onclick="navegarPara('estoque')" id="nav-estoque" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-boxes-stacked w-4 text-center"></i> Almoxarifado
+            <i class="fa-solid fa-boxes-stacked w-4 text-center"></i> Almoxarifado & NF
           </button>
           <button onclick="navegarPara('kpis')" id="nav-kpis" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-chart-line w-4 text-center"></i> Indicadores (KPIs)
+            <i class="fa-solid fa-chart-line w-4 text-center"></i> KPIs & Relatórios
           </button>
           <button onclick="navegarPara('admin')" id="nav-admin" class="nav-btn flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition">
-            <i class="fa-solid fa-users-gear w-4 text-center"></i> Acessos & Admin
+            <i class="fa-solid fa-users-gear w-4 text-center"></i> Admin & Backup
           </button>
         </nav>
       </div>
 
-      <!-- Monitor de Diagnóstico no Rodapé -->
       <div class="hidden md:block p-3 border-t border-slate-800 text-[11px] text-slate-400">
         <div class="flex items-center gap-1.5 text-emerald-400 font-medium">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Banco Supabase Online
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sistema Online (V2)
         </div>
-        <p id="statusDiagnostico" class="mt-1 text-[10px] text-slate-500 truncate">Pronto para operação.</p>
       </div>
     </aside>
 
-    <!-- Conteúdo Principal dos Módulos -->
+    <!-- Conteúdo Principal -->
     <main class="flex-1 p-4 md:p-6 overflow-y-auto space-y-6">
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 1: ORDENS DE SERVIÇO (CAMPO & OFICINA)                     -->
+      <!-- MÓDULO 1: ORDENS DE SERVIÇO (LOCALIZAÇÃO + MULTI-EXECUTANTES)     -->
       <!-- ================================================================= -->
       <section id="sec-os" class="modulo-section space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="text-lg font-bold text-white">Ordens de Serviço (Campo & Oficina)</h2>
-            <p class="text-xs text-slate-400">Fluxo direto: Abertura pelo Encarregado &rarr; Execução imediata pelos Mecânicos</p>
+            <p class="text-xs text-slate-400">Registro com localização, solicitante e atribuição de múltiplos executantes no fechamento</p>
           </div>
-          <button onclick="abrirModalNovaOS()" id="btnAbrirModalOS" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
-            <i class="fa-solid fa-plus"></i> Abrir Nova OS Corretiva
+          <button onclick="abrirModalNovaOS()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow">
+            <i class="fa-solid fa-plus"></i> Abrir Nova OS
           </button>
         </div>
 
-        <!-- Filtros Rápidos da Fila -->
         <div class="flex flex-wrap gap-2">
           <button onclick="carregarOrdensServico('ativas')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700">
             Fila da Oficina (Abertas / Em Execução)
           </button>
           <button onclick="carregarOrdensServico('concluidas')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800">
-            Concluídas (Recentes)
+            Histórico de Concluídas
           </button>
         </div>
 
-        <!-- Lista de Cards de OS -->
         <div id="listaOS" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 2: FROTA / EQUIPAMENTOS E GERADOR DE QR CODE               -->
+      <!-- MÓDULO 2: FROTA (MARCA, MODELO, SÉRIE, HORAS OU KM)               -->
       <!-- ================================================================= -->
       <section id="sec-frota" class="modulo-section hidden space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Cadastro de Frota e QR Codes</h2>
-            <p class="text-xs text-slate-400">Status em tempo real, horímetros atualizados pelos operadores e etiquetas QR</p>
+            <h2 class="text-lg font-bold text-white">Cadastro da Frota (Horas e Quilômetros)</h2>
+            <p class="text-xs text-slate-400">Controle de Marca, Modelo, Nº de Série, Leitura Atual e Etiquetas QR Code</p>
           </div>
-          <button onclick="document.getElementById('modalEquipamento').classList.remove('hidden')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
+          <button onclick="abrirModalEquipamento()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
             <i class="fa-solid fa-plus"></i> Cadastrar Equipamento
           </button>
         </div>
@@ -158,16 +153,16 @@
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 3: PCM (PLANOS DE PREVENTIVA POR HORÍMETRO)                -->
+      <!-- MÓDULO 3: PCM ACUMULATIVO (CASCATA 250 / 500 / 1000)              -->
       <!-- ================================================================= -->
       <section id="sec-pcm" class="modulo-section hidden space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Planejamento e Controle (PCM)</h2>
-            <p class="text-xs text-slate-400">Controle automático de vencimento de revisão pelo horímetro do QR Code</p>
+            <h2 class="text-lg font-bold text-white">Controle de Preventivas Acumulativas (PCM)</h2>
+            <p class="text-xs text-slate-400">Ciclos múltiplos (Ex: 250 &rarr; 500 &rarr; 750 &rarr; 1000) em Horas ou KM onde o maior soma as tarefas do menor</p>
           </div>
           <button onclick="abrirModalPlanoPreventiva()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
-            <i class="fa-solid fa-plus"></i> Novo Plano Preventivo
+            <i class="fa-solid fa-plus"></i> Configurar Plano Acumulativo
           </button>
         </div>
 
@@ -175,98 +170,85 @@
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 4: ALMOXARIFADO E ESTOQUE DE PEÇAS                         -->
+      <!-- MÓDULO 4: ALMOXARIFADO (CADASTRO, ENTRADA NF E SAÍDA AVULSA)      -->
       <!-- ================================================================= -->
       <section id="sec-estoque" class="modulo-section hidden space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Almoxarifado e Controle de Peças</h2>
-            <p class="text-xs text-slate-400">Baixas pendentes das OS (inclusive noturnas) e catálogo com custo congelado</p>
+            <h2 class="text-lg font-bold text-white">Almoxarifado, Equivalências e Notas Fiscais</h2>
+            <p class="text-xs text-slate-400">Controle de múltiplos fabricantes (Part Numbers), Entrada rastreada por NF e Saída Avulsa</p>
           </div>
-          <button onclick="document.getElementById('modalPeca').classList.remove('hidden')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
-            <i class="fa-solid fa-plus"></i> Cadastrar Peça / Entrada
-          </button>
+          <!-- 3 Botões Separados conforme solicitado -->
+          <div class="flex flex-wrap gap-2">
+            <button onclick="document.getElementById('modalPeca').classList.remove('hidden')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-box"></i> 1. Cadastrar Item Novo
+            </button>
+            <button onclick="abrirModalEntradaNF()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-file-invoice-dollar"></i> 2. Dar Entrada (Com NF)
+            </button>
+            <button onclick="abrirModalSaidaAvulsa()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i> 3. Dar Saída Avulsa
+            </button>
+          </div>
         </div>
 
-        <!-- Baixas Pendentes da Oficina -->
+        <!-- Busca Rápida por Equivalência / Fabricante / Máquina -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-2">
+          <i class="fa-solid fa-magnifying-glass text-slate-400 pl-2"></i>
+          <input type="text" id="buscaEstoqueInput" oninput="filtrarTabelaEstoque()" placeholder="Buscar peça por Código, Part Number Equivalente (CAT, Donaldson, Tecfil...), Nome ou Máquina..."
+            class="w-full bg-transparent text-xs text-white focus:outline-none" />
+        </div>
+
+        <!-- Baixas Pendentes vindas das OS -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
           <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-            <i class="fa-solid fa-clock"></i> Requisições da Oficina Pendentes de Baixa no Estoque
+            <i class="fa-solid fa-clock"></i> Peças Requisitadas nas OS (Pendentes de Confirmação)
           </h3>
           <div id="listaBaixasPendentes" class="space-y-2 text-xs"></div>
         </div>
 
-        <!-- Catálogo de Peças -->
+        <!-- Catálogo de Peças e Equivalências -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Catálogo de Sobressalentes e Saldo Atual</h3>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Saldo em Estoque e Part Numbers Equivalentes</h3>
           <div id="listaCatalogoPecas" class="overflow-x-auto"></div>
         </div>
+
+        <!-- Histórico Recente de Notas Fiscais e Saídas Avulsas -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Últimas Entradas (Notas Fiscais) e Saídas Diretas</h3>
+          <div id="listaHistoricoMovimentos" class="overflow-x-auto text-xs"></div>
+        </div>
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 5: INDICADORES GERENCIAIS (KPIs)                           -->
+      <!-- MÓDULO 5: KPIs E RELATÓRIOS (SERÁ EXPANDIDO NO LOTE 3)            -->
       <!-- ================================================================= -->
       <section id="sec-kpis" class="modulo-section hidden space-y-5">
-        <div>
-          <h2 class="text-lg font-bold text-white">Painel de Indicadores (KPIs de Manutenção)</h2>
-          <p class="text-xs text-slate-400">Métricas calculadas separando tempo efetivo de oficina vs. espera de peça</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span class="text-xs text-slate-400">Frota Operando Agora</span>
-            <p id="kpiDisponibilidade" class="text-2xl font-black text-emerald-400 mt-1">--%</p>
-            <span class="text-[11px] text-slate-500">Disponibilidade instantânea</span>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span class="text-xs text-slate-400">MTTR Efetivo (Mão na Chave)</span>
-            <p id="kpiMttrEfetivo" class="text-2xl font-black text-blue-400 mt-1">-- h</p>
-            <span class="text-[11px] text-slate-500">Tempo médio real de reparo</span>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span class="text-xs text-slate-400">Espera Média por Peça</span>
-            <p id="kpiEsperaPeca" class="text-2xl font-black text-amber-400 mt-1">-- h</p>
-            <span class="text-[11px] text-slate-500">Gargalo logístico/compras</span>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span class="text-xs text-slate-400">Custo Acumulado (Peças OS)</span>
-            <p id="kpiCustoTotal" class="text-2xl font-black text-rose-400 mt-1">R$ 0,00</p>
-            <span class="text-[11px] text-slate-500">Custo congelado na baixa</span>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-white">Indicadores de Manutenção (KPIs)</h2>
+            <p class="text-xs text-slate-400">Disponibilidade, MTBF, MTTR, Confiabilidade R(t) e Custos</p>
           </div>
         </div>
+        <div id="containerResumoKPIs" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
       </section>
 
       <!-- ================================================================= -->
-      <!-- MÓDULO 6: ADMINISTRAÇÃO, USUÁRIOS E PIN DO QR CODE                -->
+      <!-- MÓDULO 6: ADMINISTRAÇÃO DE ACESSOS                                -->
       <!-- ================================================================= -->
       <section id="sec-admin" class="modulo-section hidden space-y-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-bold text-white">Administração de Acessos e Segurança</h2>
-            <p class="text-xs text-slate-400">Crie matrículas para Encarregados, Mecânicos, Almoxarifes e PCM</p>
+            <h2 class="text-lg font-bold text-white">Administração Geral</h2>
+            <p class="text-xs text-slate-400">Gestão de usuários, edição de registros e backups</p>
           </div>
           <button onclick="document.getElementById('modalUsuario').classList.remove('hidden')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2">
             <i class="fa-solid fa-user-plus"></i> Novo Usuário
           </button>
         </div>
 
-        <!-- Configuração do PIN do QR Code -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h3 class="text-sm font-bold text-amber-400">PIN de Operação (QR Code dos Operadores)</h3>
-            <p class="text-xs text-slate-400">Código de 4 dígitos exigido na tela do operador para validar horímetro.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <input type="text" id="inputPinGlobal" maxlength="4" class="w-24 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-center font-mono text-sm text-white" />
-            <button onclick="salvarPinGlobal()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg border border-slate-700">
-              Atualizar PIN
-            </button>
-          </div>
-        </div>
-
-        <!-- Tabela de Usuários -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Usuários Cadastrados (Sem Exclusão Física para Preservar Histórico)</h3>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Equipe Cadastrada</h3>
           <div id="listaUsuariosAdmin" class="overflow-x-auto"></div>
         </div>
       </section>
@@ -275,188 +257,317 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAIS DE CADASTRO E OPERAÇÃO                                         -->
+  <!-- MODAIS DO LOTE 2                                                      -->
   <!-- ===================================================================== -->
 
-  <!-- Modal: Cadastrar Equipamento -->
+  <!-- Modal: Cadastrar / Editar Equipamento (Com Marca, Modelo, Série e Horas/KM) -->
   <div id="modalEquipamento" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
-      <h3 class="text-base font-bold text-white">Cadastrar Equipamento na Frota</h3>
+      <h3 class="text-base font-bold text-white">Cadastro de Equipamento</h3>
+      <input type="hidden" id="eqIdEdicao" value="" />
       <div class="space-y-3 text-xs">
-        <div>
-          <label class="block text-slate-300 mb-1">TAG do Equipamento (Única)</label>
-          <input type="text" id="eqTag" placeholder="Ex: ESC-01" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">TAG / Prefixo *</label>
+            <input type="text" id="eqTag" placeholder="Ex: ESC-01" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase font-bold" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Unidade de Controle *</label>
+            <select id="eqUnidade" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-bold">
+              <option value="HORAS">HORAS (Horímetro)</option>
+              <option value="KM">QUILÔMETROS (KM)</option>
+            </select>
+          </div>
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Descrição / Modelo</label>
-          <input type="text" id="eqNome" placeholder="Ex: Escavadeira Hidráulica CAT 320" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <label class="block text-slate-300 mb-1">Descrição do Equipamento *</label>
+          <input type="text" id="eqNome" placeholder="Ex: Escavadeira Hidráulica / Caminhão Basculante" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-slate-300 mb-1">Setor / Frente</label>
-            <input type="text" id="eqSetor" placeholder="Ex: Terraplenagem" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-slate-300 mb-1">Marca</label>
+            <input type="text" id="eqMarca" placeholder="Ex: Caterpillar / Volvo" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Horímetro Inicial (h)</label>
-            <input type="number" step="0.1" id="eqHorimetro" value="0" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-slate-300 mb-1">Modelo</label>
+            <input type="text" id="eqModelo" placeholder="Ex: 320D / VM 330" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">Número de Série / Chassi</label>
+            <input type="text" id="eqSerie" placeholder="Ex: CAT0320D99812" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Horímetro / KM Inicial</label>
+            <input type="number" step="0.1" id="eqHorimetro" value="0" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
           </div>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalEquipamento').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-800">Cancelar</button>
-        <button onclick="salvarEquipamento()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Salvar Máquina</button>
+        <button onclick="document.getElementById('modalEquipamento').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
+        <button onclick="salvarEquipamento()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Salvar Equipamento</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Etiqueta QR Code para Impressão -->
+  <!-- Modal: Etiqueta QR Code -->
   <div id="modalQrCode" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
     <div class="bg-white text-slate-900 rounded-2xl p-6 w-full max-w-sm text-center space-y-4">
       <div class="border-2 border-slate-900 rounded-xl p-4 space-y-2">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">VILASA MANUTENÇÃO - APONTAMENTO</p>
+        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">VILASA - DIÁRIO DE EQUIPAMENTO</p>
         <h3 id="qrModalTag" class="text-2xl font-black text-slate-900">ESC-01</h3>
         <p id="qrModalNome" class="text-xs text-slate-600">Escavadeira</p>
         <div id="qrcodeCanvas" class="flex justify-center py-3"></div>
-        <p class="text-xs font-mono bg-slate-100 py-1 rounded border border-slate-300">Código Manual: <strong id="qrModalCurto">---</strong></p>
+        <p class="text-xs font-mono bg-slate-100 py-1 rounded border border-slate-300">TAG Manual: <strong id="qrModalCurto">---</strong></p>
       </div>
-      <div class="flex justify-between gap-2">
+      <div class="flex justify-between gap-2 print:hidden">
         <button onclick="document.getElementById('modalQrCode').classList.add('hidden')" class="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-200 text-slate-800">Fechar</button>
         <button onclick="window.print()" class="flex-1 py-2 rounded-lg text-xs font-bold bg-amber-500 text-slate-950"><i class="fa-solid fa-print"></i> Imprimir</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Abrir Nova Ordem de Serviço (Com Alerta de Duplicidade) -->
+  <!-- Modal: Abrir Nova OS (Sem Prioridade/Parada, Com Localização e Quem Abriu) -->
   <div id="modalNovaOS" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
-      <h3 class="text-base font-bold text-white">Abrir Ordem de Serviço Corretiva</h3>
+      <h3 class="text-base font-bold text-white">Abrir Ordem de Serviço</h3>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="block text-slate-300 mb-1">Selecione o Equipamento</label>
+          <label class="block text-slate-300 mb-1">Equipamento *</label>
           <select id="osEquipamentoSelect" onchange="verificarDuplicidadeOS()" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
         </div>
 
-        <!-- Alerta Amarelo Anti-Duplicidade -->
         <div id="alertaDuplicidadeOS" class="hidden p-3 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-300 space-y-1">
-          <p class="font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Atenção: Já existe OS ativa para esta máquina!</p>
+          <p class="font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Já existe OS aberta para esta máquina:</p>
           <p id="textoDuplicidadeOS" class="text-[11px]"></p>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-slate-300 mb-1">Prioridade</label>
-            <select id="osPrioridade" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white">
-              <option value="emergencia">Emergência (Parada)</option>
-              <option value="alta">Alta</option>
-              <option value="media">Média</option>
-              <option value="baixa">Baixa</option>
-            </select>
+            <label class="block text-slate-300 mb-1">Localização da Máquina *</label>
+            <input type="text" id="osLocalizacao" placeholder="Ex: Frente 2 / Britador / Oficina" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Máquina Parou?</label>
-            <select id="osMaquinaParada" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white">
-              <option value="true">Sim (Máquina Parada)</option>
-              <option value="false">Não (Operando com restrição)</option>
-            </select>
+            <label class="block text-slate-300 mb-1">Aberta por (Responsável)</label>
+            <input type="text" id="osAbertoPorNome" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-semibold" />
           </div>
         </div>
 
         <div>
-          <label class="block text-slate-300 mb-1">Descrição do Defeito / Sintoma no Campo</label>
-          <textarea id="osDescricao" rows="3" placeholder="Descreva o problema observado..." class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+          <label class="block text-slate-300 mb-1">Descrição do Problema / Serviço Solicitado *</label>
+          <textarea id="osDescricao" rows="3" placeholder="Descreva o defeito observado no campo..." class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalNovaOS').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="salvarNovaOS()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs">Enviar para Oficina</button>
+        <button onclick="salvarNovaOS()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs">Abrir Ordem de Serviço</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Cadastrar Peça no Almoxarifado -->
-  <div id="modalPeca" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+  <!-- Modal: Concluir OS e Atribuir Múltiplos Executantes -->
+  <div id="modalConcluirOS" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
-      <h3 class="text-base font-bold text-white">Cadastrar Peça / Sobressalente</h3>
+      <h3 class="text-base font-bold text-white">Finalizar Ordem de Serviço e Atribuir Equipe</h3>
+      <input type="hidden" id="concluirOsId" />
+      <input type="hidden" id="concluirEqId" />
+
       <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-slate-300 mb-1">Código / Part Number</label>
-            <input type="text" id="pecaCodigo" placeholder="Ex: P5500" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Selecione TODOS os Mecânicos/Executantes que trabalharam nesta OS:</label>
+          <div id="listaCheckboxesMecanicos" class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-2"></div>
+          <p class="text-[10px] text-slate-400 mt-1">Você também pode adicionar nomes avulsos abaixo caso necessário:</p>
+          <input type="text" id="concluirExecutantesExtras" placeholder="Outros executantes (separados por vírgula)" class="w-full mt-1 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Descrição do Serviço Executado / Solução *</label>
+          <textarea id="concluirServicoTexto" rows="3" placeholder="Descreva o que foi feito na máquina..." class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('modalConcluirOS').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
+        <button onclick="confirmarFechamentoOS()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">
+          <i class="fa-solid fa-check"></i> Concluir OS e Liberar Máquina
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 1 Almoxarifado: Cadastrar Item Novo (Com Equivalências e Aplicações) -->
+  <div id="modalPeca" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-lg space-y-4">
+      <h3 class="text-base font-bold text-white">1. Cadastrar Novo Item no Catálogo</h3>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-1">
+            <label class="block text-slate-300 mb-1">Código Principal *</label>
+            <input type="text" id="pecaCodigo" placeholder="Ex: FIL-001" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase font-bold" />
           </div>
-          <div>
-            <label class="block text-slate-300 mb-1">Localização (Prateleira)</label>
-            <input type="text" id="pecaLocal" placeholder="Ex: Rua A - Niv 2" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <div class="col-span-1">
+            <label class="block text-slate-300 mb-1">Unidade</label>
+            <input type="text" id="pecaUnidade" value="UN" placeholder="UN, L, M, KG" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white uppercase" />
+          </div>
+          <div class="col-span-1">
+            <label class="block text-slate-300 mb-1">Local / Prateleira</label>
+            <input type="text" id="pecaLocal" placeholder="Ex: Prateleira B2" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Nome Oficial da Peça</label>
+          <label class="block text-slate-300 mb-1">Descrição da Peça *</label>
           <input type="text" id="pecaDescricao" placeholder="Ex: Filtro Lubrificante do Motor" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Apelidos / Aplicação (Para o Mecânico achar fácil)</label>
-          <input type="text" id="pecaApelidos" placeholder="Ex: Filtro de óleo escavadeira ESC-01 CAT" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <label class="block text-amber-400 font-semibold mb-1">Part Numbers Equivalentes (Fabricantes Diferentes / Similares)</label>
+          <input type="text" id="pecaEquivalentes" placeholder="Ex: CAT: 1R-1808 | Donaldson: P551808 | Tecfil: PSL283 | Mann: W950" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
-        <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-emerald-400 font-semibold mb-1">Equipamentos onde esta peça aplica (TAGs ou Modelos)</label>
+          <input type="text" id="pecaEquipamentos" placeholder="Ex: ESC-01, ESC-02, PA-01, Motores CAT C7" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+        </div>
+        <div class="grid grid-cols-3 gap-3">
           <div>
-            <label class="block text-slate-300 mb-1">Saldo Atual</label>
-            <input type="number" step="0.01" id="pecaSaldo" value="10" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-slate-300 mb-1">Saldo Inicial</label>
+            <input type="number" step="0.01" id="pecaSaldo" value="0" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Estoque Mín.</label>
+            <label class="block text-slate-300 mb-1">Estoque Mínimo</label>
             <input type="number" step="0.01" id="pecaMinimo" value="2" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
           <div>
             <label class="block text-slate-300 mb-1">Custo Unit. (R$)</label>
-            <input type="number" step="0.01" id="pecaCusto" value="85.00" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <input type="number" step="0.01" id="pecaCusto" value="0.00" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalPeca').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="salvarPecaEstoque()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs">Salvar no Estoque</button>
+        <button onclick="salvarPecaEstoque()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs">Cadastrar no Catálogo</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Novo Plano Preventivo (PCM) -->
-  <div id="modalPlanoPCM" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+  <!-- Modal 2 Almoxarifado: Dar Entrada de Material (Com Nota Fiscal) -->
+  <div id="modalEntradaNF" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
-      <h3 class="text-base font-bold text-white">Criar Plano de Preventiva por Horímetro</h3>
+      <h3 class="text-base font-bold text-emerald-400"><i class="fa-solid fa-file-invoice-dollar"></i> 2. Entrada de Material (Nota Fiscal)</h3>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="block text-slate-300 mb-1">Equipamento</label>
-          <select id="pcmEquipamentoSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
+          <label class="block text-slate-300 mb-1">Selecione a Peça / Material *</label>
+          <select id="nfPecaSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-slate-300 mb-1">Nome do Plano</label>
-            <input type="text" id="pcmNomePlano" placeholder="Ex: Revisão 250h" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-amber-400 font-bold mb-1">Número da Nota Fiscal *</label>
+            <input type="text" id="nfNumero" placeholder="Ex: NF 45892" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Intervalo (Horas)</label>
-            <input type="number" id="pcmIntervalo" value="250" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+            <label class="block text-slate-300 mb-1">Fornecedor / Marca Recebida</label>
+            <input type="text" id="nfFornecedor" placeholder="Ex: Sotreq / Donaldson" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">Quantidade Recebida *</label>
+            <input type="number" step="0.01" id="nfQuantidade" value="1" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Valor Unitário na NF (R$) *</label>
+            <input type="number" step="0.01" id="nfCustoUnitario" placeholder="0.00" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('modalEntradaNF').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
+        <button onclick="confirmarEntradaNF()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Registrar Entrada e Somar Saldo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3 Almoxarifado: Dar Saída Avulsa (Sem OS / Direto pela Nota ou Balcão) -->
+  <div id="modalSaidaAvulsa" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
+      <h3 class="text-base font-bold text-rose-400"><i class="fa-solid fa-arrow-right-from-bracket"></i> 3. Saída Avulsa de Material (Fora de OS)</h3>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 mb-1">Selecione a Peça / Material *</label>
+          <select id="saidaPecaSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">Quantidade Retirada *</label>
+            <input type="number" step="0.01" id="saidaQuantidade" value="1" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Nº NF / Doc Referência (Opcional)</label>
+            <input type="text" id="saidaNF" placeholder="Ex: NF 45892 ou Balcão" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Horímetro da Última Revisão Feita</label>
-          <input type="number" step="0.1" id="pcmUltimoHorimetro" value="0" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <label class="block text-amber-400 font-semibold mb-1">Aplicado em qual Equipamento? (Para contabilizar no KPI da máquina)</label>
+          <select id="saidaEquipamentoSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Checklist de Tarefas da Preventiva</label>
-          <textarea id="pcmChecklist" rows="3" placeholder="1. Trocar óleo motor; 2. Trocar filtro lubrificante..." class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+          <label class="block text-slate-300 mb-1">Quem retirou / Motivo</label>
+          <input type="text" id="saidaObservacao" placeholder="Ex: Retirado no campo / Nota chegou direto" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="document.getElementById('modalSaidaAvulsa').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
+        <button onclick="confirmarSaidaAvulsa()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Confirmar Baixa no Estoque</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Plano Preventivo Acumulativo (Cascata 250 / 500 / 1000) -->
+  <div id="modalPlanoPCM" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-lg space-y-4">
+      <h3 class="text-base font-bold text-white">Configurar Plano Preventivo em Cascata (Acumulativo)</h3>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 mb-1">Equipamento *</label>
+            <select id="pcmEquipamentoSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white"></select>
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">Passo Base do Ciclo (H ou KM) *</label>
+            <select id="pcmIntervaloBase" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 font-bold">
+              <option value="250">Ciclo de 250 em 250 (250 / 500 / 1000)</option>
+              <option value="5000">Ciclo KM de 5.000 (5.000 / 10.000 / 20.000)</option>
+              <option value="10000">Ciclo KM de 10.000 (10.000 / 20.000 / 40.000)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-300 mb-1">Horímetro / KM da Última Preventiva Realizada</label>
+          <input type="number" step="0.1" id="pcmUltimoHorimetro" value="0" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" />
+        </div>
+        <div>
+          <label class="block text-emerald-400 font-semibold mb-1">Tarefas Base (Ex: 250h ou 5.000 km)</label>
+          <textarea id="pcmTarefas250" rows="2" placeholder="Ex: Trocar óleo motor, filtro de óleo motor, filtro combustível primário..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+        </div>
+        <div>
+          <label class="block text-amber-400 font-semibold mb-1">Tarefas Adicionais de Médio Ciclo (Ex: +500h — Soma automaticamente com a de 250h)</label>
+          <textarea id="pcmTarefas500" rows="2" placeholder="Ex: + Filtro de ar secundário, filtro hidráulico, análise de óleo..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
+        </div>
+        <div>
+          <label class="block text-rose-400 font-semibold mb-1">Tarefas Adicionais de Grande Ciclo (Ex: +1000h — Soma com 250h e 500h)</label>
+          <textarea id="pcmTarefas1000" rows="2" placeholder="Ex: + Troca de óleo hidráulico, óleo de transmissão/comando final, regulagem de válvulas..." class="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white"></textarea>
         </div>
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="document.getElementById('modalPlanoPCM').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-400">Cancelar</button>
-        <button onclick="salvarPlanoPCM()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Criar Plano</button>
+        <button onclick="salvarPlanoPCM()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs">Salvar Plano em Cascata</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Cadastrar Usuário (RBAC) -->
+  <!-- Modal: Novo Usuário -->
   <div id="modalUsuario" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md space-y-4">
-      <h3 class="text-base font-bold text-white">Cadastrar Usuário e Permissões</h3>
+      <h3 class="text-base font-bold text-white">Cadastrar Usuário</h3>
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -464,23 +575,23 @@
             <input type="text" id="usrMatricula" placeholder="Ex: 1045" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
           <div>
-            <label class="block text-slate-300 mb-1">Senha Inicial</label>
+            <label class="block text-slate-300 mb-1">Senha</label>
             <input type="text" id="usrSenha" value="1234" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
           </div>
         </div>
         <div>
           <label class="block text-slate-300 mb-1">Nome Completo</label>
-          <input type="text" id="usrNome" placeholder="Ex: Carlos Mendes" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input type="text" id="usrNome" placeholder="Ex: João Mecânico" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white" />
         </div>
         <div>
-          <label class="block text-slate-300 mb-1">Cargo Base (Define quais módulos ele vê)</label>
+          <label class="block text-slate-300 mb-1">Função / Perfil de Acesso</label>
           <select id="usrCargo" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white">
-            <option value="encarregado">Encarregado de Campo (Abre OS Corretiva)</option>
-            <option value="mecanico">Mecânico / Mantenedor (Executa OS e Pede Peça)</option>
-            <option value="almoxarife">Almoxarife (Controla Estoque e Baixas)</option>
-            <option value="pcm">Planejador PCM (Frota, Preventivas, OS e KPIs)</option>
-            <option value="gestor">Gestor / Engenharia (Visão Total + Indicadores)</option>
-            <option value="admin">Administrador Geral (Acesso Total)</option>
+            <option value="encarregado">Encarregado de Campo</option>
+            <option value="mecanico">Mecânico / Executante</option>
+            <option value="almoxarife">Almoxarife</option>
+            <option value="pcm">Planejador PCM</option>
+            <option value="gestor">Gestor / Engenharia</option>
+            <option value="admin">Administrador Geral</option>
           </select>
         </div>
       </div>
@@ -492,14 +603,14 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- LÓGICA JAVASCRIPT DE TODOS OS MÓDULOS E CONTROLE DE ACESSO (RBAC)     -->
+  <!-- JAVASCRIPT PRINCIPAL (LOTE 2)                                         -->
   <!-- ===================================================================== -->
   <script>
     let usuarioLogado = null;
     let cacheEquipamentos = [];
     let cachePecas = [];
+    let cacheUsuarios = [];
 
-    // Matriz RBAC: Quais módulos cada perfil pode acessar
     const PERMISSOES_MODULOS = {
       encarregado: ['os'],
       mecanico:    ['os'],
@@ -509,7 +620,7 @@
       admin:       ['os', 'frota', 'pcm', 'estoque', 'kpis', 'admin']
     };
 
-    // 1. AUTENTICAÇÃO POR MATRÍCULA
+    // 1. LOGIN E SESSÃO
     async function fazerLogin() {
       const mat = document.getElementById('loginMatricula').value.trim();
       const sen = document.getElementById('loginSenha').value.trim();
@@ -522,14 +633,8 @@
         .eq('senha_acesso', sen)
         .single();
 
-      if (error || !data) {
-        divErro.innerText = "Matrícula ou senha incorretos!";
-        divErro.classList.remove('hidden');
-        return;
-      }
-
-      if (!data.ativo) {
-        divErro.innerText = "Acesso inativado pelo Administrador.";
+      if (error || !data || !data.ativo) {
+        divErro.innerText = "Matrícula/senha incorretos ou usuário inativo!";
         divErro.classList.remove('hidden');
         return;
       }
@@ -554,7 +659,6 @@
       document.getElementById('txtMatriculaUsuario').innerText = `Matrícula: ${usuarioLogado.matricula}`;
       document.getElementById('badgeCargo').innerText = usuarioLogado.cargo_base.toUpperCase();
 
-      // Aplica RBAC no Menu Lateral
       const permitidos = PERMISSOES_MODULOS[usuarioLogado.cargo_base] || ['os'];
       ['os', 'frota', 'pcm', 'estoque', 'kpis', 'admin'].forEach(mod => {
         const btn = document.getElementById(`nav-${mod}`);
@@ -581,52 +685,61 @@
       if (modulo === 'frota') carregarFrota();
       if (modulo === 'pcm') carregarPCM();
       if (modulo === 'estoque') carregarEstoque();
-      if (modulo === 'kpis') calcularKPIs();
+      if (modulo === 'kpis') carregarResumoKPIs();
       if (modulo === 'admin') carregarAdmin();
     }
 
     // =====================================================================
-    // MÓDULO DE FROTA E QR CODES
+    // MÓDULO 2: FROTA (MARCA, MODELO, Nº SÉRIE, HORAS OU KM)
     // =====================================================================
+    function abrirModalEquipamento() {
+      document.getElementById('eqIdEdicao').value = '';
+      document.getElementById('eqTag').value = '';
+      document.getElementById('eqNome').value = '';
+      document.getElementById('eqMarca').value = '';
+      document.getElementById('eqModelo').value = '';
+      document.getElementById('eqSerie').value = '';
+      document.getElementById('eqHorimetro').value = '0';
+      document.getElementById('eqUnidade').value = 'HORAS';
+      document.getElementById('modalEquipamento').classList.remove('hidden');
+    }
+
     async function carregarFrota() {
-      const { data, error } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
-      if (error) return;
+      const { data } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
       cacheEquipamentos = data || [];
       const container = document.getElementById('listaEquipamentos');
 
       if (cacheEquipamentos.length === 0) {
-        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhum equipamento cadastrado ainda. Clique em "Cadastrar Equipamento".</div>`;
+        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhum equipamento cadastrado.</div>`;
         return;
       }
 
       container.innerHTML = cacheEquipamentos.map(eq => {
-        const coresStatus = {
-          operando: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-          parado_corretiva: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
-          parado_preventiva: 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-        };
-        const labelStatus = {
-          operando: 'OPERANDO',
-          parado_corretiva: 'PARADO (CORRETIVA)',
-          parado_preventiva: 'PARADO (PREVENTIVA)'
-        };
+        const sufixo = eq.unidade_medida === 'KM' ? 'km' : 'h';
+        const badgeStatus = eq.status_operacional === 'operando'
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+
         return `
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3">
             <div>
               <div class="flex items-center justify-between">
                 <span class="text-base font-black text-amber-400">${eq.tag}</span>
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${coresStatus[eq.status_operacional]}">${labelStatus[eq.status_operacional]}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${badgeStatus}">${eq.status_operacional === 'operando' ? 'OPERANDO' : 'EM MANUTENÇÃO'}</span>
               </div>
-              <p class="text-xs font-semibold text-white mt-1">${eq.nome}</p>
-              <p class="text-[11px] text-slate-400">Setor: ${eq.setor}</p>
+              <p class="text-xs font-bold text-white mt-1">${eq.nome}</p>
+              <div class="text-[11px] text-slate-400 mt-1 space-y-0.5">
+                <p>Marca/Modelo: <strong class="text-slate-200">${eq.marca || '-'} / ${eq.modelo || '-'}</strong></p>
+                <p>Nº Série: <span class="font-mono text-slate-300">${eq.numero_serie || '-'}</span></p>
+              </div>
             </div>
             <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
               <div>
-                <span class="text-[10px] text-slate-400 block">Horímetro Atual</span>
-                <span class="text-sm font-bold text-emerald-400">${parseFloat(eq.horimetro_atual).toFixed(1)} h</span>
+                <span class="text-[10px] text-slate-400 block">${eq.unidade_medida === 'KM' ? 'Quilometragem Atual' : 'Horímetro Atual'}</span>
+                <span class="text-sm font-black text-emerald-400">${parseFloat(eq.horimetro_atual).toFixed(1)} ${sufixo}</span>
               </div>
               <button onclick="exibirEtiquetaQR('${eq.id}')" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
-                <i class="fa-solid fa-qrcode"></i> Etiqueta QR
+                <i class="fa-solid fa-qrcode"></i> QR Code
               </button>
             </div>
           </div>
@@ -637,16 +750,20 @@
     async function salvarEquipamento() {
       const tag = document.getElementById('eqTag').value.trim().toUpperCase();
       const nome = document.getElementById('eqNome').value.trim();
-      const setor = document.getElementById('eqSetor').value.trim();
+      const marca = document.getElementById('eqMarca').value.trim();
+      const modelo = document.getElementById('eqModelo').value.trim();
+      const numero_serie = document.getElementById('eqSerie').value.trim().toUpperCase();
+      const unidade_medida = document.getElementById('eqUnidade').value;
       const horimetro = parseFloat(document.getElementById('eqHorimetro').value) || 0;
-      if (!tag || !nome) return alert("Preencha TAG e Descrição!");
 
+      if (!tag || !nome) return alert("Preencha ao menos a TAG e a Descrição!");
       const codigoCurto = `${tag.replace(/[^A-Z0-9]/g, '')}-${Math.floor(10 + Math.random() * 89)}`;
+
       const { error } = await db.from('equipamentos').insert([{
-        tag, nome, setor, horimetro_atual: horimetro, codigo_curto: codigoCurto
+        tag, nome, marca, modelo, numero_serie, unidade_medida, setor: '', horimetro_atual: horimetro, codigo_curto: codigoCurto
       }]);
 
-      if (error) return alert("Erro ao salvar equipamento: " + error.message);
+      if (error) return alert("Erro ao salvar: " + error.message);
       document.getElementById('modalEquipamento').classList.add('hidden');
       carregarFrota();
     }
@@ -655,8 +772,8 @@
       const eq = cacheEquipamentos.find(e => e.id === id);
       if (!eq) return;
       document.getElementById('qrModalTag').innerText = eq.tag;
-      document.getElementById('qrModalNome').innerText = eq.nome;
-      document.getElementById('qrModalCurto').innerText = eq.codigo_curto;
+      document.getElementById('qrModalNome').innerText = `${eq.nome} (${eq.marca || ''} ${eq.modelo || ''})`;
+      document.getElementById('qrModalCurto').innerText = eq.tag;
 
       const container = document.getElementById('qrcodeCanvas');
       container.innerHTML = '';
@@ -668,14 +785,17 @@
     }
 
     // =====================================================================
-    // MÓDULO DE ORDENS DE SERVIÇO (CAMPO & OFICINA)
+    // MÓDULO 1: ORDENS DE SERVIÇO (LOCALIZAÇÃO + MULTI-EXECUTANTES)
     // =====================================================================
     async function abrirModalNovaOS() {
       const { data } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
       cacheEquipamentos = data || [];
       const sel = document.getElementById('osEquipamentoSelect');
-      sel.innerHTML = `<option value="">-- Selecione a máquina --</option>` +
+      sel.innerHTML = `<option value="">-- Selecione o equipamento --</option>` +
         cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('');
+      document.getElementById('osAbertoPorNome').value = usuarioLogado.nome;
+      document.getElementById('osLocalizacao').value = '';
+      document.getElementById('osDescricao').value = '';
       document.getElementById('alertaDuplicidadeOS').classList.add('hidden');
       document.getElementById('modalNovaOS').classList.remove('hidden');
     }
@@ -691,7 +811,7 @@
         .in('status', ['aberta', 'em_execucao', 'pausada_peca']);
 
       if (data && data.length > 0) {
-        document.getElementById('textoDuplicidadeOS').innerText = `OS #${data[0].numero_os} (${data[0].status.toUpperCase()}): "${data[0].descricao_problema}"`;
+        document.getElementById('textoDuplicidadeOS').innerText = `OS #${data[0].numero_os}: "${data[0].descricao_problema}"`;
         divAlerta.classList.remove('hidden');
       } else {
         divAlerta.classList.add('hidden');
@@ -700,36 +820,34 @@
 
     async function salvarNovaOS() {
       const eqId = document.getElementById('osEquipamentoSelect').value;
-      const prioridade = document.getElementById('osPrioridade').value;
-      const parada = document.getElementById('osMaquinaParada').value === 'true';
+      const localizacao = document.getElementById('osLocalizacao').value.trim();
+      const abertoPorNome = document.getElementById('osAbertoPorNome').value.trim() || usuarioLogado.nome;
       const desc = document.getElementById('osDescricao').value.trim();
 
-      if (!eqId || !desc) return alert("Selecione o equipamento e descreva o problema!");
+      if (!eqId || !localizacao || !desc) return alert("Preencha o Equipamento, a Localização e a Descrição!");
 
       const { error } = await db.from('ordens_servico').insert([{
         equipamento_id: eqId,
         tipo: 'corretiva',
-        prioridade,
-        maquina_parada: parada,
+        prioridade: 'alta',
+        maquina_parada: true,
+        localizacao,
         aberto_por: usuarioLogado.id,
+        aberto_por_nome: abertoPorNome,
         descricao_problema: desc,
         status: 'aberta'
       }]);
 
       if (error) return alert("Erro ao abrir OS: " + error.message);
-
-      if (parada) {
-        await db.from('equipamentos').update({ status_operacional: 'parado_corretiva' }).eq('id', eqId);
-      }
+      await db.from('equipamentos').update({ status_operacional: 'parado_corretiva' }).eq('id', eqId);
 
       document.getElementById('modalNovaOS').classList.add('hidden');
-      document.getElementById('osDescricao').value = '';
       carregarOrdensServico('ativas');
     }
 
     async function carregarOrdensServico(filtro) {
       let query = db.from('ordens_servico')
-        .select('*, equipamentos(tag, nome, horimetro_atual), perfis_usuarios!ordens_servico_mecanico_responsavel_fkey(nome)')
+        .select('*, equipamentos(tag, nome, modelo)')
         .order('aberta_em', { ascending: false })
         .limit(50);
 
@@ -739,12 +857,15 @@
       const { data: listaPecas } = await db.from('pecas_estoque').select('*').eq('ativo', true);
       cachePecas = listaPecas || [];
 
+      const { data: listaUsrs } = await db.from('perfis_usuarios').select('*').eq('ativo', true).order('nome');
+      cacheUsuarios = listaUsrs || [];
+
       const { data, error } = await query;
       if (error) return;
 
       const container = document.getElementById('listaOS');
       if (!data || data.length === 0) {
-        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhuma Ordem de Serviço encontrada neste filtro.</div>`;
+        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhuma OS encontrada neste filtro.</div>`;
         return;
       }
 
@@ -757,6 +878,7 @@
         }[os.status] || 'bg-slate-800 text-slate-300';
 
         const opcoesPecas = cachePecas.map(p => `<option value="${p.id}">${p.codigo} - ${p.descricao} (Saldo: ${p.saldo_atual})</option>`).join('');
+        const listaExec = (os.executantes_nomes && os.executantes_nomes.length > 0) ? os.executantes_nomes.join(', ') : 'Aguardando';
 
         return `
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 flex flex-col justify-between">
@@ -767,45 +889,45 @@
               </div>
               <div class="flex items-center justify-between">
                 <h3 class="text-base font-black text-amber-400">${os.equipamentos?.tag || '---'} <span class="text-xs font-normal text-slate-300">- ${os.equipamentos?.nome || ''}</span></h3>
-                ${os.maquina_parada ? `<span class="text-[10px] bg-rose-950 text-rose-400 px-2 py-0.5 rounded border border-rose-800 font-bold">MÁQUINA PARADA</span>` : ''}
+                <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-location-dot"></i> ${os.localizacao || 'Campo'}</span>
               </div>
               <p class="text-xs text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">${os.descricao_problema}</p>
-              <div class="text-[11px] text-slate-400 flex flex-wrap gap-3">
-                <span><i class="fa-regular fa-clock"></i> Aberta: ${new Date(os.aberta_em).toLocaleString('pt-BR')}</span>
-                <span><i class="fa-solid fa-user-wrench"></i> Mecânico: <strong>${os.perfis_usuarios?.nome || 'Aguardando'}</strong></span>
+              <div class="text-[11px] text-slate-400 grid grid-cols-2 gap-1 pt-1">
+                <span><i class="fa-solid fa-user-tie"></i> Aberta por: <strong class="text-slate-200">${os.aberto_por_nome || 'Encarregado'}</strong></span>
+                <span><i class="fa-regular fa-clock"></i> ${new Date(os.aberta_em).toLocaleString('pt-BR')}</span>
+                <span class="col-span-2"><i class="fa-solid fa-users-gear"></i> Executantes: <strong class="text-amber-300">${listaExec}</strong></span>
               </div>
             </div>
 
             ${os.status !== 'concluida_oficina' && os.status !== 'auditada_pcm' ? `
               <div class="pt-3 border-t border-slate-800 space-y-2">
-                <!-- Requisitar Peça Rápida na OS -->
                 <div class="flex gap-1.5">
                   <select id="selPecaOS-${os.id}" class="flex-1 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-[11px] text-white">
-                    <option value="">+ Usar peça do estoque nesta OS...</option>
+                    <option value="">+ Requisitar peça para esta OS...</option>
                     ${opcoesPecas}
                   </select>
                   <input type="number" id="qtdPecaOS-${os.id}" value="1" min="1" class="w-14 px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-[11px] text-center text-white" />
-                  <button onclick="requisitarPecaNaOS('${os.id}')" class="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2.5 py-1.5 rounded text-[11px] font-bold border border-slate-700">
-                    Pedir
+                  <button onclick="requisitarPecaNaOS('${os.id}', '${os.equipamento_id}')" class="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2.5 py-1.5 rounded text-[11px] font-bold border border-slate-700">
+                    Vincular
                   </button>
                 </div>
 
-                <!-- Botões de Ação do Mecânico -->
                 <div class="grid grid-cols-3 gap-2 pt-1">
-                  <button onclick="acaoMecanicoOS('${os.id}', 'em_execucao', '${os.equipamento_id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
-                    <i class="fa-solid fa-play"></i> Assumir / Play
+                  <button onclick="acaoMecanicoOS('${os.id}', 'em_execucao')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-play"></i> Iniciar
                   </button>
-                  <button onclick="acaoMecanicoOS('${os.id}', 'pausada_peca', '${os.equipamento_id}')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
+                  <button onclick="acaoMecanicoOS('${os.id}', 'pausada_peca')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
                     <i class="fa-solid fa-pause"></i> Aguard. Peça
                   </button>
-                  <button onclick="concluirOSOficina('${os.id}', '${os.equipamento_id}')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
-                    <i class="fa-solid fa-check"></i> Liberar Máq.
+                  <button onclick="abrirModalConcluirOS('${os.id}', '${os.equipamento_id}')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-check-double"></i> Finalizar OS
                   </button>
                 </div>
               </div>
             ` : `
-              <div class="pt-2 border-t border-slate-800 text-[11px] text-emerald-400">
-                <i class="fa-solid fa-circle-check"></i> Serviço Concluído: ${os.servico_executado || 'Registrado'}
+              <div class="pt-2 border-t border-slate-800 text-[11px] text-emerald-400 space-y-0.5">
+                <p><i class="fa-solid fa-circle-check"></i> <strong>Serviço:</strong> ${os.servico_executado || 'Concluído'}</p>
+                <p class="text-slate-400">Concluída em: ${os.concluida_em ? new Date(os.concluida_em).toLocaleString('pt-BR') : '-'}</p>
               </div>
             `}
           </div>
@@ -818,7 +940,7 @@
       const { data: osAtual } = await db.from('ordens_servico').select('*').eq('id', osId).single();
       if (!osAtual) return;
 
-      let updateData = { status: novoStatus, mecanico_responsavel: usuarioLogado.id };
+      let updateData = { status: novoStatus };
       if (novoStatus === 'em_execucao' && !osAtual.iniciada_em) updateData.iniciada_em = agora;
       if (novoStatus === 'pausada_peca') updateData.ultima_pausa_em = agora;
 
@@ -826,68 +948,105 @@
       carregarOrdensServico('ativas');
     }
 
-    async function concluirOSOficina(osId, eqId) {
-      const servico = prompt("Descreva resumidamente o serviço executado para liberar o equipamento:");
-      if (!servico) return;
+    function abrirModalConcluirOS(osId, eqId) {
+      document.getElementById('concluirOsId').value = osId;
+      document.getElementById('concluirEqId').value = eqId;
+      document.getElementById('concluirServicoTexto').value = '';
+      document.getElementById('concluirExecutantesExtras').value = '';
+
+      const divChecks = document.getElementById('listaCheckboxesMecanicos');
+      divChecks.innerHTML = cacheUsuarios.map(u => `
+        <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer hover:bg-slate-900 p-1 rounded">
+          <input type="checkbox" value="${u.nome}" data-id="${u.id}" class="chk-executante rounded border-slate-700 text-amber-500" ${u.id === usuarioLogado.id ? 'checked' : ''} />
+          <span>${u.nome} <span class="text-[10px] text-slate-500">(${u.cargo_base})</span></span>
+        </label>
+      `).join('');
+
+      document.getElementById('modalConcluirOS').classList.remove('hidden');
+    }
+
+    async function confirmarFechamentoOS() {
+      const osId = document.getElementById('concluirOsId').value;
+      const eqId = document.getElementById('concluirEqId').value;
+      const servico = document.getElementById('concluirServicoTexto').value.trim();
+      const extras = document.getElementById('concluirExecutantesExtras').value.trim();
+
+      const selecionados = Array.from(document.querySelectorAll('.chk-executante:checked')).map(cb => cb.value);
+      if (extras) {
+        extras.split(',').map(s => s.trim()).filter(Boolean).forEach(nome => selecionados.push(nome));
+      }
+
+      if (selecionados.length === 0) return alert("Selecione pelo menos um executante que trabalhou na OS!");
+      if (!servico) return alert("Descreva o serviço executado!");
 
       const { data: osAtual } = await db.from('ordens_servico').select('*').eq('id', osId).single();
       const agora = new Date();
       const inicio = osAtual.iniciada_em ? new Date(osAtual.iniciada_em) : new Date(osAtual.aberta_em);
-      const segundosEfetivos = Math.max(60, Math.floor((agora - inicio) / 1000));
+      const segundosParada = Math.max(60, Math.floor((agora - inicio) / 1000));
 
       await db.from('ordens_servico').update({
         status: 'concluida_oficina',
         servico_executado: servico,
-        mecanico_responsavel: usuarioLogado.id,
+        executantes_nomes: selecionados,
+        quantidade_executantes: selecionados.length,
         concluida_em: agora.toISOString(),
-        tempo_efetivo_segundos: segundosEfetivos
+        tempo_efetivo_segundos: segundosParada
       }).eq('id', osId);
 
-      // Libera a máquina de volta para Operando
       await db.from('equipamentos').update({ status_operacional: 'operando' }).eq('id', eqId);
+      document.getElementById('modalConcluirOS').classList.add('hidden');
       carregarOrdensServico('ativas');
     }
 
-    async function requisitarPecaNaOS(osId) {
+    async function requisitarPecaNaOS(osId, eqId) {
       const pecaId = document.getElementById(`selPecaOS-${osId}`).value;
       const qtd = parseFloat(document.getElementById(`qtdPecaOS-${osId}`).value) || 1;
-      if (!pecaId) return alert("Selecione uma peça da lista!");
+      if (!pecaId) return alert("Selecione a peça!");
 
       const peca = cachePecas.find(p => p.id === pecaId);
-      const { error } = await db.from('itens_os_estoque').insert([{
+      await db.from('itens_os_estoque').insert([{
         peca_id: pecaId,
         os_id: osId,
+        equipamento_id: eqId,
         tipo_movimento: 'saida_os',
         quantidade: qtd,
         custo_unitario_congelado: peca ? peca.custo_unitario_atual : 0,
         status_baixa: 'pendente_almoxarife',
         solicitado_por: usuarioLogado.id
       }]);
-
-      if (error) return alert("Erro ao requisitar peça: " + error.message);
-      alert("Peça vinculada à OS! (Pendente de conferência do Almoxarife, mas você já pode liberar a máquina quando terminar).");
+      alert("Peça vinculada à OS!");
     }
 
     // =====================================================================
-    // MÓDULO DE PCM (PREVENTIVAS POR HORÍMETRO)
+    // MÓDULO 3: PCM ACUMULATIVO EM CASCATA (250 / 500 / 1000)
     // =====================================================================
     async function abrirModalPlanoPreventiva() {
       const { data } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
       const sel = document.getElementById('pcmEquipamentoSelect');
-      sel.innerHTML = (data || []).map(e => `<option value="${e.id}">${e.tag} - ${e.nome} (${e.horimetro_atual}h)</option>`).join('');
+      sel.innerHTML = (data || []).map(e => `<option value="${e.id}">${e.tag} - ${e.nome} (${e.horimetro_atual} ${e.unidade_medida === 'KM' ? 'km' : 'h'})</option>`).join('');
       document.getElementById('modalPlanoPCM').classList.remove('hidden');
     }
 
     async function salvarPlanoPCM() {
       const eqId = document.getElementById('pcmEquipamentoSelect').value;
-      const nome = document.getElementById('pcmNomePlano').value.trim();
-      const intervalo = parseFloat(document.getElementById('pcmIntervalo').value) || 250;
+      const base = parseFloat(document.getElementById('pcmIntervaloBase').value) || 250;
       const ultimo = parseFloat(document.getElementById('pcmUltimoHorimetro').value) || 0;
-      const check = document.getElementById('pcmChecklist').value.trim();
+      const t250 = document.getElementById('pcmTarefas250').value.trim();
+      const t500 = document.getElementById('pcmTarefas500').value.trim();
+      const t1000 = document.getElementById('pcmTarefas1000').value.trim();
 
-      if (!eqId || !nome || !check) return alert("Preencha todos os campos do plano!");
+      if (!eqId || !t250) return alert("Selecione o equipamento e preencha ao menos as tarefas base!");
+
       await db.from('planos_preventiva').insert([{
-        equipamento_id: eqId, nome_plano: nome, intervalo_horas: intervalo, ultimo_horimetro_executado: ultimo, checklist_tarefas: check
+        equipamento_id: eqId,
+        nome_plano: `Plano Múltiplo (${base}/${base*2}/${base*4})`,
+        intervalo_horas: base,
+        intervalo_base: base,
+        ultimo_horimetro_executado: ultimo,
+        tarefas_250: t250,
+        tarefas_500: t500,
+        tarefas_1000: t1000,
+        checklist_tarefas: t250
       }]);
 
       document.getElementById('modalPlanoPCM').classList.add('hidden');
@@ -895,121 +1054,270 @@
     }
 
     async function carregarPCM() {
-      const { data } = await db.from('planos_preventiva').select('*, equipamentos(id, tag, nome, horimetro_atual)').eq('ativo', true);
+      const { data } = await db.from('planos_preventiva').select('*, equipamentos(id, tag, nome, horimetro_atual, unidade_medida)').eq('ativo', true);
       const container = document.getElementById('listaPlanosPCM');
       if (!data || data.length === 0) {
-        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhum plano preventivo cadastrado.</div>`;
+        container.innerHTML = `<div class="col-span-full p-6 bg-slate-900 border border-slate-800 rounded-xl text-center text-xs text-slate-400">Nenhum plano preventivo configurado.</div>`;
         return;
       }
 
       container.innerHTML = data.map(p => {
-        const horAtual = parseFloat(p.equipamentos?.horimetro_atual || 0);
-        const proxRevisao = parseFloat(p.ultimo_horimetro_executado) + parseFloat(p.intervalo_horas);
-        const horasRestantes = proxRevisao - horAtual;
+        const sufixo = p.equipamentos?.unidade_medida === 'KM' ? 'km' : 'h';
+        const base = parseFloat(p.intervalo_base || p.intervalo_horas || 250);
+        const atual = parseFloat(p.equipamentos?.horimetro_atual || 0);
+        const ultimo = parseFloat(p.ultimo_horimetro_executado || 0);
+        const proxAlvo = ultimo + base;
+        const falta = proxAlvo - atual;
+
+        // Descobre qual degrau da escadinha é o próximo (250, 500 ou 1000)
+        let nivelRevisao = `${base}${sufixo}`;
+        let checklistAcumulado = `[REVISÃO ${base}${sufixo}]: ${p.tarefas_250 || p.checklist_tarefas}`;
+
+        if (proxAlvo % (base * 4) === 0) {
+          nivelRevisao = `${base * 4}${sufixo} (Completa: ${base}+${base*2}+${base*4})`;
+          checklistAcumulado = `[${base}${sufixo}]: ${p.tarefas_250 || ''} | [+${base*2}${sufixo}]: ${p.tarefas_500 || ''} | [+${base*4}${sufixo}]: ${p.tarefas_1000 || ''}`;
+        } else if (proxAlvo % (base * 2) === 0) {
+          nivelRevisao = `${base * 2}${sufixo} (Acumulada: ${base}+${base*2})`;
+          checklistAcumulado = `[${base}${sufixo}]: ${p.tarefas_250 || ''} | [+${base*2}${sufixo}]: ${p.tarefas_500 || ''}`;
+        }
 
         let cor = 'border-emerald-500/40 text-emerald-400';
-        let statusTxt = `Faltam ${horasRestantes.toFixed(1)} h`;
-        if (horasRestantes <= 0) {
-          cor = 'border-rose-500/50 text-rose-400 bg-rose-950/20';
-          statusTxt = `VENCIDA HÁ ${Math.abs(horasRestantes).toFixed(1)} h!`;
-        } else if (horasRestantes <= 30) {
-          cor = 'border-amber-500/50 text-amber-400 bg-amber-950/20';
-          statusTxt = `ATENÇÃO: Faltam ${horasRestantes.toFixed(1)} h`;
+        let alertaTxt = `Faltam ${falta.toFixed(1)} ${sufixo}`;
+        const margem = p.equipamentos?.unidade_medida === 'KM' ? 500 : 30;
+        if (falta <= 0) {
+          cor = 'border-rose-500/60 text-rose-400 bg-rose-950/20';
+          alertaTxt = `VENCIDA HÁ ${Math.abs(falta).toFixed(1)} ${sufixo}!`;
+        } else if (falta <= margem) {
+          cor = 'border-amber-500/60 text-amber-400 bg-amber-950/20';
+          alertaTxt = `PRÓXIMA: Faltam ${falta.toFixed(1)} ${sufixo}`;
         }
 
         return `
-          <div class="bg-slate-900 border ${cor} rounded-xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-black text-white">${p.equipamentos?.tag} - ${p.nome_plano}</span>
-              <span class="text-xs font-bold">${statusTxt}</span>
+          <div class="bg-slate-900 border ${cor} rounded-xl p-4 space-y-3 flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-base font-black text-white">${p.equipamentos?.tag} <span class="text-xs font-normal text-slate-400">- ${p.equipamentos?.nome}</span></span>
+                <span class="text-xs font-bold">${alertaTxt}</span>
+              </div>
+              <div class="text-xs bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <p class="text-amber-400 font-bold">Próxima Etapa do Ciclo: Revisão de ${nivelRevisao}</p>
+                <p class="text-slate-400">Leitura Atual: <strong class="text-white">${atual} ${sufixo}</strong> &bull; Executar em: <strong class="text-emerald-400">${proxAlvo} ${sufixo}</strong></p>
+                <p class="text-slate-300 text-[11px] pt-1 border-t border-slate-800/80">${checklistAcumulado}</p>
+              </div>
             </div>
-            <p class="text-xs text-slate-400">Horímetro Atual: <strong>${horAtual}h</strong> | Próxima Revisão em: <strong>${proxRevisao}h</strong></p>
-            <p class="text-xs text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">${p.checklist_tarefas}</p>
-            <button onclick="gerarOSPreventiva('${p.id}', '${p.equipamentos?.id}', '${p.nome_plano}', '${p.checklist_tarefas}', ${horAtual})"
+            <button onclick="gerarOSPreventivaCascata('${p.id}', '${p.equipamentos?.id}', '${nivelRevisao}', \`${checklistAcumulado.replace(/`/g, '')}\`, ${proxAlvo})"
               class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs">
-              Gerar OS Preventiva para a Oficina e Atualizar Ciclo
+              Disparar OS desta Preventiva e Avançar Ciclo para ${proxAlvo + base} ${sufixo}
             </button>
           </div>
         `;
       }).join('');
     }
 
-    async function gerarOSPreventiva(planoId, eqId, nomePlano, checklist, horAtual) {
+    async function gerarOSPreventivaCascata(planoId, eqId, nivelRevisao, checklist, marcoExecutado) {
       await db.from('ordens_servico').insert([{
         equipamento_id: eqId,
         tipo: 'preventiva',
-        prioridade: 'media',
-        maquina_parada: true,
+        localizacao: 'Oficina Preventiva',
         aberto_por: usuarioLogado.id,
-        descricao_problema: `[PREVENTIVA: ${nomePlano}] Checklist: ${checklist}`,
+        aberto_por_nome: `PCM (${usuarioLogado.nome})`,
+        descricao_problema: `PREVENTIVA ACUMULADA ${nivelRevisao} -> ${checklist}`,
         status: 'aberta'
       }]);
-      await db.from('planos_preventiva').update({ ultimo_horimetro_executado: horAtual }).eq('id', planoId);
-      alert("OS Preventiva enviada para a fila da oficina!");
+      await db.from('planos_preventiva').update({ ultimo_horimetro_executado: marcoExecutado }).eq('id', planoId);
+      alert("OS Preventiva gerada na fila da oficina e ciclo atualizado!");
       carregarPCM();
     }
 
     // =====================================================================
-    // MÓDULO DE ALMOXARIFADO E ESTOQUE
+    // MÓDULO 4: ALMOXARIFADO (EQUIVALÊNCIAS, ENTRADA NF E SAÍDA AVULSA)
     // =====================================================================
     async function salvarPecaEstoque() {
       const codigo = document.getElementById('pecaCodigo').value.trim().toUpperCase();
+      const unidade = document.getElementById('pecaUnidade').value.trim().toUpperCase() || 'UN';
+      const localizacao = document.getElementById('pecaLocal').value.trim();
       const descricao = document.getElementById('pecaDescricao').value.trim();
-      const apelidos = document.getElementById('pecaApelidos').value.trim();
-      const local = document.getElementById('pecaLocal').value.trim();
-      const saldo = parseFloat(document.getElementById('pecaSaldo').value) || 0;
-      const minimo = parseFloat(document.getElementById('pecaMinimo').value) || 1;
-      const custo = parseFloat(document.getElementById('pecaCusto').value) || 0;
+      const codigos_equivalentes = document.getElementById('pecaEquivalentes').value.trim();
+      const equipamentos_aplicaveis = document.getElementById('pecaEquipamentos').value.trim();
+      const saldo_atual = parseFloat(document.getElementById('pecaSaldo').value) || 0;
+      const estoque_minimo = parseFloat(document.getElementById('pecaMinimo').value) || 1;
+      const custo_unitario_atual = parseFloat(document.getElementById('pecaCusto').value) || 0;
 
-      if (!codigo || !descricao) return alert("Preencha Código e Nome da Peça!");
+      if (!codigo || !descricao) return alert("Preencha Código Principal e Descrição!");
+
       const { error } = await db.from('pecas_estoque').insert([{
-        codigo, descricao, aplicacao_apelidos: apelidos, localizacao: local, saldo_atual: saldo, estoque_minimo: minimo, custo_unitario_atual: custo
+        codigo, unidade, localizacao, descricao, codigos_equivalentes, equipamentos_aplicaveis,
+        aplicacao_apelidos: `${codigos_equivalentes} ${equipamentos_aplicaveis}`,
+        saldo_atual, estoque_minimo, custo_unitario_atual
       }]);
-      if (error) return alert("Erro: " + error.message);
+      if (error) return alert("Erro ao cadastrar peça: " + error.message);
       document.getElementById('modalPeca').classList.add('hidden');
       carregarEstoque();
     }
 
+    async function abrirModalEntradaNF() {
+      const { data } = await db.from('pecas_estoque').select('*').eq('ativo', true).order('codigo');
+      cachePecas = data || [];
+      document.getElementById('nfPecaSelect').innerHTML = cachePecas.map(p => `<option value="${p.id}">${p.codigo} - ${p.descricao} (Saldo: ${p.saldo_atual})</option>`).join('');
+      document.getElementById('nfNumero').value = '';
+      document.getElementById('nfFornecedor').value = '';
+      document.getElementById('nfQuantidade').value = '1';
+      document.getElementById('nfCustoUnitario').value = '';
+      document.getElementById('modalEntradaNF').classList.remove('hidden');
+    }
+
+    async function confirmarEntradaNF() {
+      const pecaId = document.getElementById('nfPecaSelect').value;
+      const nf = document.getElementById('nfNumero').value.trim();
+      const fornecedor = document.getElementById('nfFornecedor').value.trim();
+      const qtd = parseFloat(document.getElementById('nfQuantidade').value) || 0;
+      const custoNF = parseFloat(document.getElementById('nfCustoUnitario').value) || 0;
+
+      if (!pecaId || !nf || qtd <= 0) return alert("Informe a Peça, o Número da Nota Fiscal e a Quantidade!");
+
+      const peca = cachePecas.find(p => p.id === pecaId);
+      const novoSaldo = parseFloat(peca.saldo_atual || 0) + qtd;
+
+      await db.from('itens_os_estoque').insert([{
+        peca_id: pecaId,
+        tipo_movimento: 'entrada_nf',
+        quantidade: qtd,
+        custo_unitario_congelado: custoNF,
+        nota_fiscal: nf,
+        fornecedor: fornecedor,
+        status_baixa: 'confirmado',
+        solicitado_por: usuarioLogado.id,
+        confirmado_por: usuarioLogado.id
+      }]);
+
+      await db.from('pecas_estoque').update({
+        saldo_atual: novoSaldo,
+        custo_unitario_atual: custoNF > 0 ? custoNF : peca.custo_unitario_atual
+      }).eq('id', pecaId);
+
+      document.getElementById('modalEntradaNF').classList.add('hidden');
+      carregarEstoque();
+    }
+
+    async function abrirModalSaidaAvulsa() {
+      const { data: pecas } = await db.from('pecas_estoque').select('*').eq('ativo', true).order('codigo');
+      cachePecas = pecas || [];
+      document.getElementById('saidaPecaSelect').innerHTML = cachePecas.map(p => `<option value="${p.id}">${p.codigo} - ${p.descricao} (Saldo: ${p.saldo_atual})</option>`).join('');
+
+      const { data: eqs } = await db.from('equipamentos').select('*').eq('ativo', true).order('tag');
+      document.getElementById('saidaEquipamentoSelect').innerHTML = `<option value="">-- Uso Geral / Sem Equipamento Específico --</option>` +
+        (eqs || []).map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('');
+
+      document.getElementById('saidaQuantidade').value = '1';
+      document.getElementById('saidaNF').value = '';
+      document.getElementById('saidaObservacao').value = '';
+      document.getElementById('modalSaidaAvulsa').classList.remove('hidden');
+    }
+
+    async function confirmarSaidaAvulsa() {
+      const pecaId = document.getElementById('saidaPecaSelect').value;
+      const qtd = parseFloat(document.getElementById('saidaQuantidade').value) || 0;
+      const nf = document.getElementById('saidaNF').value.trim();
+      const eqId = document.getElementById('saidaEquipamentoSelect').value || null;
+      const obs = document.getElementById('saidaObservacao').value.trim();
+
+      if (!pecaId || qtd <= 0) return alert("Selecione a peça e a quantidade!");
+      const peca = cachePecas.find(p => p.id === pecaId);
+
+      await db.from('itens_os_estoque').insert([{
+        peca_id: pecaId,
+        equipamento_id: eqId,
+        tipo_movimento: 'saida_avulsa',
+        quantidade: qtd,
+        custo_unitario_congelado: peca ? peca.custo_unitario_atual : 0,
+        nota_fiscal: nf,
+        observacao: obs,
+        status_baixa: 'confirmado',
+        solicitado_por: usuarioLogado.id,
+        confirmado_por: usuarioLogado.id
+      }]);
+
+      await db.from('pecas_estoque').update({
+        saldo_atual: parseFloat(peca.saldo_atual || 0) - qtd
+      }).eq('id', pecaId);
+
+      document.getElementById('modalSaidaAvulsa').classList.add('hidden');
+      carregarEstoque();
+    }
+
     async function carregarEstoque() {
-      // 1. Baixas pendentes
+      // 1. Baixas Pendentes de OS
       const { data: pendentes } = await db.from('itens_os_estoque')
         .select('*, pecas_estoque(codigo, descricao, saldo_atual), ordens_servico(numero_os)')
         .eq('status_baixa', 'pendente_almoxarife');
 
       const divPend = document.getElementById('listaBaixasPendentes');
       if (!pendentes || pendentes.length === 0) {
-        divPend.innerHTML = `<p class="text-slate-500">Nenhuma requisição pendente de baixa no momento.</p>`;
+        divPend.innerHTML = `<p class="text-slate-500">Nenhuma requisição da oficina pendente.</p>`;
       } else {
         divPend.innerHTML = pendentes.map(item => `
           <div class="flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800">
             <div>
               <span class="font-bold text-amber-400">OS #${item.ordens_servico?.numero_os || '---'}</span> &bull;
               <span class="text-white font-semibold">${item.quantidade}x ${item.pecas_estoque?.codigo} - ${item.pecas_estoque?.descricao}</span>
-              <span class="text-slate-400 ml-2">(Custo congelado: R$ ${parseFloat(item.custo_unitario_congelado).toFixed(2)})</span>
             </div>
             <button onclick="confirmarBaixaAlmoxarife('${item.id}', '${item.peca_id}', ${item.quantidade}, ${item.pecas_estoque?.saldo_atual || 0})"
               class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded text-xs">
-              Confirmar Saída
+              Confirmar Baixa
             </button>
           </div>
         `).join('');
       }
 
-      // 2. Catálogo Geral
+      // 2. Catálogo com Equivalências
       const { data: pecas } = await db.from('pecas_estoque').select('*').eq('ativo', true).order('codigo');
-      const divCat = document.getElementById('listaCatalogoPecas');
-      divCat.innerHTML = `
+      cachePecas = pecas || [];
+      renderizarTabelaCatalogo(cachePecas);
+
+      // 3. Histórico de Entradas NF e Saídas Avulsas
+      const { data: movs } = await db.from('itens_os_estoque')
+        .select('*, pecas_estoque(codigo, descricao), equipamentos(tag)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      document.getElementById('listaHistoricoMovimentos').innerHTML = `
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="py-1.5">Data</th><th>Tipo</th><th>Peça</th><th>Qtd</th><th>NF / Fornecedor</th><th>Máquina</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/50">
+            ${(movs || []).map(m => `
+              <tr>
+                <td class="py-1.5 text-slate-400">${new Date(m.created_at).toLocaleDateString('pt-BR')}</td>
+                <td class="font-bold ${m.tipo_movimento === 'entrada_nf' ? 'text-emerald-400' : 'text-rose-400'}">${m.tipo_movimento.toUpperCase()}</td>
+                <td>${m.pecas_estoque?.codigo} - ${m.pecas_estoque?.descricao}</td>
+                <td class="font-bold">${m.quantidade}</td>
+                <td class="text-amber-300">${m.nota_fiscal || '-'} ${m.fornecedor ? '(' + m.fornecedor + ')' : ''}</td>
+                <td>${m.equipamentos?.tag || m.observacao || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderizarTabelaCatalogo(lista) {
+      document.getElementById('listaCatalogoPecas').innerHTML = `
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-slate-800 text-slate-400">
-              <th class="py-2">Código</th><th>Descrição / Apelidos</th><th>Local</th><th>Saldo</th><th>Custo Unit.</th>
+              <th class="py-2">Código</th><th>Descrição</th><th>Part Numbers Equivalentes (Similares)</th><th>Aplicação (Máquinas)</th><th>Local</th><th>Saldo</th><th>Custo Unit.</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/60">
-            ${(pecas || []).map(p => `
+            ${lista.map(p => `
               <tr>
                 <td class="py-2 font-mono font-bold text-amber-400">${p.codigo}</td>
-                <td>${p.descricao} <span class="text-[10px] text-slate-500 block">${p.aplicacao_apelidos || ''}</span></td>
+                <td class="font-semibold text-white">${p.descricao}</td>
+                <td class="text-amber-200/90">${p.codigos_equivalentes || '-'}</td>
+                <td class="text-emerald-300">${p.equipamentos_aplicaveis || '-'}</td>
                 <td>${p.localizacao || '-'}</td>
                 <td class="font-bold ${p.saldo_atual <= p.estoque_minimo ? 'text-rose-400' : 'text-emerald-400'}">${p.saldo_atual} ${p.unidade}</td>
                 <td>R$ ${parseFloat(p.custo_unitario_atual).toFixed(2)}</td>
@@ -1020,41 +1328,40 @@
       `;
     }
 
+    function filtrarTabelaEstoque() {
+      const termo = document.getElementById('buscaEstoqueInput').value.toLowerCase();
+      const filtradas = cachePecas.filter(p =>
+        (p.codigo || '').toLowerCase().includes(termo) ||
+        (p.descricao || '').toLowerCase().includes(termo) ||
+        (p.codigos_equivalentes || '').toLowerCase().includes(termo) ||
+        (p.equipamentos_aplicaveis || '').toLowerCase().includes(termo)
+      );
+      renderizarTabelaCatalogo(filtradas);
+    }
+
     async function confirmarBaixaAlmoxarife(itemId, pecaId, qtd, saldoAtual) {
       await db.from('itens_os_estoque').update({ status_baixa: 'confirmado', confirmado_por: usuarioLogado.id }).eq('id', itemId);
       await db.from('pecas_estoque').update({ saldo_atual: saldoAtual - qtd }).eq('id', pecaId);
       carregarEstoque();
     }
 
-    // =====================================================================
-    // MÓDULO DE INDICADORES (KPIs) E ADMIN
-    // =====================================================================
-    async function calcularKPIs() {
-      const { data: eqs } = await db.from('equipamentos').select('status_operacional').eq('ativo', true);
-      if (eqs && eqs.length > 0) {
-        const operando = eqs.filter(e => e.status_operacional === 'operando').length;
-        document.getElementById('kpiDisponibilidade').innerText = `${((operando / eqs.length) * 100).toFixed(1)}%`;
-      }
+    // Resumo rápido de KPIs (Lote 3 trará o painel analítico completo com filtros e PDF/Excel)
+    async function carregarResumoKPIs() {
+      const { data: pecas } = await db.from('pecas_estoque').select('saldo_atual, custo_unitario_atual').eq('ativo', true);
+      const valorEstoque = (pecas || []).reduce((acc, p) => acc + (Math.max(0, parseFloat(p.saldo_atual)) * parseFloat(p.custo_unitario_atual)), 0);
 
-      const { data: osConcluidas } = await db.from('ordens_servico').select('tempo_efetivo_segundos, tempo_espera_segundos').eq('status', 'concluida_oficina');
-      if (osConcluidas && osConcluidas.length > 0) {
-        const mediaEfetivaH = (osConcluidas.reduce((acc, o) => acc + (o.tempo_efetivo_segundos || 0), 0) / osConcluidas.length) / 3600;
-        const mediaEsperaH = (osConcluidas.reduce((acc, o) => acc + (o.tempo_espera_segundos || 0), 0) / osConcluidas.length) / 3600;
-        document.getElementById('kpiMttrEfetivo').innerText = `${mediaEfetivaH.toFixed(1)} h`;
-        document.getElementById('kpiEsperaPeca').innerText = `${mediaEsperaH.toFixed(1)} h`;
-      }
-
-      const { data: itens } = await db.from('itens_os_estoque').select('quantidade, custo_unitario_congelado');
-      if (itens) {
-        const total = itens.reduce((acc, i) => acc + (parseFloat(i.quantidade) * parseFloat(i.custo_unitario_congelado)), 0);
-        document.getElementById('kpiCustoTotal').innerText = `R$ ${total.toFixed(2)}`;
-      }
+      document.getElementById('containerResumoKPIs').innerHTML = `
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <span class="text-xs text-slate-400">Valor Total em Estoque</span>
+          <p class="text-2xl font-black text-emerald-400 mt-1">R$ ${valorEstoque.toFixed(2)}</p>
+        </div>
+      `;
     }
 
+    // =====================================================================
+    // ADMINISTRAÇÃO DE USUÁRIOS
+    // =====================================================================
     async function carregarAdmin() {
-      const { data: cfg } = await db.from('configuracoes_sistema').select('*').eq('id', 1).single();
-      if (cfg) document.getElementById('inputPinGlobal').value = cfg.pin_operacao;
-
       const { data: usrs } = await db.from('perfis_usuarios').select('*').order('nome');
       document.getElementById('listaUsuariosAdmin').innerHTML = `
         <table class="w-full text-left text-xs">
@@ -1089,8 +1396,7 @@
       const cargo_base = document.getElementById('usrCargo').value;
       if (!matricula || !senha_acesso || !nome) return alert("Preencha todos os campos!");
 
-      const { error } = await db.from('perfis_usuarios').insert([{ matricula, senha_acesso, nome, cargo_base }]);
-      if (error) return alert("Erro ao criar matrícula: " + error.message);
+      await db.from('perfis_usuarios').insert([{ matricula, senha_acesso, nome, cargo_base }]);
       document.getElementById('modalUsuario').classList.add('hidden');
       carregarAdmin();
     }
@@ -1100,14 +1406,6 @@
       carregarAdmin();
     }
 
-    async function salvarPinGlobal() {
-      const novoPin = document.getElementById('inputPinGlobal').value.trim();
-      if (novoPin.length !== 4) return alert("O PIN deve ter 4 dígitos!");
-      await db.from('configuracoes_sistema').update({ pin_operacao: novoPin }).eq('id', 1);
-      alert("PIN dos operadores atualizado com sucesso!");
-    }
-
-    // Restaura sessão se já estava logado
     window.onload = () => {
       const salvo = localStorage.getItem('vilasa_user');
       if (salvo) {
