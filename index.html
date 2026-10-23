@@ -3172,6 +3172,429 @@
         } catch (e) { fazerLogout(); }
       }
     };
+  // =====================================================================
+    // UPGRADE V5.2: BUSCA EM TODAS AS CAIXAS (<SELECT>), ADMIN SEM LIMITE
+    // E IMPORTADOR REP COM AUTO-CADASTRO DE EQUIPAMENTOS NÃO CADASTRADOS
+    // =====================================================================
+
+    // 1. Buscador Paginado que vence o limite de 1.000 linhas do Supabase
+    async function buscarTudoSemLimite(tabela, colunaOrdem = 'id', ascendente = true) {
+      let todos = [];
+      let de = 0;
+      const passo = 1000;
+      while (true) {
+        let q = db.from(tabela).select('*').range(de, de + passo - 1);
+        if (colunaOrdem) q = q.order(colunaOrdem, { ascending: ascendente });
+        const { data, error } = await q;
+        if (error || !data || data.length === 0) break;
+        todos = todos.concat(data);
+        if (data.length < passo) break;
+        de += passo;
+      }
+      return todos;
+    }
+
+    // 2. Editor Universal do Admin SEM limite de 100 linhas + Busca Instantânea + Paginação
+    let paginaAtualAdmin = 1;
+    const ITENS_POR_PAGINA_ADMIN = 50;
+    let listaFiltradaAdmin = [];
+
+    async function carregarTabelaEditorAdmin() {
+      if (!podeExecutarAcao('acesso_modo_deus')) return;
+      const tabela = document.getElementById('selectTabelaEditorAdmin').value;
+      const container = document.getElementById('containerTabelaEditorAdmin');
+      container.innerHTML = `<p class="text-amber-600 font-bold py-4"><i class="fa-solid fa-spinner fa-spin"></i> Carregando todos os registros de ${tabela}...</p>`;
+
+      cacheRegistrosEditorAdmin = await buscarTudoSemLimite(tabela, null);
+      listaFiltradaAdmin = [...cacheRegistrosEditorAdmin];
+      paginaAtualAdmin = 1;
+      renderizarTabelaPaginadaAdmin();
+    }
+
+    function filtrarRegistrosEditorAdmin(termo) {
+      const t = (termo || '').toLowerCase().trim();
+      if (!t) {
+        listaFiltradaAdmin = [...cacheRegistrosEditorAdmin];
+      } else {
+        listaFiltradaAdmin = cacheRegistrosEditorAdmin.filter(reg =>
+          Object.values(reg).some(val => String(val ?? '').toLowerCase().includes(t))
+        );
+      }
+      paginaAtualAdmin = 1;
+      renderizarTabelaPaginadaAdmin(termo);
+    }
+
+    function mudarPaginaAdmin(delta) {
+      const totalPaginas = Math.max(1, Math.ceil(listaFiltradaAdmin.length / ITENS_POR_PAGINA_ADMIN));
+      paginaAtualAdmin = Math.min(totalPaginas, Math.max(1, paginaAtualAdmin + delta));
+      const inputBusca = document.getElementById('inputBuscaEditorAdmin');
+      renderizarTabelaPaginadaAdmin(inputBusca ? inputBusca.value : '');
+    }
+
+    function renderizarTabelaPaginadaAdmin(termoMantido = '') {
+      const container = document.getElementById('containerTabelaEditorAdmin');
+      if (cacheRegistrosEditorAdmin.length === 0) {
+        container.innerHTML = `<p class="text-slate-500 py-4">Sem registros nesta tabela.</p>`;
+        return;
+      }
+
+      const total = listaFiltradaAdmin.length;
+      const totalPaginas = Math.max(1, Math.ceil(total / ITENS_POR_PAGINA_ADMIN));
+      const inicio = (paginaAtualAdmin - 1) * ITENS_POR_PAGINA_ADMIN;
+      const fatia = listaFiltradaAdmin.slice(inicio, inicio + ITENS_POR_PAGINA_ADMIN);
+      const colunas = Object.keys(cacheRegistrosEditorAdmin[0]).slice(0, 7);
+
+      container.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-200">
+          <div class="flex items-center gap-2 flex-1 min-w-[240px]">
+            <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
+            <input type="text" id="inputBuscaEditorAdmin" value="${termoMantido.replace(/"/g, '&quot;')}"
+              oninput="filtrarRegistrosEditorAdmin(this.value)"
+              placeholder="Pesquisar qualquer TAG, código, nome ou valor nos ${cacheRegistrosEditorAdmin.length} registros..."
+              class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 font-semibold focus:outline-none focus:border-amber-500" />
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-slate-600 font-bold">Total: ${total} registro(s) &bull; Pág. ${paginaAtualAdmin}/${totalPaginas}</span>
+            <button onclick="mudarPaginaAdmin(-1)" ${paginaAtualAdmin <= 1 ? 'disabled' : ''} class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded border border-slate-300 font-bold">Anterior</button>
+            <button onclick="mudarPaginaAdmin(1)" ${paginaAtualAdmin >= totalPaginas ? 'disabled' : ''} class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded border border-slate-300 font-bold">Próxima</button>
+          </div>
+        </div>
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b border-slate-300 text-slate-600">
+              ${colunas.map(c => `<th class="py-2 pr-3 uppercase text-[10px]">${c}</th>`).join('')}
+              <th class="py-2 text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            ${fatia.map(reg => {
+              const idxOriginal = cacheRegistrosEditorAdmin.findIndex(r => r.id === reg.id);
+              return `
+                <tr class="hover:bg-slate-50">
+                  ${colunas.map(c => `<td class="py-2 pr-3 truncate max-w-[160px]">${typeof reg[c] === 'object' ? JSON.stringify(reg[c]) : (reg[c] ?? '-')}</td>`).join('')}
+                  <td class="py-2 text-right">
+                    <button onclick="abrirModalEditorUniversal(${idxOriginal})" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2.5 py-1 rounded text-[11px]">Modificar</button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+
+      const inputFoco = document.getElementById('inputBuscaEditorAdmin');
+      if (termoMantido && inputFoco) {
+        inputFoco.focus();
+        inputFoco.setSelectionRange(termoMantido.length, termoMantido.length);
+      }
+    }
+
+    // 3. Carregamento da Frota sem limite + Busca Rápida na Aba de Frota
+    const carregarFrotaOriginal = carregarFrota;
+    carregarFrota = async function(filtroProp = 'TODOS') {
+      const todos = await buscarTudoSemLimite('equipamentos', 'tag', true);
+      cacheEquipamentos = todos.filter(e => e.ativo !== false);
+      const spanTodos = document.getElementById('countFrotaTodos');
+      if (spanTodos) spanTodos.innerText = cacheEquipamentos.length;
+
+      // Injeta barra de busca na aba Frota se ainda não existir
+      if (!document.getElementById('buscaRapidaAbaFrota')) {
+        const containerFrota = document.getElementById('listaEquipamentos');
+        const barra = document.createElement('div');
+        barra.className = "bg-slate-50 border border-slate-300 rounded-xl p-2.5 flex items-center gap-2";
+        barra.innerHTML = `
+          <i class="fa-solid fa-magnifying-glass text-slate-400 pl-2"></i>
+          <input type="text" id="buscaRapidaAbaFrota" oninput="filtrarCardsFrotaPorTexto()" placeholder="Digite a TAG, Descrição, Marca, Modelo ou Placa para filtrar a frota instantaneamente..."
+            class="w-full bg-transparent text-xs text-slate-900 font-semibold focus:outline-none" />
+        `;
+        containerFrota.parentNode.insertBefore(barra, containerFrota);
+      }
+      filtrarCardsFrota(filtroProp);
+    };
+
+    function filtrarCardsFrotaPorTexto() {
+      const termo = (document.getElementById('buscaRapidaAbaFrota')?.value || '').toLowerCase().trim();
+      const filtrados = cacheEquipamentos.filter(eq =>
+        (eq.tag || '').toLowerCase().includes(termo) ||
+        (eq.nome || '').toLowerCase().includes(termo) ||
+        (eq.marca || '').toLowerCase().includes(termo) ||
+        (eq.modelo || '').toLowerCase().includes(termo) ||
+        (eq.placa || '').toLowerCase().includes(termo) ||
+        (eq.numero_serie || '').toLowerCase().includes(termo)
+      );
+      const backup = cacheEquipamentos;
+      cacheEquipamentos = filtrados;
+      filtrarCardsFrota('TODOS');
+      cacheEquipamentos = backup;
+    }
+
+    // 4. INJETOR AUTOMÁTICO DE BUSCA DIGITÁVEL EM QUALQUER CAIXA DE SELEÇÃO (<SELECT>)
+    function ativarBuscaEmTodosOsSelects() {
+      document.querySelectorAll('select').forEach(sel => {
+        // Ignora selects pequenininhos de opções fixas (menos de 5 opções)
+        if (sel.options.length <= 5 && !sel.dataset.temBuscaAtiva) return;
+
+        // Atualiza o catálogo de opções originais sempre que o sistema recarregar o select
+        const assinaturaAtual = sel.options.length + '_' + (sel.options[0]?.text || '') + '_' + (sel.options[sel.options.length - 1]?.text || '');
+        if (sel.dataset.assinaturaOpcoes !== assinaturaAtual && !sel.dataset.filtrandoAgora) {
+          sel._opcoesOriginais = Array.from(sel.options).map(o => ({
+            value: o.value,
+            text: o.text,
+            selected: o.selected
+          }));
+          sel.dataset.assinaturaOpcoes = assinaturaAtual;
+        }
+
+        if (sel.dataset.temBuscaAtiva) return;
+        sel.dataset.temBuscaAtiva = "true";
+
+        const inputFiltro = document.createElement('input');
+        inputFiltro.type = "text";
+        inputFiltro.placeholder = "🔍 Digite para buscar na lista abaixo...";
+        inputFiltro.className = "w-full mb-1 px-2.5 py-1 bg-amber-50/70 border border-amber-300 rounded-lg text-[11px] text-slate-900 font-semibold placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:bg-white no-print";
+
+        sel.parentNode.insertBefore(inputFiltro, sel);
+
+        inputFiltro.addEventListener('input', function() {
+          const termo = this.value.toLowerCase().trim();
+          const originais = sel._opcoesOriginais || [];
+          const valorSelecionadoAntes = sel.value;
+
+          sel.dataset.filtrandoAgora = "true";
+          sel.innerHTML = '';
+
+          const correspondentes = originais.filter(o =>
+            o.value === '' || o.text.toLowerCase().includes(termo) || o.value.toLowerCase().includes(termo)
+          );
+
+          if (correspondentes.length === 0) {
+            const optVazia = document.createElement('option');
+            optVazia.value = "";
+            optVazia.text = "-- Nenhum resultado para '" + this.value + "' --";
+            sel.appendChild(optVazia);
+          } else {
+            correspondentes.forEach(o => {
+              const opt = document.createElement('option');
+              opt.value = o.value;
+              opt.text = o.text;
+              sel.appendChild(opt);
+            });
+            // Seleciona automaticamente o primeiro resultado válido encontrado ao digitar
+            const primeiroValido = correspondentes.find(o => o.value !== '');
+            if (termo && primeiroValido) {
+              sel.value = primeiroValido.value;
+              sel.dispatchEvent(new Event('change'));
+            } else if (correspondentes.some(o => o.value === valorSelecionadoAntes)) {
+              sel.value = valorSelecionadoAntes;
+            }
+          }
+          delete sel.dataset.filtrandoAgora;
+        });
+      });
+    }
+
+    // Observa mudanças na tela e ativa o buscador automaticamente em qualquer modal ou linha nova
+    const observadorSelects = new MutationObserver(() => ativarBuscaEmTodosOsSelects());
+    observadorSelects.observe(document.body, { childList: true, subtree: true });
+    setTimeout(ativarBuscaEmTodosOsSelects, 800);
+
+    // 5. IMPORTADOR REP BLINDADO (HIGIENIZA DATAS E AUTO-CADASTRA EQUIPAMENTOS AUSENTES)
+    function parseDataSeguraREP(val) {
+      if (!val) return null;
+      if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString();
+      let s = String(val).trim().replace(/::+/g, ':');
+      const matchBR = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{1,2}):(\d{1,2})/);
+      if (matchBR) {
+        const [_, d, m, y, hh, mm] = matchBR;
+        const dt = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:00`);
+        if (!isNaN(dt.getTime())) return dt.toISOString();
+      }
+      const dtGenerica = new Date(s);
+      return !isNaN(dtGenerica.getTime()) ? dtGenerica.toISOString() : null;
+    }
+
+    importarPlanilhaREPCompleta = async function() {
+      if (!podeExecutarAcao('acesso_modo_deus')) return;
+      const input = document.getElementById('inputPlanilhaREPCompleta');
+      const statusTxt = document.getElementById('statusImportacaoREP');
+      if (!input.files || !input.files[0]) return alert("Selecione o arquivo Excel primeiro!");
+
+      const limparAntes = confirm("Deseja limpar as Ordens de Serviço anteriores antes de importar a planilha completa (Recomendado para evitar duplicatas)?\n\nOK = Limpar e importar tudo limpo\nCancelar = Apenas adicionar");
+      if (limparAntes) {
+        statusTxt.innerText = "Limpando histórico antigo de OS para evitar duplicidade...";
+        await db.from('ordens_servico').delete().neq('status', 'inexistente_placeholder');
+      }
+
+      statusTxt.innerText = "Lendo a planilha Excel completa... Aguarde.";
+      const buffer = await input.files[0].arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+
+      let eqImportados = 0;
+      const mapaTagId = {};
+      const maiorHorimetroPorEq = {};
+      const maquinasParadasAgora = new Set();
+
+      // Passo A: Importa equipamentos da aba EQP ECOVIAS ARAGUAIA
+      if (wb.Sheets['EQP ECOVIAS ARAGUAIA']) {
+        const linhasEq = XLSX.utils.sheet_to_json(wb.Sheets['EQP ECOVIAS ARAGUAIA'], { range: 1 });
+        const loteFrota = [];
+        for (const r of linhasEq) {
+          const tag = String(r['PREFIXOS'] || '').trim().toUpperCase();
+          if (!tag || tag === 'PREFIXOS' || tag === '0') continue;
+          const nome = String(r['EQUIPAMENTO '] || r['EQUIPAMENTO'] || 'EQUIPAMENTO').trim().toUpperCase();
+          const marca = String(r['MARCA'] || '').trim().toUpperCase();
+          const modelo = String(r['MODELO '] || r['MODELO'] || '').trim().toUpperCase();
+          const ano = String(r['ANO FABRICAÇÃO'] || '').trim();
+          const placaSerie = String(r['PLACA/SERIE'] || '').split('/');
+          const placa = (placaSerie[0] || '').trim().toUpperCase();
+          const numero_serie = (placaSerie[1] || placaSerie[0] || '').trim().toUpperCase();
+          const propRaw = String(r['ORIGEM /PROPRIETARIO'] || 'VILASA').toUpperCase();
+          const proprietario = propRaw.includes('VILASA') ? 'VILASA' : 'TERCEIRO';
+          const codigo_curto = `${tag.replace(/[^A-Z0-9]/g, '')}-${Math.floor(10 + Math.random() * 89)}`;
+
+          loteFrota.push({
+            tag, nome, marca, modelo, ano_fabricacao: ano, placa, numero_serie,
+            proprietario, preventiva_propria: proprietario === 'VILASA', setor: '', codigo_curto, ativo: true
+          });
+        }
+        if (loteFrota.length > 0) {
+          await db.from('equipamentos').upsert(loteFrota, { onConflict: 'tag' });
+          eqImportados = loteFrota.length;
+        }
+      }
+
+      // Carrega TODAS as máquinas já cadastradas (sem limite de 1000)
+      const todosEq = await buscarTudoSemLimite('equipamentos', null);
+      (todosEq || []).forEach(e => {
+        mapaTagId[e.tag] = e.id;
+        maiorHorimetroPorEq[e.id] = parseFloat(e.horimetro_atual || 0);
+      });
+
+      // Passo B: Verifica na aba BASE todos os equipamentos que ainda não existem no cadastro e cria em lote!
+      let osImportadas = 0;
+      if (wb.Sheets['BASE']) {
+        const linhasBase = XLSX.utils.sheet_to_json(wb.Sheets['BASE'], { range: 5 });
+        const novosEqMap = {};
+
+        for (const b of linhasBase) {
+          const tag = String(b['PATRIMÔNIO'] || '').trim().toUpperCase();
+          if (!tag || tag === 'PATRIMÔNIO' || tag === '0') continue;
+          if (!mapaTagId[tag] && !novosEqMap[tag]) {
+            const descEq = String(b['DESCRIÇÃO '] || b['DESCRIÇÃO'] || 'EQUIPAMENTO IMPORTADO REP').trim().toUpperCase();
+            const marcaEq = String(b['MARCA'] || '').trim().toUpperCase();
+            const ehTerc = tag.includes('-AL-') || tag.includes('AL-');
+            novosEqMap[tag] = {
+              tag,
+              nome: descEq,
+              marca: marcaEq,
+              setor: '',
+              proprietario: ehTerc ? 'TERCEIRO' : 'VILASA',
+              preventiva_propria: !ehTerc,
+              codigo_curto: `${tag.replace(/[^A-Z0-9]/g, '')}-${Math.floor(10 + Math.random() * 89)}`,
+              ativo: true
+            };
+          }
+        }
+
+        const listaNovosEq = Object.values(novosEqMap);
+        if (listaNovosEq.length > 0) {
+          statusTxt.innerText = `Auto-cadastrando ${listaNovosEq.length} equipamentos encontrados no REP que não estavam na Frota...`;
+          await db.from('equipamentos').upsert(listaNovosEq, { onConflict: 'tag' });
+          eqImportados += listaNovosEq.length;
+          const recarregados = await buscarTudoSemLimite('equipamentos', null);
+          (recarregados || []).forEach(e => {
+            mapaTagId[e.tag] = e.id;
+            if (!(e.id in maiorHorimetroPorEq)) maiorHorimetroPorEq[e.id] = parseFloat(e.horimetro_atual || 0);
+          });
+        }
+
+        // Passo C: Importa todas as Ordens de Serviço da aba BASE
+        const loteOS = [];
+        for (const b of linhasBase) {
+          const tag = String(b['PATRIMÔNIO'] || '').trim().toUpperCase();
+          if (!tag || tag === 'PATRIMÔNIO' || tag === '0') continue;
+          const eqId = mapaTagId[tag];
+          if (!eqId) continue;
+
+          const locRaw = String(b['LOCAL MANUTENÇÃO '] || b['LOCAL MANUTENÇÃO'] || 'OFICINA').trim().toUpperCase();
+          let localPCM = 'OFICINA';
+          if (locRaw.includes('TRECHO')) localPCM = 'TRECHO';
+          else if (locRaw.includes('TERCEIRO')) localPCM = 'TERCEIRO';
+          else if (locRaw.includes('USINA')) localPCM = 'USINA';
+
+          const comp = String(b['COMPONENTE'] || '').trim().toUpperCase();
+          const nomeComp = String(b['DESCRIÇÃO COMPONENTE'] || '').trim().toUpperCase();
+          let motivo = String(b['MOTIVO '] || b['MOTIVO'] || 'CORRETIVA').trim().toUpperCase();
+          if (motivo === 'OFICINA') motivo = 'CORRETIVA';
+          if (comp === 'PRE18' || comp === 'PRE01') motivo = 'PREVENTIVA';
+
+          const mecsRaw = String(b['MECÂNICO'] || '').trim().toUpperCase();
+          const mecsLista = mecsRaw ? mecsRaw.split('/').map(s => s.trim()).filter(Boolean) : [];
+
+          const dEnt = parseDataSeguraREP(b['ENTRADA']) || new Date().toISOString();
+          const dSai = parseDataSeguraREP(b['SAÍDA '] || b['SAÍDA']);
+          const prevLib = parseDataSeguraREP(b['PREVISÃO DE LIBERAÇÃO '] || b['PREVISÃO DE LIBERAÇÃO']);
+
+          const horOS = parseFloat(String(b['HORIMETRO'] || '').replace(',', '.')) || null;
+          if (horOS && horOS > (maiorHorimetroPorEq[eqId] || 0)) {
+            maiorHorimetroPorEq[eqId] = horOS;
+          }
+
+          const estaParadaAgora = !dSai;
+          if (estaParadaAgora) maquinasParadasAgora.add(eqId);
+
+          const horasTurno = calcularHorasParadasTurnoVilasa(dEnt, dSai);
+
+          loteOS.push({
+            equipamento_id: eqId,
+            tipo: motivo === 'PREVENTIVA' ? 'preventiva' : (motivo.includes('OPERACIONAL') ? 'falha_operacional' : 'corretiva'),
+            motivo_rep: motivo,
+            localizacao: localPCM,
+            local_manutencao_pcm: localPCM,
+            codigo_componente: comp,
+            nome_componente: nomeComp,
+            descricao_problema: String(b['DESCRIÇÃO DO PROBLEMA '] || b['DESCRIÇÃO DO PROBLEMA'] || 'MANUTENÇÃO').trim().toUpperCase(),
+            servico_executado: String(b['SERVIÇO EXECUTADO '] || b['SERVIÇO EXECUTADO'] || '').trim().toUpperCase(),
+            horimetro_os: horOS,
+            executantes_nomes: mecsLista,
+            quantidade_executantes: Math.max(1, mecsLista.length),
+            manutencao_externa: localPCM === 'TERCEIRO',
+            oficina_externa: localPCM === 'TERCEIRO' ? mecsRaw : '',
+            aberta_em: dEnt,
+            concluida_em: dSai,
+            previsao_liberacao: prevLib ? prevLib.split('T')[0] : null,
+            tempo_efetivo_segundos: Math.round(horasTurno * 3600),
+            status: estaParadaAgora ? 'em_execucao' : 'auditada_pcm',
+            classificada_pcm: Boolean(comp !== '')
+          });
+
+          if (loteOS.length >= 200) {
+            const chunk = loteOS.splice(0, 200);
+            await db.from('ordens_servico').insert(chunk);
+            osImportadas += chunk.length;
+            statusTxt.innerText = `Importando histórico BASE: ${osImportadas} de ${linhasBase.length} linhas processadas...`;
+          }
+        }
+
+        if (loteOS.length > 0) {
+          await db.from('ordens_servico').insert(loteOS);
+          osImportadas += loteOS.length;
+        }
+      }
+
+      statusTxt.innerText = `Sincronizando horímetros atuais e status da frota...`;
+      for (const [eqId, maxHor] of Object.entries(maiorHorimetroPorEq)) {
+        const parada = maquinasParadasAgora.has(eqId);
+        if (maxHor > 0 || parada) {
+          await db.from('equipamentos').update({
+            horimetro_atual: maxHor,
+            status_operacional: parada ? 'parado_corretiva' : 'operando'
+          }).eq('id', eqId);
+        }
+      }
+
+      statusTxt.innerText = `✅ Importação Concluída! ${eqImportados} equipamentos novos/atualizados, ${osImportadas} Ordens de Serviço importadas e ${maquinasParadasAgora.size} máquinas paradas no REP!`;
+    };
   </script>
 </body>
 </html>
