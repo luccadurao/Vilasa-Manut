@@ -2759,3 +2759,68 @@ salvarClassificacaoOuManualPCM = async function() {
   // Se lançou em execução, mostra a fila de ativas; se lançou concluída, mostra concluídas!
   carregarOrdensServico(estaEmExecucao ? 'ativas' : 'concluidas');
 };
+// ============================================================================
+// CORREÇÃO: QUADRO ENXUTO DE PARADOS (REP) COM FILTRO AMPLIADO
+// ============================================================================
+
+renderizarQuadroEnxutoParadosREP = function(lista) {
+  // Considera parada qualquer OS que esteja aberta, em execução, pausada, ou sem data de conclusão (concluida_em vazia)
+  const paradasAgora = lista.filter(o => {
+    const statusAtivo = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros', 'aguardando_pcm'].includes(o.status);
+    const semSaida = !o.concluida_em;
+    return statusAtivo || semSaida;
+  });
+
+  const spanData = document.getElementById('dataHoraCabecalhoREP');
+  const spanContador = document.getElementById('contadorParadosCabecalhoREP');
+  const divTabela = document.getElementById('tabelaEnxutaParadosREP');
+
+  if (spanData) spanData.innerText = `Atualizado em: ${new Date().toLocaleString('pt-BR')}`;
+  if (spanContador) spanContador.innerText = `${paradasAgora.length} Equipamento(s) Parado(s)`;
+
+  if (!divTabela) return;
+
+  if (paradasAgora.length === 0) {
+    divTabela.innerHTML = `<p class="text-emerald-700 font-bold py-3 text-center">Nenhum equipamento parado em manutenção no momento!</p>`;
+    return;
+  }
+
+  divTabela.innerHTML = `
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="bg-amber-500 text-white text-[11px] uppercase">
+          <th class="py-2 px-2 border border-amber-600">Nº</th>
+          <th class="py-2 px-2 border border-amber-600">DESCRIÇÃO</th>
+          <th class="py-2 px-2 border border-amber-600">MARCA</th>
+          <th class="py-2 px-2 border border-amber-600">PATRIMÔNIO</th>
+          <th class="py-2 px-2 border border-amber-600">MOTIVO</th>
+          <th class="py-2 px-2 border border-amber-600">DESCRIÇÃO DO PROBLEMA</th>
+          <th class="py-2 px-2 border border-amber-600">ENTRADA</th>
+          <th class="py-2 px-2 border border-amber-600">PREV. LIBERAÇÃO</th>
+          <th class="py-2 px-2 border border-amber-600 text-center">DIAS PARADOS</th>
+          <th class="py-2 px-2 border border-amber-600">OBSERVAÇÃO</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 text-[11px]">
+        ${paradasAgora.map((o, idx) => {
+          const diasParados = Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / (24 * 3600000)));
+          const prev = o.previsao_liberacao ? new Date(o.previsao_liberacao + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+          return `
+            <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">${idx + 1}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-800">${o.equipamentos?.nome || '-'}</td>
+              <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${o.equipamentos?.marca || '-'}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-black text-amber-700">${o.equipamentos?.tag || '-'}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">${o.motivo_rep || o.tipo.toUpperCase()}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-900">${o.descricao_problema}</td>
+              <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${new Date(o.aberta_em).toLocaleString('pt-BR')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-blue-700">${prev}</td>
+              <td class="py-1.5 px-2 border border-slate-200 text-center font-black text-rose-600">${diasParados}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-amber-700">${o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : 'EM EXECUÇÃO'}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+};
