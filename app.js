@@ -2408,3 +2408,216 @@ window.onload = async () => {
     } catch (e) { fazerLogout(); }
   }
 };
+
+// ============================================================================
+// MÓDULO EXTRA: FUSÃO / UNIFICAÇÃO DE EQUIPAMENTOS DUPLICADOS OU COM ERRO DE DIGITAÇÃO
+// ============================================================================
+
+function normalizarTagParaComparacao(tag) {
+  const limpo = String(tag || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const match = limpo.match(/^([A-Z]+)0*(\d+)$/);
+  if (match) return `${match[1]}_${match[2]}`;
+  return limpo;
+}
+
+async function injetarPainelFusaoEquipamentosAdmin() {
+  const abaEditor = document.getElementById('abaAdmin-editor');
+  if (!abaEditor || document.getElementById('painelFusaoEquipamentos')) return;
+
+  const box = document.createElement('div');
+  box.id = 'painelFusaoEquipamentos';
+  box.className = "bg-amber-50/70 border-2 border-amber-300 rounded-xl p-4 space-y-3 mb-4";
+  box.innerHTML = `
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-2">
+      <div>
+        <h4 class="text-xs font-black uppercase text-amber-900 flex items-center gap-1.5">
+          <i class="fa-solid fa-object-group text-amber-600"></i> Unificador / Fusão de Equipamentos Duplicados (Corrige TAGs do REP)
+        </h4>
+        <p class="text-[11px] text-amber-800">Transfere todas as OS, Horímetros, Peças e Serviços do cadastro com erro para o equipamento oficial e apaga a duplicata.</p>
+      </div>
+      <button onclick="detectarSugestoesFusaoAutomatica()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-sm flex items-center gap-1.5">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Detectar Duplicatas (Zeros / Traços)
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end text-xs">
+      <div class="md:col-span-5">
+        <label class="block text-rose-800 font-bold mb-1">1. Equipamento ERRADO / Duplicado (Será absorvido e excluído)</label>
+        <select id="selFusaoOrigemErrado" class="w-full px-3 py-2 bg-white border border-rose-300 rounded-lg text-slate-900 font-bold"></select>
+      </div>
+      <div class="md:col-span-5">
+        <label class="block text-emerald-800 font-bold mb-1">2. Equipamento OFICIAL / Correto (Receberá todo o histórico)</label>
+        <select id="selFusaoDestinoCorreto" class="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-slate-900 font-bold"></select>
+      </div>
+      <div class="md:col-span-2">
+        <button onclick="executarFusaoManualEquipamentos()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-2 rounded-lg shadow transition">
+          <i class="fa-solid fa-code-merge"></i> Fundir Agora
+        </button>
+      </div>
+    </div>
+
+    <!-- Área onde aparecem os grupos de duplicatas encontrados automaticamente -->
+    <div id="containerSugestoesFusao" class="hidden pt-2 border-t border-amber-200 space-y-2 text-xs"></div>
+  `;
+
+  abaEditor.insertBefore(box, abaEditor.firstChild);
+  await atualizarSelectsFusaoEquipamentos();
+}
+
+async function atualizarSelectsFusaoEquipamentos() {
+  const selOrigem = document.getElementById('selFusaoOrigemErrado');
+  const selDestino = document.getElementById('selFusaoDestinoCorreto');
+  if (!selOrigem || !selDestino) return;
+
+  const todos = await buscarTudoSemLimite('equipamentos', 'tag', true);
+  cacheEquipamentos = todos;
+
+  const htmlOpcoes = `<option value="">-- Selecione o Equipamento --</option>` +
+    todos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome} (${e.marca || 'S/ Marca'} | ${e.horimetro_atual || 0} ${e.unidade_medida === 'KM' ? 'km' : 'h'})</option>`).join('');
+
+  selOrigem.innerHTML = htmlOpcoes;
+  selDestino.innerHTML = htmlOpcoes;
+  setTimeout(ativarBuscaEmTodosOsSelects, 200);
+}
+
+// Motor que transfere todo o histórico de um equipamento para outro sem perder nada
+async function fundirDoisEquipamentosNoBanco(idErrado, idCorreto, silencioso = false) {
+  if (!idErrado || !idCorreto || idErrado === idCorreto) {
+    if (!silencioso) alert("Selecione dois equipamentos diferentes para fundir!");
+    return false;
+  }
+
+  const eqErrado = cacheEquipamentos.find(e => e.id === idErrado);
+  const eqCorreto = cacheEquipamentos.find(e => e.id === idCorreto);
+  if (!eqErrado || !eqCorreto) return false;
+
+  if (!silencioso) {
+    const ok = confirm(
+      `CONFIRMAR FUSÃO DE EQUIPAMENTOS?\n\n` +
+      `• Sairá de (Será apagado): ${eqErrado.tag} (${eqErrado.nome})\n` +
+      `• Irá tudo para (Oficial): ${eqCorreto.tag} (${eqCorreto.nome})\n\n` +
+      `Todas as Ordens de Serviço, Horímetros, Peças e Serviços serão transferidos para ${eqCorreto.tag}.`
+    );
+    if (!ok) return false;
+  }
+
+  // 1. Transfere todas as tabelas filhas para o equipamento correto
+  await db.from('ordens_servico').update({ equipamento_id: idCorreto }).eq('equipamento_id', idErrado);
+  await db.from('diario_horimetro').update({ equipamento_id: idCorreto }).eq('equipamento_id', idErrado);
+  await db.from('itens_os_estoque').update({ equipamento_id: idCorreto }).eq('equipamento_id', idErrado);
+  await db.from('servicos_almoxarifado').update({ equipamento_id: idCorreto }).eq('equipamento_id', idErrado);
+  await db.from('planos_preventiva').update({ equipamento_id: idCorreto }).eq('equipamento_id', idErrado);
+
+  // 2. Preserva o maior horímetro e preenche dados cadastrais que estejam vazios no oficial
+  const horMaior = Math.max(parseFloat(eqCorreto.horimetro_atual || 0), parseFloat(eqErrado.horimetro_atual || 0));
+  const updateOficial = {
+    horimetro_atual: horMaior,
+    marca: eqCorreto.marca || eqErrado.marca || '',
+    modelo: eqCorreto.modelo || eqErrado.modelo || '',
+    placa: eqCorreto.placa || eqErrado.placa || '',
+    numero_serie: eqCorreto.numero_serie || eqErrado.numero_serie || '',
+    ano_fabricacao: eqCorreto.ano_fabricacao || eqErrado.ano_fabricacao || ''
+  };
+  if (eqErrado.status_operacional === 'parado_corretiva') {
+    updateOficial.status_operacional = 'parado_corretiva';
+  }
+
+  await db.from('equipamentos').update(updateOficial).eq('id', idCorreto);
+
+  // 3. Remove o equipamento duplicado/errado
+  await db.from('equipamentos').delete().eq('id', idErrado);
+  return true;
+}
+
+async function executarFusaoManualEquipamentos() {
+  if (!podeExecutarAcao('acesso_modo_deus')) return;
+  const idErrado = document.getElementById('selFusaoOrigemErrado').value;
+  const idCorreto = document.getElementById('selFusaoDestinoCorreto').value;
+
+  const sucesso = await fundirDoisEquipamentosNoBanco(idErrado, idCorreto, false);
+  if (sucesso) {
+    alert("✅ Fusão concluída com sucesso! Todo o histórico foi unificado.");
+    await atualizarSelectsFusaoEquipamentos();
+    carregarTabelaEditorAdmin();
+  }
+}
+
+// Detector inteligente que acha variações como TP-AL-47 vs TP-AL-0047 vs TPAL-0047
+async function detectarSugestoesFusaoAutomatica() {
+  if (!podeExecutarAcao('acesso_modo_deus')) return;
+  const container = document.getElementById('containerSugestoesFusao');
+  container.classList.remove('hidden');
+  container.innerHTML = `<p class="text-amber-700 font-bold"><i class="fa-solid fa-spinner fa-spin"></i> Analisando TAGs parecidas na frota...</p>`;
+
+  const todos = await buscarTudoSemLimite('equipamentos', 'tag', true);
+  cacheEquipamentos = todos;
+
+  const grupos = {};
+  todos.forEach(eq => {
+    const chave = normalizarTagParaComparacao(eq.tag);
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(eq);
+  });
+
+  const duplicados = Object.entries(grupos).filter(([_, lista]) => lista.length > 1);
+
+  if (duplicados.length === 0) {
+    container.innerHTML = `<p class="text-emerald-700 font-bold">✅ Nenhuma duplicata por zeros à esquerda ou falta de traço encontrada!</p>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <p class="font-bold text-slate-800">Encontramos <span class="text-rose-600">${duplicados.length} grupo(s)</span> de equipamentos que parecem ser a mesma máquina com escrita diferente. Escolha qual TAG manter em cada grupo:</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+      ${duplicados.map(([chave, lista], idx) => {
+        // Sugere manter o que tem Placa/Série/Modelo preenchido, ou o de TAG mais limpa
+        const ordenados = [...lista].sort((a, b) => {
+          const scoreA = (a.placa ? 2 : 0) + (a.modelo ? 2 : 0) + (a.tag.includes('-') ? 1 : 0);
+          const scoreB = (b.placa ? 2 : 0) + (b.modelo ? 2 : 0) + (b.tag.includes('-') ? 1 : 0);
+          return scoreB - scoreA;
+        });
+        const principal = ordenados[0];
+        const outros = ordenados.slice(1);
+        const idsOutros = outros.map(o => o.id).join(',');
+        const tagsOutros = outros.map(o => o.tag).join(', ');
+
+        return `
+          <div id="cardSugestaoFusao-${idx}" class="bg-white border border-slate-300 rounded-lg p-2.5 flex items-center justify-between gap-2">
+            <div>
+              <span class="text-[11px] font-black text-emerald-700 block">Manter Oficial: ${principal.tag}</span>
+              <span class="text-[10px] text-rose-600 font-semibold block">Absorver e Apagar: ${tagsOutros}</span>
+            </div>
+            <button onclick="unificarGrupoSugerido(${idx}, '${principal.id}', '${idsOutros}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded text-[11px] shrink-0">
+              Unificar
+            </button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+async function unificarGrupoSugerido(idxCard, idPrincipal, idsOutrosStr) {
+  const idsOutros = idsOutrosStr.split(',').filter(Boolean);
+  for (const idErrado of idsOutros) {
+    await fundirDoisEquipamentosNoBanco(idErrado, idPrincipal, true);
+  }
+  const card = document.getElementById(`cardSugestaoFusao-${idxCard}`);
+  if (card) {
+    card.innerHTML = `<span class="text-emerald-700 font-bold text-xs"><i class="fa-solid fa-check"></i> Grupo unificado com sucesso!</span>`;
+  }
+  await atualizarSelectsFusaoEquipamentos();
+  carregarTabelaEditorAdmin();
+}
+
+// Pluga o painel automaticamente sempre que abrir a aba Admin
+const navOriginalFusao = navegarPara;
+navegarPara = function(modulo) {
+  navOriginalFusao(modulo);
+  if (modulo === 'admin' && podeExecutarAcao('acesso_modo_deus')) {
+    setTimeout(injetarPainelFusaoEquipamentosAdmin, 300);
+  }
+};
+setTimeout(() => {
+  if (usuarioLogado && podeExecutarAcao('acesso_modo_deus')) injetarPainelFusaoEquipamentosAdmin();
+}, 800);
