@@ -1983,40 +1983,45 @@ async function excluirRegistroModoDeus() {
   carregarTabelaEditorAdmin();
 }
 
-// 6.2 PLANILHA PADRÃO DO REP (MODELO LIMPO PARA DOWNLOAD E IMPORTAÇÃO EM MASSA)
+// 6.2 PLANILHA PADRÃO DO REP (BLINDADA CONTRA QUEBRAS DE LINHA E NA ORDEM EXATA DA ABA BASE)
+let memoriaLinhasREPExcel = [];
+
 function baixarPlanilhaPadraoREP() {
+  // Usa EXATAMENTE os mesmos nomes e a mesma ordem da sua aba BASE oficial
   const modeloREP = [
     {
-      PATRIMONIO: "TE-09",
-      DESCRICAO_EQ: "TRATOR DE ESTEIRAS",
-      MARCA: "KOMATSU",
-      LOCAL_PCM: "OFICINA",
-      MOTIVO: "CORRETIVA",
-      COD_COMPONENTE: "COR14",
-      DESC_COMPONENTE: "CONCHA, LAMINA E ESCARIFICADOR",
-      PROBLEMA: "EQUIP. SEM LAMINA",
-      ENTRADA: "19/07/2025 09:30",
-      SAIDA: "19/07/2025 12:05",
-      HORIMETRO: 2017,
-      MECANICOS: "MARIO / JOSE CARLOS / FELIPE",
-      SERVICO_EXECUTADO: "COLOCADO LAMINA",
-      STATUS: "EXECUTADO"
+      "PATRIMÔNIO": "TE-09",
+      "DESCRIÇÃO": "TRATOR DE ESTEIRAS",
+      "MARCA": "KOMATSU",
+      "LOCAL MANUTENÇÃO": "OFICINA",
+      "MOTIVO": "CORRETIVA",
+      "COMPONENTE": "COR14",
+      "DESCRIÇÃO COMPONENTE": "CONCHA, LAMINA E ESCARIFICADOR",
+      "DESCRIÇÃO DO PROBLEMA": "EQUIP. SEM LAMINA",
+      "OBSERVAÇÃO": "EXECUTADO",
+      "ENTRADA": "19/07/2025 09:30",
+      "HORIMETRO": 2017,
+      "PREVISÃO DE LIBERAÇÃO": "",
+      "SAÍDA": "19/07/2025 12:05",
+      "MECÂNICO": "MARIO / JOSE CARLOS / FELIPE",
+      "SERVIÇO EXECUTADO": "COLOCADO LAMINA"
     },
     {
-      PATRIMONIO: "CB-05",
-      DESCRICAO_EQ: "CAMINHAO BASCULANTE",
-      MARCA: "VOLKSWAGEN",
-      LOCAL_PCM: "OFICINA",
-      MOTIVO: "CORRETIVA",
-      COD_COMPONENTE: "COR01",
-      DESC_COMPONENTE: "MOTOR",
-      PROBLEMA: "MOTOR COM AVARIAS",
-      ENTRADA: "01/10/2026 07:00",
-      SAIDA: "",
-      HORIMETRO: 85400,
-      MECANICOS: "MARIO",
-      SERVICO_EXECUTADO: "",
-      STATUS: "EM EXECUCAO"
+      "PATRIMÔNIO": "CB-05",
+      "DESCRIÇÃO": "CAMINHÃO BASCULANTE",
+      "MARCA": "VOLKSWAGEN",
+      "LOCAL MANUTENÇÃO": "OFICINA",
+      "MOTIVO": "CORRETIVA",
+      "COMPONENTE": "COR01",
+      "DESCRIÇÃO COMPONENTE": "MOTOR",
+      "DESCRIÇÃO DO PROBLEMA": "MOTOR COM AVARIAS",
+      "OBSERVAÇÃO": "EM EXECUÇÃO",
+      "ENTRADA": "01/10/2026 07:00",
+      "HORIMETRO": 85400,
+      "PREVISÃO DE LIBERAÇÃO": "25/10/2026",
+      "SAÍDA": "",
+      "MECÂNICO": "MARIO",
+      "SERVIÇO EXECUTADO": ""
     }
   ];
 
@@ -2035,7 +2040,6 @@ function lerPlanilhaPadraoREP(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-    // Se a planilha tiver uma aba chamada BASE, lê a partir da linha 6, senão lê a primeira aba do modelo padrão
     let json = [];
     if (wb.Sheets['BASE']) {
       json = XLSX.utils.sheet_to_json(wb.Sheets['BASE'], { range: 5, defval: "" });
@@ -2045,42 +2049,60 @@ function lerPlanilhaPadraoREP(event) {
 
     if (json.length === 0) return alert("A planilha selecionada está vazia!");
 
+    const limparQuebras = (txt) => String(txt ?? '').replace(/[\r\n]+/g, ' | ').replace(/;/g, ',').trim();
     const fmtData = (v) => {
       if (!v) return '';
       if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString();
-      return String(v).trim();
+      return limparQuebras(v);
     };
 
-    const linhasTexto = json.map(r => {
-      const pat = r['PATRIMONIO'] || r['PATRIMÔNIO'] || '';
-      if (!pat) return '';
-      const descEq = r['DESCRICAO_EQ'] || r['DESCRIÇÃO '] || r['DESCRIÇÃO'] || 'EQUIPAMENTO';
-      const marca = r['MARCA'] || '';
-      const loc = r['LOCAL_PCM'] || r['LOCAL MANUTENÇÃO '] || r['LOCAL MANUTENÇÃO'] || 'OFICINA';
-      const mot = r['MOTIVO'] || r['MOTIVO '] || 'CORRETIVA';
-      const codC = r['COD_COMPONENTE'] || r['COMPONENTE'] || '';
-      const descC = r['DESC_COMPONENTE'] || r['DESCRIÇÃO COMPONENTE'] || '';
-      const prob = r['PROBLEMA'] || r['DESCRIÇÃO DO PROBLEMA '] || r['DESCRIÇÃO DO PROBLEMA'] || 'MANUTENCAO';
-      const ent = fmtData(r['ENTRADA']);
-      const sai = fmtData(r['SAIDA'] || r['SAÍDA '] || r['SAÍDA']);
-      const hor = r['HORIMETRO'] ?? '';
-      const mecs = r['MECANICOS'] || r['MECÂNICO'] || '';
-      const serv = r['SERVICO_EXECUTADO'] || r['SERVIÇO EXECUTADO '] || r['SERVIÇO EXECUTADO'] || '';
-      const st = r['STATUS'] || r['OBSERVAÇÃO '] || r['OBSERVAÇÃO'] || 'EXECUTADO';
-      return `${pat} ; ${descEq} ; ${marca} ; ${loc} ; ${mot} ; ${codC} ; ${descC} ; ${prob} ; ${ent} ; ${sai} ; ${hor} ; ${mecs} ; ${serv} ; ${st}`;
-    }).filter(Boolean);
+    memoriaLinhasREPExcel = [];
+    const previaVisual = [];
 
-    document.getElementById('textoPreviaREPMassa').value = linhasTexto.join('\n');
-    statusTxt.innerText = `${linhasTexto.length} Ordem(ns) de Serviço lidas e prontas para importar!`;
+    for (const r of json) {
+      const pat = limparQuebras(r['PATRIMÔNIO'] || r['PATRIMONIO'] || '').toUpperCase();
+      // Ignora linhas vazias ou TAGs inválidas (como "307 KM" ou números soltos sem traço/letra)
+      if (!pat || pat === 'PATRIMÔNIO' || pat === 'PATRIMONIO' || pat === '0' || pat.length > 14 || pat.includes(' ')) continue;
+
+      const itemLimpo = {
+        tag: pat,
+        descEq: limparQuebras(r['DESCRIÇÃO '] || r['DESCRIÇÃO'] || r['DESCRICAO_EQ'] || 'EQUIPAMENTO').toUpperCase(),
+        marca: limparQuebras(r['MARCA'] || '').toUpperCase(),
+        localPCM: limparQuebras(r['LOCAL MANUTENÇÃO '] || r['LOCAL MANUTENÇÃO'] || r['LOCAL_PCM'] || 'OFICINA').toUpperCase(),
+        motivo: limparQuebras(r['MOTIVO '] || r['MOTIVO'] || 'CORRETIVA').toUpperCase(),
+        codComp: limparQuebras(r['COMPONENTE'] || r['COD_COMPONENTE'] || '').toUpperCase(),
+        nomeComp: limparQuebras(r['DESCRIÇÃO COMPONENTE'] || r['DESC_COMPONENTE'] || '').toUpperCase(),
+        problema: limparQuebras(r['DESCRIÇÃO DO PROBLEMA '] || r['DESCRIÇÃO DO PROBLEMA'] || r['PROBLEMA'] || 'MANUTENÇÃO').toUpperCase(),
+        obsStatus: limparQuebras(r['OBSERVAÇÃO '] || r['OBSERVAÇÃO'] || r['STATUS'] || 'EXECUTADO').toUpperCase(),
+        entrada: fmtData(r['ENTRADA']),
+        horimetro: r['HORIMETRO'] ?? '',
+        previsao: fmtData(r['PREVISÃO DE LIBERAÇÃO '] || r['PREVISÃO DE LIBERAÇÃO'] || ''),
+        saida: fmtData(r['SAÍDA '] || r['SAÍDA'] || r['SAIDA']),
+        mecanicos: limparQuebras(r['MECÂNICO'] || r['MECANICOS'] || '').toUpperCase(),
+        servico: limparQuebras(r['SERVIÇO EXECUTADO '] || r['SERVIÇO EXECUTADO'] || r['SERVICO_EXECUTADO'] || '').toUpperCase()
+      };
+
+      memoriaLinhasREPExcel.push(itemLimpo);
+      if (previaVisual.length < 100) {
+        previaVisual.push(`${itemLimpo.tag} | ${itemLimpo.descEq} | ${itemLimpo.localPCM} | ${itemLimpo.codComp} | ${itemLimpo.problema.substring(0, 35)} | Ent: ${itemLimpo.entrada.substring(0, 16)}`);
+      }
+    }
+
+    document.getElementById('textoPreviaREPMassa').value =
+      `[PRÉVIA SEGURA - MOSTRANDO AS PRIMEIRAS ${previaVisual.length} DE ${memoriaLinhasREPExcel.length} ORDENS DE SERVIÇO VÁLIDAS LIDAS DO EXCEL]:\n` +
+      previaVisual.join('\n');
+    statusTxt.innerText = `✅ ${memoriaLinhasREPExcel.length} Ordem(ns) de Serviço válidas carregadas na memória (sem risco de quebra de linha)!`;
   };
   reader.readAsArrayBuffer(file);
 }
 
 async function confirmarImportacaoREPPadrao() {
   if (!podeExecutarAcao('acesso_modo_deus')) return;
-  const raw = document.getElementById('textoPreviaREPMassa').value.trim();
   const statusTxt = document.getElementById('statusImportacaoREP');
-  if (!raw) return alert("Selecione a planilha padrão preenchida ou cole as linhas primeiro!");
+
+  if (!memoriaLinhasREPExcel || memoriaLinhasREPExcel.length === 0) {
+    return alert("Selecione o arquivo Excel (.xlsx) no botão 'Escolher arquivo' primeiro!");
+  }
 
   if (document.getElementById('chkLimparOSAntesImportarREP').checked) {
     if (!confirm("Confirmar limpeza das OS antigas antes de importar esta planilha?")) return;
@@ -2088,29 +2110,28 @@ async function confirmarImportacaoREPPadrao() {
     await db.from('ordens_servico').delete().neq('status', 'inexistente_placeholder');
   }
 
-  const linhas = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  statusTxt.innerText = `Verificando equipamentos das ${linhas.length} linhas...`;
-
   const todosEq = await buscarTudoSemLimite('equipamentos', null);
   const mapaTagId = {};
   const maiorHorimetroPorEq = {};
   (todosEq || []).forEach(e => {
-    mapaTagId[e.tag] = e.id;
+    mapaTagId[e.tag.trim().toUpperCase()] = e.id;
     maiorHorimetroPorEq[e.id] = parseFloat(e.horimetro_atual || 0);
   });
 
-  // Auto-cadastra em lote qualquer equipamento que apareça no REP mas ainda não exista na Frota
+  // Verifica quais TAGs válidas (ex: CB-05, EH-40) estão no REP mas não estão na Frota
   const novosEqMap = {};
-  for (const linha of linhas) {
-    const cols = (linha.includes('\t') ? linha.split('\t') : linha.split(';')).map(c => c.trim());
-    const tag = (cols[0] || '').toUpperCase();
-    if (!tag || tag === 'PATRIMONIO' || tag === 'PATRIMÔNIO' || tag === '0') continue;
-    if (!mapaTagId[tag] && !novosEqMap[tag]) {
+  for (const item of memoriaLinhasREPExcel) {
+    const tag = item.tag;
+    // Regra rígida: só aceita TAG com letra + traço + número (ex: CB-05, TP-AL-0048)
+    const tagValidaPadrao = /^[A-Z]{1,6}-?[A-Z0-9-]{1,10}$/.test(tag);
+    if (tagValidaPadrao && !mapaTagId[tag] && !novosEqMap[tag]) {
       const ehTerc = tag.includes('-AL-') || tag.includes('AL-');
+      const ehKm = item.descEq.includes('CAMINH') || item.descEq.includes('ONIBUS') || item.descEq.includes('ÔNIBUS') || item.descEq.includes('CARRETA') || item.descEq.includes('VEICULO') || item.descEq.includes('PICK');
       novosEqMap[tag] = {
         tag,
-        nome: (cols[1] || 'EQUIPAMENTO').toUpperCase(),
-        marca: (cols[2] || '').toUpperCase(),
+        nome: item.descEq || 'EQUIPAMENTO',
+        marca: item.marca || '',
+        unidade_medida: ehKm ? 'KM' : 'HORAS',
         setor: '',
         proprietario: ehTerc ? 'TERCEIRO' : 'VILASA',
         preventiva_propria: !ehTerc,
@@ -2122,53 +2143,53 @@ async function confirmarImportacaoREPPadrao() {
 
   const listaNovosEq = Object.values(novosEqMap);
   if (listaNovosEq.length > 0) {
-    statusTxt.innerText = `Cadastrando automaticamente ${listaNovosEq.length} equipamento(s) novos encontrados no REP...`;
-    await db.from('equipamentos').upsert(listaNovosEq, { onConflict: 'tag' });
-    const recarregados = await buscarTudoSemLimite('equipamentos', null);
-    (recarregados || []).forEach(e => {
-      mapaTagId[e.tag] = e.id;
-      if (!(e.id in maiorHorimetroPorEq)) maiorHorimetroPorEq[e.id] = parseFloat(e.horimetro_atual || 0);
-    });
+    const exemplos = listaNovosEq.slice(0, 8).map(e => `${e.tag} (${e.nome})`).join(', ');
+    const desejaCriar = confirm(
+      `Encontramos ${listaNovosEq.length} equipamentos no REP que ainda não estavam cadastrados na sua Frota:\n` +
+      `Exemplos: ${exemplos}...\n\n` +
+      `Clique em OK para cadastrar essas máquinas automaticamente, ou Cancelar para importar APENAS as OS das máquinas que você já cadastrou na Frota!`
+    );
+
+    if (desejaCriar) {
+      statusTxt.innerText = `Cadastrando ${listaNovosEq.length} equipamento(s) novos...`;
+      await db.from('equipamentos').upsert(listaNovosEq, { onConflict: 'tag' });
+      const recarregados = await buscarTudoSemLimite('equipamentos', null);
+      (recarregados || []).forEach(e => {
+        mapaTagId[e.tag.trim().toUpperCase()] = e.id;
+        if (!(e.id in maiorHorimetroPorEq)) maiorHorimetroPorEq[e.id] = parseFloat(e.horimetro_atual || 0);
+      });
+    }
   }
 
-  // Monta e insere as Ordens de Serviço em pacotes de 200
+  // Insere as Ordens de Serviço em pacotes de 200 direto da memória limpa
   const loteOS = [];
   const maquinasParadasAgora = new Set();
   let osImportadas = 0;
 
-  for (const linha of linhas) {
-    const cols = (linha.includes('\t') ? linha.split('\t') : linha.split(';')).map(c => c.trim());
-    const tag = (cols[0] || '').toUpperCase();
-    if (!tag || tag === 'PATRIMONIO' || tag === 'PATRIMÔNIO' || tag === '0') continue;
-    const eqId = mapaTagId[tag];
-    if (!eqId) continue;
+  for (const item of memoriaLinhasREPExcel) {
+    const eqId = mapaTagId[item.tag];
+    if (!eqId) continue; // Se o usuário optou por não criar máquinas ausentes, pula com segurança
 
-    const locRaw = (cols[3] || 'OFICINA').toUpperCase();
     let localPCM = 'OFICINA';
-    if (locRaw.includes('TRECHO')) localPCM = 'TRECHO';
-    else if (locRaw.includes('TERCEIRO')) localPCM = 'TERCEIRO';
-    else if (locRaw.includes('USINA')) localPCM = 'USINA';
+    if (item.localPCM.includes('TRECHO')) localPCM = 'TRECHO';
+    else if (item.localPCM.includes('TERCEIRO')) localPCM = 'TERCEIRO';
+    else if (item.localPCM.includes('USINA')) localPCM = 'USINA';
 
-    let motivo = (cols[4] || 'CORRETIVA').toUpperCase();
+    let motivo = item.motivo || 'CORRETIVA';
     if (motivo === 'OFICINA') motivo = 'CORRETIVA';
-    const comp = (cols[5] || '').toUpperCase();
-    const nomeComp = (cols[6] || '').toUpperCase();
-    if (comp === 'PRE18' || comp === 'PRE01') motivo = 'PREVENTIVA';
+    if (item.codComp === 'PRE18' || item.codComp === 'PRE01') motivo = 'PREVENTIVA';
 
-    const prob = (cols[7] || 'MANUTENÇÃO').toUpperCase();
-    const dEnt = parseDataSeguraREP(cols[8]) || new Date().toISOString();
-    const dSai = parseDataSeguraREP(cols[9]);
-    const horOS = parseFloat(String(cols[10] || '').replace(',', '.')) || null;
+    const dEnt = parseDataSeguraREP(item.entrada) || new Date().toISOString();
+    const dSai = parseDataSeguraREP(item.saida);
+    const prevLib = parseDataSeguraREP(item.previsao);
+    const horOS = parseFloat(String(item.horimetro || '').replace(',', '.')) || null;
+
     if (horOS && horOS > (maiorHorimetroPorEq[eqId] || 0)) {
       maiorHorimetroPorEq[eqId] = horOS;
     }
 
-    const mecsRaw = (cols[11] || '').toUpperCase();
-    const mecsLista = mecsRaw ? mecsRaw.split('/').map(s => s.trim()).filter(Boolean) : [];
-    const serv = (cols[12] || '').toUpperCase();
-    const stRaw = (cols[13] || '').toUpperCase();
-
-    const estaParadaAgora = !dSai || (stRaw.includes('EXECU') && !dSai);
+    const mecsLista = item.mecanicos ? item.mecanicos.split('/').map(s => s.trim()).filter(Boolean) : [];
+    const estaParadaAgora = !dSai;
     if (estaParadaAgora) maquinasParadasAgora.add(eqId);
 
     const horasTurno = calcularHorasParadasTurnoVilasa(dEnt, dSai);
@@ -2179,27 +2200,28 @@ async function confirmarImportacaoREPPadrao() {
       motivo_rep: motivo,
       localizacao: localPCM,
       local_manutencao_pcm: localPCM,
-      codigo_componente: comp,
-      nome_componente: nomeComp,
-      descricao_problema: prob,
-      servico_executado: serv,
+      codigo_componente: item.codComp,
+      nome_componente: item.nomeComp,
+      descricao_problema: item.problema,
+      servico_executado: item.servico,
       horimetro_os: horOS,
       executantes_nomes: mecsLista,
       quantidade_executantes: Math.max(1, mecsLista.length),
       manutencao_externa: localPCM === 'TERCEIRO',
-      oficina_externa: localPCM === 'TERCEIRO' ? mecsRaw : '',
+      oficina_externa: localPCM === 'TERCEIRO' ? item.mecanicos : '',
       aberta_em: dEnt,
       concluida_em: dSai,
+      previsao_liberacao: prevLib ? prevLib.split('T')[0] : null,
       tempo_efetivo_segundos: Math.round(horasTurno * 3600),
       status: estaParadaAgora ? 'em_execucao' : 'auditada_pcm',
-      classificada_pcm: Boolean(comp !== '')
+      classificada_pcm: Boolean(item.codComp !== '')
     });
 
     if (loteOS.length >= 200) {
       const chunk = loteOS.splice(0, 200);
       await db.from('ordens_servico').insert(chunk);
       osImportadas += chunk.length;
-      statusTxt.innerText = `Gravando no banco: ${osImportadas} de ${linhas.length} OS...`;
+      statusTxt.innerText = `Gravando no banco: ${osImportadas} de ${memoriaLinhasREPExcel.length} OS...`;
     }
   }
 
@@ -2208,7 +2230,7 @@ async function confirmarImportacaoREPPadrao() {
     osImportadas += loteOS.length;
   }
 
-  statusTxt.innerText = `Atualizando horímetros e status operacional da frota...`;
+  statusTxt.innerText = `Sincronizando horímetros e máquinas paradas...`;
   for (const [eqId, maxHor] of Object.entries(maiorHorimetroPorEq)) {
     const parada = maquinasParadasAgora.has(eqId);
     if (maxHor > 0 || parada) {
@@ -2219,8 +2241,8 @@ async function confirmarImportacaoREPPadrao() {
     }
   }
 
-  statusTxt.innerText = `✅ Sucesso Total! ${osImportadas} Ordens de Serviço importadas (${listaNovosEq.length} máquinas novas auto-cadastradas e ${maquinasParadasAgora.size} máquinas paradas atualmente)!`;
-  alert(`Importação do REP concluída! ${osImportadas} OS registradas com sucesso.`);
+  statusTxt.innerText = `✅ Importação Concluída! ${osImportadas} Ordens de Serviço gravadas e ${maquinasParadasAgora.size} máquinas paradas atualmente no REP!`;
+  alert(`Importação concluída com sucesso! ${osImportadas} OS registradas.`);
 }
 
 async function gerarBackupCompletoExcel() {
