@@ -2621,3 +2621,141 @@ navegarPara = function(modulo) {
 setTimeout(() => {
   if (usuarioLogado && podeExecutarAcao('acesso_modo_deus')) injetarPainelFusaoEquipamentosAdmin();
 }, 800);
+// ============================================================================
+// CORREÇÃO: LANÇAMENTO E IMPORTAÇÃO DE EQUIPAMENTOS "EM EXECUÇÃO" (PARADOS)
+// ============================================================================
+
+// 1. Limpa e trava o campo de SAÍDA automaticamente quando o status for "Em Execução" ou "Aguardando Peça"
+function sincronizarCampoSaidaPorStatusModalPCM() {
+  const selStatus = document.getElementById('repStatusOS');
+  const inpSaida = document.getElementById('repDataSaida');
+  if (!selStatus || !inpSaida) return;
+
+  const emAndamento = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros'].includes(selStatus.value);
+  if (emAndamento) {
+    inpSaida.value = '';
+    inpSaida.disabled = true;
+    inpSaida.classList.add('opacity-40', 'cursor-not-allowed');
+  } else {
+    inpSaida.disabled = false;
+    inpSaida.classList.remove('opacity-40', 'cursor-not-allowed');
+    if (!inpSaida.value) {
+      inpSaida.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+  }
+}
+
+document.getElementById('repStatusOS')?.addEventListener('change', sincronizarCampoSaidaPorStatusModalPCM);
+
+// 2. Sobrescreve a abertura do Modal Manual do PCM para iniciar pronto para ambos os casos
+abrirModalManualPCM = async function() {
+  if (!podeExecutarAcao('classificar_rep_pcm')) return;
+  const todos = await buscarTudoSemLimite('equipamentos', 'tag', true);
+  cacheEquipamentos = todos.filter(e => e.ativo !== false);
+  document.getElementById('repEquipamentoId').innerHTML = cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('');
+
+  document.getElementById('repOsId').value = '';
+  document.getElementById('repStatusOS').value = 'em_execucao'; // Já abre sugerindo Em Execução (ou você muda para Executado)
+  document.getElementById('repHorimetro').value = '';
+  document.getElementById('repLocalFisico').value = 'CAMPO / OBRA';
+  document.getElementById('repLocalPCM').value = 'OFICINA';
+  document.getElementById('repMotivo').value = 'CORRETIVA';
+  document.getElementById('repComponenteSelect').value = '';
+  document.getElementById('repOficinaExterna').value = '';
+
+  const agoraLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  document.getElementById('repDataEntrada').value = agoraLocal;
+  document.getElementById('repDataSaida').value = '';
+  document.getElementById('repPrevisaoLiberacao').value = '';
+  document.getElementById('repMecanicosTexto').value = '';
+  document.getElementById('repProblemaTexto').value = '';
+  document.getElementById('repServicoTexto').value = '';
+
+  sincronizarCampoSaidaPorStatusModalPCM();
+  document.getElementById('modalClassificarPCM').classList.remove('hidden');
+  setTimeout(ativarBuscaEmTodosOsSelects, 150);
+};
+
+// 3. Sobrescreve o Salvamento do PCM para aceitar Em Execução sem Data de Saída e redirecionar para a aba certa
+salvarClassificacaoOuManualPCM = async function() {
+  if (!podeExecutarAcao('classificar_rep_pcm')) return;
+  const osId = document.getElementById('repOsId').value;
+  const eqId = document.getElementById('repEquipamentoId').value;
+  const status = document.getElementById('repStatusOS').value;
+  const horimetro_os = parseFloat(document.getElementById('repHorimetro').value) || null;
+  const localizacao = document.getElementById('repLocalFisico').value.trim().toUpperCase() || 'OFICINA';
+  const local_manutencao_pcm = document.getElementById('repLocalPCM').value;
+  const motivo_rep = document.getElementById('repMotivo').value;
+  const compRaw = document.getElementById('repComponenteSelect').value;
+  const [codigo_componente, nome_componente] = compRaw ? compRaw.split('|') : ['', ''];
+  const oficina_externa = document.getElementById('repOficinaExterna').value.trim().toUpperCase();
+  const manutencao_externa = Boolean(local_manutencao_pcm === 'TERCEIRO' || oficina_externa !== '');
+
+  const dEntrada = document.getElementById('repDataEntrada').value;
+  const dSaida = document.getElementById('repDataSaida').value;
+  const previsao_liberacao = document.getElementById('repPrevisaoLiberacao').value || null;
+  const mecsRaw = document.getElementById('repMecanicosTexto').value.trim().toUpperCase();
+  const executantes_nomes = mecsRaw ? mecsRaw.split(/[/,]/).map(s => s.trim()).filter(Boolean) : [];
+  const descricao_problema = document.getElementById('repProblemaTexto').value.trim().toUpperCase();
+  const servico_executado = document.getElementById('repServicoTexto').value.trim().toUpperCase();
+
+  if (!eqId || !descricao_problema || !dEntrada) {
+    return alert("Preencha o Equipamento, a Data de Entrada e a Descrição do Problema!");
+  }
+
+  // Se o status for em execução ou pausada, garante que concluida_em fique NULL (máquina parada!)
+  const estaEmExecucao = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros'].includes(status);
+  const aberta_em = new Date(dEntrada).toISOString();
+  const concluida_em = (!estaEmExecucao && dSaida) ? new Date(dSaida).toISOString() : null;
+
+  const horasTurno = calcularHorasParadasTurnoVilasa(aberta_em, concluida_em);
+  const tipo = motivo_rep === 'PREVENTIVA' ? 'preventiva' : (motivo_rep === 'FALHA OPERACIONAL' ? 'falha_operacional' : 'corretiva');
+
+  const payload = {
+    equipamento_id: eqId,
+    tipo,
+    motivo_rep,
+    status,
+    horimetro_os,
+    localizacao,
+    local_manutencao_pcm,
+    codigo_componente,
+    nome_componente,
+    manutencao_externa,
+    oficina_externa,
+    aberta_em,
+    concluida_em,
+    previsao_liberacao,
+    executantes_nomes,
+    quantidade_executantes: Math.max(1, executantes_nomes.length),
+    descricao_problema,
+    servico_executado,
+    tempo_efetivo_segundos: Math.round(horasTurno * 3600),
+    classificada_pcm: Boolean(codigo_componente !== ''),
+    classificada_por_nome: usuarioLogado.nome
+  };
+
+  if (osId) {
+    const { error } = await db.from('ordens_servico').update(payload).eq('id', osId);
+    if (error) return alert("Erro ao atualizar OS: " + error.message);
+  } else {
+    payload.aberto_por = usuarioLogado.id;
+    payload.aberto_por_nome = `PCM (${usuarioLogado.nome})`;
+    const { error } = await db.from('ordens_servico').insert([payload]);
+    if (error) return alert("Erro ao lançar OS no REP: " + error.message);
+  }
+
+  // Atualiza status operacional e horímetro da máquina
+  const eq = cacheEquipamentos.find(e => e.id === eqId);
+  const updateEq = {
+    status_operacional: estaEmExecucao ? 'parado_corretiva' : 'operando'
+  };
+  if (eq && horimetro_os && horimetro_os > parseFloat(eq.horimetro_atual || 0)) {
+    updateEq.horimetro_atual = horimetro_os;
+  }
+  await db.from('equipamentos').update(updateEq).eq('id', eqId);
+
+  document.getElementById('modalClassificarPCM').classList.add('hidden');
+  // Se lançou em execução, mostra a fila de ativas; se lançou concluída, mostra concluídas!
+  carregarOrdensServico(estaEmExecucao ? 'ativas' : 'concluidas');
+};
