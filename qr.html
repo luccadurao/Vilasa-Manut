@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vilasa CMMS - Terminal QR de Campo (Online/Offline)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col justify-between p-4">
+
+  <div class="max-w-md w-full mx-auto space-y-4 my-4">
+    <!-- Cabeçalho da Máquina -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">VILASA • TERMINAL DE CAMPO</span>
+        <div id="badgeStatusOfflineGlobal"></div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="qrTagEquip" class="bg-amber-500 text-slate-950 font-black text-xl px-3 py-1.5 rounded-xl">---</div>
+        <div>
+          <h1 id="qrNomeEquip" class="text-sm font-extrabold text-white">Carregando equipamento...</h1>
+          <p id="qrHorimetroAtual" class="text-xs font-bold text-slate-400">Última leitura: ---</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Abas: Horímetro (Operador) vs. Abertura Técnica (Restrito Encarregado/Mecânico) -->
+    <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+      <button id="btnAbaHorimetro" onclick="alternarAbaQR('horimetro')" class="py-2 rounded-lg text-xs font-black bg-amber-500 text-slate-950">
+        ⏱️ Lançar Horímetro / KM
+      </button>
+      <button id="btnAbaTecnica" onclick="alternarAbaQR('tecnica')" class="py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800">
+        🔒 Abrir OS (Encarregado)
+      </button>
+    </div>
+
+    <!-- ABA 1: LANÇAMENTO DE HORÍMETRO (OPERADORES) -->
+    <form id="formQRHorimetro" onsubmit="salvarHorimetroPeloQR(event)" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+      <div>
+        <label class="block text-xs font-black uppercase text-slate-400 mb-1">Nome ou Matrícula do Operador</label>
+        <input id="qrOperadorNome" type="text" required placeholder="Ex: 1045 - José Silva"
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white focus:outline-none focus:border-amber-400" />
+      </div>
+      <div>
+        <label class="block text-xs font-black uppercase text-slate-400 mb-1">Novo Horímetro / KM Lido no Painel</label>
+        <input id="qrNovoHorimetro" type="number" step="0.1" required placeholder="Ex: 3458.5"
+          class="w-full bg-slate-950 border border-amber-500/80 rounded-xl p-3.5 text-lg font-black text-amber-300 focus:outline-none focus:border-amber-400" />
+      </div>
+      <button type="submit" class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm uppercase shadow-lg">
+        ✅ Confirmar Leitura de Horímetro
+      </button>
+    </form>
+
+    <!-- ABA 2: ABERTURA DE OS / COMBOIO (BLOQUEADO PARA OPERADORES — EXIGE CREDENCIAL DE ENCARREGADO/MECÂNICO) -->
+    <form id="formQRTecnicoOS" onsubmit="salvarOSPeloQREncarregado(event)" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3.5 shadow-xl">
+      <div class="bg-amber-500/10 border border-amber-500/40 rounded-xl p-2.5 text-[11px] text-amber-200 font-semibold">
+        🔒 <strong>Acesso Restrito:</strong> Abertura de OS bloqueada para operadores. Informe sua credencial de <strong>Encarregado, Mecânico, PCM ou Engenheiro</strong>.
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Sua Matrícula</label>
+          <input id="qrTecMatricula" type="text" required placeholder="Matrícula"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold uppercase text-white" />
+        </div>
+        <div>
+          <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Sua Senha</label>
+          <input id="qrTecSenha" type="password" required placeholder="••••••"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Origem Técnica</label>
+        <select id="qrTecOrigem" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white">
+          <option value="solicitacao_encarregado">📋 Solicitação de Manutenção (Encarregado)</option>
+          <option value="inspecao_campo">🔍 Inspeção de Campo (Manut. de Oportunidade)</option>
+          <option value="atendimento_comboio">🚛 Atendimento de Comboio / Lubrificação</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Condição do Equipamento</label>
+        <select id="qrTecParada" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white">
+          <option value="true">🔴 Equipamento Parado (Requer Atendimento)</option>
+          <option value="false">🟡 Equipamento Operando c/ Anomalia (Sem Parada)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Localização no Trecho</label>
+        <div class="flex gap-1.5">
+          <input id="qrTecLocal" type="text" placeholder="Ex: Frente Norte - KM 98"
+            class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white" />
+          <button type="button" onclick="capturarGPSNoQR()" class="px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-black">
+            📍 GPS
+          </button>
+        </div>
+        <input id="qrTecGPS" type="hidden" />
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Descrição Técnica da Falha / Serviço</label>
+        <textarea id="qrTecDescricao" rows="3" required placeholder="Descreva o defeito ou intervenção realizada..."
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-white"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm uppercase shadow-lg">
+        🚀 Registrar Ordem de Serviço
+      </button>
+    </form>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="offline_sync.js"></script>
+  <script>
+    let equipAtualQR = null;
+
+    function alternarAbaQR(aba) {
+      const ehHor = aba === 'horimetro';
+      document.getElementById('formQRHorimetro').classList.toggle('hidden', !ehHor);
+      document.getElementById('formQRTecnicoOS').classList.toggle('hidden', ehHor);
+      document.getElementById('btnAbaHorimetro').className = ehHor
+        ? 'py-2 rounded-lg text-xs font-black bg-amber-500 text-slate-950'
+        : 'py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800';
+      document.getElementById('btnAbaTecnica').className = !ehHor
+        ? 'py-2 rounded-lg text-xs font-black bg-emerald-500 text-slate-950'
+        : 'py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800';
+    }
+
+    async function carregarEquipamentoDoQR() {
+      const params = new URLSearchParams(window.location.search);
+      const idParam = params.get('id');
+      const tagParam = params.get('tag');
+      const nomeParam = params.get('nome');
+      const unParam = params.get('un') || 'H';
+
+      // 1. Tenta buscar online ou do espelho local de frota no celular
+      const res = await lerDadosComFallbackOffline('equipamentos', async () => {
+        return await db.from('equipamentos').select('*');
+      });
+
+      const lista = res.data || [];
+      equipAtualQR = lista.find(e =>
+        (idParam && String(e.id) === String(idParam)) ||
+        (tagParam && String(e.tag).toUpperCase() === String(tagParam).toUpperCase())
+      );
+
+      // 2. Fallback para parâmetros embutidos na própria etiqueta QR Code caso celular nunca tenha tido internet
+      if (!equipAtualQR && (idParam || tagParam)) {
+        equipAtualQR = {
+          id: idParam,
+          tag: tagParam || 'EQUIP',
+          nome: nomeParam || 'Equipamento de Campo',
+          unidade_medida: unParam,
+          horimetro_atual: 0
+        };
+      }
+
+      if (equipAtualQR) {
+        document.getElementById('qrTagEquip').innerText = equipAtualQR.tag;
+        document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome;
+        document.getElementById('qrHorimetroAtual').innerText = `Atual: ${equipAtualQR.horimetro_atual || 0} ${equipAtualQR.unidade_medida || 'H'}`;
+      }
+    }
+
+    async function salvarHorimetroPeloQR(e) {
+      e.preventDefault();
+      if (!equipAtualQR) return alert('Equipamento não identificado no QR Code!');
+
+      const operador = document.getElementById('qrOperadorNome').value.trim();
+      const novoValor = parseFloat(document.getElementById('qrNovoHorimetro').value);
+
+      // Aplica a Trava Física Cronológica (Anti-Regressão e Anti-Salto > 24h/dia)
+      const validacao = validarFisicaHorimetro(equipAtualQR, novoValor);
+      if (!validacao.valido) return alert(validacao.mensagem);
+      if (validacao.nivel === 'alerta' && !confirm(validacao.mensagem)) return;
+
+      const agoraISO = new Date().toISOString();
+
+      await gravarDadosOfflineSafe('diario_horimetro', 'INSERT', {
+        equipamento_id: equipAtualQR.id,
+        horimetro_anterior: equipAtualQR.horimetro_atual || 0,
+        horimetro_novo: novoValor,
+        operador_nome: operador,
+        registrado_em: agoraISO
+      });
+
+      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', {
+        horimetro_atual: novoValor,
+        horimetro_atualizado_em: agoraISO
+      }, equipAtualQR.id);
+
+      equipAtualQR.horimetro_atual = novoValor;
+      equipAtualQR.horimetro_atualizado_em = agoraISO;
+      document.getElementById('qrHorimetroAtual').innerText = `Atual: ${novoValor} ${equipAtualQR.unidade_medida || 'H'}`;
+      document.getElementById('qrNovoHorimetro').value = '';
+      alert('✅ Horímetro registrado com sucesso!');
+    }
+
+    function capturarGPSNoQR() {
+      if (!navigator.geolocation) return alert('GPS não suportado neste aparelho.');
+      navigator.geolocation.getCurrentPosition(pos => {
+        const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`;
+        document.getElementById('qrTecGPS').value = coords;
+        const campoLocal = document.getElementById('qrTecLocal');
+        if (!campoLocal.value) campoLocal.value = `GPS (${coords})`;
+        alert('📍 Coordenadas de satélite capturadas!');
+      }, () => alert('Não foi possível obter o sinal do satélite GPS.'));
+    }
+
+    async function salvarOSPeloQREncarregado(e) {
+      e.preventDefault();
+      if (!equipAtualQR) return alert('Equipamento não identificado!');
+
+      const mat = document.getElementById('qrTecMatricula').value.trim().toUpperCase();
+      const sen = document.getElementById('qrTecSenha').value.trim();
+
+      // Valida credencial online ou no espelho local para bloquear Operadores
+      const resUsers = await lerDadosComFallbackOffline('perfis_usuarios', async () => {
+        return await db.from('perfis_usuarios').select('*').eq('ativo', true);
+      });
+
+      const user = (resUsers.data || []).find(u =>
+        String(u.matricula).toUpperCase() === mat && String(u.senha) === sen && u.ativo !== false
+      );
+
+      if (!user) {
+        return alert('🚫 Matrícula ou senha inválida!');
+      }
+
+      const cargos = Array.isArray(user.cargos_lista) && user.cargos_lista.length > 0 ? user.cargos_lista : [user.cargo_base];
+      const autorizado = cargos.some(c => ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'].includes(String(c).toLowerCase()));
+
+      if (!autorizado) {
+        return alert('🚫 ACESSO NEGADO: Operadores só têm permissão para lançar Horímetro. A abertura de OS é exclusiva para Encarregados e Equipe Técnica.');
+      }
+
+      const origem = document.getElementById('qrTecOrigem').value;
+      const parada = document.getElementById('qrTecParada').value === 'true';
+      const local = document.getElementById('qrTecLocal').value.trim();
+      const gps = document.getElementById('qrTecGPS').value.trim();
+      const desc = document.getElementById('qrTecDescricao').value.trim();
+
+      await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
+        equipamento_id: equipAtualQR.id,
+        obra_id: equipAtualQR.obra_id || null,
+        tipo: 'corretiva',
+        origem_atendimento: origem,
+        parada_obrigatoria: parada,
+        status: parada ? 'aberta' : 'aviso_operando',
+        localizacao_trecho: local,
+        gps_coordenadas: gps,
+        descricao_problema: desc,
+        aberta_por_nome: user.nome,
+        aberta_em: new Date().toISOString()
+      });
+
+      document.getElementById('qrTecDescricao').value = '';
+      alert('✅ Ordem de Serviço registrada e enviada para a Central de Despacho!');
+    }
+
+    document.addEventListener('DOMContentLoaded', carregarEquipamentoDoQR);
+  </script>
+</body>
+</html>
