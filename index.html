@@ -8,81 +8,83 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-slate-100 text-slate-900 min-h-screen font-sans">
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
-  <!-- 1. TELA DE LOGIN -->
-  <div id="telaLogin" class="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
+  <!-- 1. TELA DE LOGIN (FUNDO CLARO E SEM FORÇAR MAIÚSCULAS) -->
+  <div id="telaLogin" class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-5">
       <div class="text-center">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 font-black text-2xl mb-2 shadow-lg">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 font-black text-2xl mb-2 shadow-md">
           <i class="fa-solid fa-screwdriver-wrench"></i>
         </div>
-        <h1 class="text-xl font-black text-white tracking-wide">VILASA <span class="text-amber-400">CMMS</span></h1>
-        <p class="text-xs text-slate-400 mt-1">Engenharia de Manutenção, Controle de Frota & PCM</p>
+        <h1 class="text-xl font-black text-slate-900 tracking-wide">VILASA <span class="text-amber-500">CMMS</span></h1>
+        <p class="text-xs text-slate-500 font-semibold mt-1">Engenharia de Manutenção, Controle de Frota & PCM</p>
       </div>
 
       <form onsubmit="realizarLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Matrícula</label>
-          <input id="loginMatricula" type="text" required placeholder="Digite sua matrícula..."
-            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white uppercase focus:outline-none focus:border-amber-400" />
+          <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Matrícula / Usuário</label>
+          <input id="loginMatricula" type="text" required autocapitalize="none" autocorrect="off" spellcheck="false"
+            placeholder="Digite seu usuário ou matrícula..."
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
         </div>
         <div>
-          <label class="block text-[11px] font-black uppercase text-slate-400 mb-1">Senha</label>
-          <input id="loginSenha" type="password" required placeholder="••••••"
-            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white focus:outline-none focus:border-amber-400" />
+          <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Senha</label>
+          <input id="loginSenha" type="password" required autocapitalize="none" autocorrect="off" spellcheck="false"
+            placeholder="••••••"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
         </div>
-        <button type="submit" class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg transition">
+        <button type="submit" class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md transition">
           🔑 Entrar no Sistema
         </button>
       </form>
     </div>
   </div>
 
-  <!-- 2. APLICAÇÃO PRINCIPAL (OCULTA ATÉ O LOGIN) -->
-  <div id="appPrincipal" class="hidden min-h-screen flex flex-col lg:flex-row">
+  <!-- 2. APLICAÇÃO PRINCIPAL (TEMA CLARO CORPORATIVO) -->
+  <div id="appPrincipal" class="hidden min-h-screen flex flex-col lg:flex-row bg-slate-50">
 
-    <!-- MENU LATERAL / TOPO -->
-    <aside class="w-full lg:w-64 bg-slate-950 text-white p-4 flex flex-col justify-between shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800">
+    <!-- MENU LATERAL CLARO -->
+    <aside class="w-full lg:w-64 bg-white text-slate-800 p-4 flex flex-col justify-between shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 shadow-sm">
       <div class="space-y-4">
         <!-- Logo e Usuário Logado -->
-        <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-800">
+        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
           <div class="flex items-center justify-between">
-            <span class="text-sm font-black text-amber-400 tracking-wide">VILASA CMMS</span>
-            <button onclick="encerrarSessao()" class="text-xs text-rose-400 hover:text-rose-300 font-bold" title="Sair">
+            <span class="text-sm font-black text-slate-900 tracking-wide">VILASA <span class="text-amber-500">CMMS</span></span>
+            <button onclick="encerrarSessao()" class="text-xs text-rose-600 hover:text-rose-700 font-extrabold" title="Sair">
               <i class="fa-solid fa-right-from-bracket"></i> Sair
             </button>
           </div>
-          <div class="mt-2 pt-2 border-t border-slate-800">
-            <div id="headerNomeUsuario" class="text-xs font-black text-white truncate">Usuário</div>
-            <div id="headerCargoUsuario" class="text-[10px] font-bold text-slate-400 truncate">Cargo</div>
+          <div class="mt-2 pt-2 border-t border-slate-200">
+            <div id="headerNomeUsuario" class="text-xs font-black text-slate-900 truncate">Usuário</div>
+            <div id="headerCargoUsuario" class="text-[10px] font-bold text-slate-500 truncate">Cargo</div>
           </div>
-          <!-- Aqui o core.js e o offline_sync.js injetam automaticamente o Seletor de Obra e o Status Offline -->
+          <!-- Seletor de Obra e Status Offline são injetados aqui pelo core.js e offline_sync.js -->
         </div>
 
         <!-- Botões de Navegação entre Módulos -->
         <nav class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
-          <button id="nav-os" onclick="navegarPara('os')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-os" onclick="navegarPara('os')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-wrench w-4 text-center"></i>
             <span>Ordens & REP</span>
           </button>
-          <button id="nav-frota" onclick="navegarPara('frota')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-frota" onclick="navegarPara('frota')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-truck-monster w-4 text-center"></i>
             <span>Frota & QR Codes</span>
           </button>
-          <button id="nav-preventivas" onclick="navegarPara('preventivas')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-preventivas" onclick="navegarPara('preventivas')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-calendar-check w-4 text-center"></i>
             <span>Preventivas (SAP)</span>
           </button>
-          <button id="nav-estoque" onclick="navegarPara('estoque')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-estoque" onclick="navegarPara('estoque')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-boxes-stacked w-4 text-center"></i>
             <span>Almoxarifado</span>
           </button>
-          <button id="nav-kpis" onclick="navegarPara('kpis')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-kpis" onclick="navegarPara('kpis')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-chart-line w-4 text-center"></i>
             <span>Indicadores (KPIs)</span>
           </button>
-          <button id="nav-admin" onclick="navegarPara('admin')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 flex items-center gap-2.5 transition">
+          <button id="nav-admin" onclick="navegarPara('admin')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-user-shield w-4 text-center"></i>
             <span>Administração</span>
           </button>
@@ -95,7 +97,6 @@
 
       <!-- SEÇÃO 1: ORDENS DE SERVIÇO + QUADRO REP -->
       <section id="sec-os" class="space-y-5">
-        <!-- Quadro Enxuto de Equipamentos Parados (REP) -->
         <div class="bg-white rounded-2xl border-2 border-amber-500 p-4 shadow-sm">
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
             <div>
@@ -110,7 +111,6 @@
           <div id="tabelaEnxutaParadosREP" class="overflow-x-auto"></div>
         </div>
 
-        <!-- Lista de Cards de Ordens de Serviço -->
         <div id="listaOrdensServico" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </section>
 
@@ -120,13 +120,13 @@
       <!-- SEÇÃO 3: PREVENTIVAS (SAP PM) -->
       <section id="sec-preventivas" class="hidden"></section>
 
-      <!-- SEÇÃO 4: ALMOXARIFADO (OS 3 BOTÕES) -->
+      <!-- SEÇÃO 4: ALMOXARIFADO -->
       <section id="sec-estoque" class="hidden"></section>
 
       <!-- SEÇÃO 5: INDICADORES (KPIS) -->
       <section id="sec-kpis" class="hidden"></section>
 
-      <!-- SEÇÃO 6: ADMINISTRAÇÃO & MODO DEUS -->
+      <!-- SEÇÃO 6: ADMINISTRAÇÃO -->
       <section id="sec-admin" class="hidden"></section>
 
     </main>
