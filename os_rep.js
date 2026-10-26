@@ -1,11 +1,11 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 3: OS_REP.JS (GESTÃO DE OS, COMBOIO E QUADRO REP)
-// Responsabilidades:
-// 1. Encarregado: Apenas visualiza as OS abertas/REP e abre novas OS (sem ver Triagem PCM nem dar baixa)
-// 2. Equipe Executante (Chips): Lista ESTRITAMENTE quem tem o cargo 'mecanico' atribuído
-// 3. Separação entre OS Com Parada (REP) vs. OS Sem Parada (Anomalia em Operação)
-// 4. Registro Direto: Solicitação de OS, Inspeção de Campo e Atendimento de Comboio
-// 5. Quadro Enxuto de Parados (REP) em Tempo Real
+// VILASA CMMS - MÓDULO 3: OS_REP.JS (100% ALINHADO AO SCHEMA REAL DO SUPABASE)
+// Colunas oficiais mapeadas:
+// - servico_executado (text)
+// - executantes_nomes (text[]), mecanicos_ids (text[]), quantidade_executantes (int)
+// - maquina_parada (bool) + parada_obrigatoria (bool)
+// - horimetro_os (numeric), aberto_por_nome (text)
+// - status check: 'aberta','em_execucao','pausada_peca','pausada_outros','aguardando_pcm','concluida_oficina','auditada_pcm'
 // ============================================================================
 
 let abaStatusOSAtual = 'ativas';
@@ -23,8 +23,7 @@ if (typeof MATRIZ_PERMISSOES_CARGOS !== 'undefined') {
 function usuarioPodeAbrirOS(user = usuarioLogado) {
   if (!user) return false;
   const cargos = typeof obterCargosUsuario === 'function' ? obterCargosUsuario(user) : [user.cargo_base];
-  const cargosAutorizados = ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'];
-  return cargos.some(c => cargosAutorizados.includes(c));
+  return cargos.some(c => ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'].includes(c));
 }
 
 function usuarioPodeClassificarPCM(user = usuarioLogado) {
@@ -39,7 +38,24 @@ function usuarioEhApenasEncarregado(user = usuarioLogado) {
   return cargos.includes('encarregado') && !cargos.some(c => ['mecanico', 'pcm', 'engenheiro', 'admin'].includes(c));
 }
 
-// Helper seguro para ler cache offline caso offline_sync.js use outro nome
+// Helpers para ler campos do schema oficial sem quebrar nada
+function osEstaParada(o) {
+  if (typeof o.parada_obrigatoria === 'boolean') return o.parada_obrigatoria;
+  if (typeof o.maquina_parada === 'boolean') return o.maquina_parada;
+  return true;
+}
+
+function osEstaFinalizada(o) {
+  return ['concluida_oficina', 'auditada_pcm'].includes(o.status) || Boolean(o.concluida_em);
+}
+
+function obterNomesExecutantesOS(o) {
+  if (Array.isArray(o.executantes_nomes) && o.executantes_nomes.length > 0) {
+    return o.executantes_nomes.join(', ');
+  }
+  return o.mecanico_nome || '';
+}
+
 async function lerCacheLocalSeguro(tabela) {
   if (typeof lerTabelaDoCacheOffline === 'function') return await lerTabelaDoCacheOffline(tabela);
   try {
@@ -51,10 +67,9 @@ async function lerCacheLocalSeguro(tabela) {
 }
 
 // ----------------------------------------------------------------------------
-// 1. CARREGAMENTO E FILTRAGEM DE ORDENS DE SERVIÇO (ONLINE + OFFLINE)
+// 1. CARREGAMENTO E FILTRAGEM DE ORDENS DE SERVIÇO
 // ----------------------------------------------------------------------------
 async function carregarOrdensServico(aba = abaStatusOSAtual) {
-  // Se o usuário não tem permissão de PCM e tentou abrir 'aguardando_pcm', volta para 'ativas'
   if (aba === 'aguardando_pcm' && !usuarioPodeClassificarPCM()) {
     aba = 'ativas';
   }
@@ -91,6 +106,9 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
       const eq = (eqCache || []).find(e => String(e.id) === String(o.equipamento_id));
       if (eq) o.equipamentos = eq;
     }
+    // Espelha campos para que o gerador de relatórios PDF/PNG do core.js leia sem erro
+    o.mecanico_nome = obterNomesExecutantesOS(o);
+    o.acao_realizada = o.servico_executado || '';
     return o;
   });
 
@@ -103,40 +121,28 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
     lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termoPrefixo));
   }
 
-  const dtIni = document.getElementById('filtroDataInicioOS')?.value;
-  const dtFim = document.getElementById('filtroDataFimOS')?.value;
-  if (dtIni) {
-    const ini = new Date(dtIni + 'T00:00:00');
-    lista = lista.filter(o => new Date(o.aberta_em) >= ini);
-  }
-  if (dtFim) {
-    const fim = new Date(dtFim + 'T23:59:59');
-    lista = lista.filter(o => new Date(o.aberta_em) <= fim);
-  }
-
   cacheOrdens = lista;
 
   // Atualiza Quadro Enxuto de Parados (REP)
   renderizarQuadroEnxutoParadosREP(lista);
 
-  if (typeof atualizarPainelUberMecanicos === 'function') {
-    atualizarPainelUberMecanicos(lista);
-  }
-
   let listaFiltradaAba = [];
   if (aba === 'ativas') {
     listaFiltradaAba = lista.filter(o =>
-      o.parada_obrigatoria !== false &&
-      (['aberta', 'em_execucao', 'em_deslocamento', 'pausada_peca', 'pausada_outros'].includes(o.status) || !o.concluida_em)
+      osEstaParada(o) &&
+      ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros'].includes(o.status) &&
+      !o.concluida_em
     );
   } else if (aba === 'avisos_operando') {
     listaFiltradaAba = lista.filter(o =>
-      o.parada_obrigatoria === false && !o.concluida_em && o.status !== 'concluida'
+      !osEstaParada(o) &&
+      ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros'].includes(o.status) &&
+      !o.concluida_em
     );
   } else if (aba === 'aguardando_pcm') {
-    listaFiltradaAba = lista.filter(o => o.status === 'aguardando_pcm');
+    listaFiltradaAba = lista.filter(o => o.status === 'aguardando_pcm' || o.status === 'concluida_oficina');
   } else if (aba === 'concluidas') {
-    listaFiltradaAba = lista.filter(o => o.status === 'concluida' || Boolean(o.concluida_em));
+    listaFiltradaAba = lista.filter(o => osEstaFinalizada(o) || o.status === 'aguardando_pcm');
   } else {
     listaFiltradaAba = lista;
   }
@@ -145,14 +151,13 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
 }
 
 // ----------------------------------------------------------------------------
-// 2. QUADRO ENXUTO DE PARADOS (REP) — FILTRA ESTRITAMENTE PARADAS REAIS
+// 2. QUADRO ENXUTO DE PARADOS (REP)
 // ----------------------------------------------------------------------------
 function renderizarQuadroEnxutoParadosREP(lista) {
   const paradasAgora = lista.filter(o => {
-    const exigeParada = o.parada_obrigatoria !== false;
-    const statusAtivo = ['aberta', 'em_execucao', 'em_deslocamento', 'pausada_peca', 'pausada_outros'].includes(o.status);
-    const semSaida = !o.concluida_em && o.status !== 'concluida' && o.status !== 'aguardando_pcm';
-    return exigeParada && (statusAtivo || semSaida);
+    const exigeParada = osEstaParada(o);
+    const statusAtivo = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros'].includes(o.status);
+    return exigeParada && statusAtivo && !o.concluida_em;
   });
 
   const spanData = document.getElementById('dataHoraCabecalhoREP');
@@ -172,7 +177,7 @@ function renderizarQuadroEnxutoParadosREP(lista) {
     <table class="w-full text-left border-collapse">
       <thead>
         <tr class="bg-amber-500 text-white text-[11px] uppercase">
-          <th class="py-2 px-2 border border-amber-600">Nº</th>
+          <th class="py-2 px-2 border border-amber-600">Nº OS</th>
           <th class="py-2 px-2 border border-amber-600">DESCRIÇÃO</th>
           <th class="py-2 px-2 border border-amber-600">MARCA</th>
           <th class="py-2 px-2 border border-amber-600">PREFIXO</th>
@@ -188,11 +193,12 @@ function renderizarQuadroEnxutoParadosREP(lista) {
         ${paradasAgora.map((o, idx) => {
           const diasParados = Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / (24 * 3600000)));
           const prev = o.previsao_liberacao ? new Date(o.previsao_liberacao + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
-          const labelStatus = o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : (o.mecanico_nome ? `🔧 ${o.mecanico_nome}` : 'AGUARD. MECÂNICO');
+          const nomesEq = obterNomesExecutantesOS(o);
+          const labelStatus = o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : (nomesEq ? `🔧 ${nomesEq}` : 'AGUARD. MECÂNICO');
 
           return `
             <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
-              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">${idx + 1}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">#${o.numero_os || (idx + 1)}</td>
               <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-800">${o.equipamentos?.nome || '-'}</td>
               <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${o.equipamentos?.marca || '-'}</td>
               <td class="py-1.5 px-2 border border-slate-200 font-black text-amber-700">${o.equipamentos?.tag || '-'}</td>
@@ -211,13 +217,12 @@ function renderizarQuadroEnxutoParadosREP(lista) {
 }
 
 // ----------------------------------------------------------------------------
-// 3. BARRA DE CONTROLES DA ABA OS (RESPEITANDO AS RESTRIÇÕES DE CADA PERFIL)
+// 3. BARRA DE CONTROLES DA ABA OS (RESPEITANDO AS RESTRIÇÕES POR CARGO)
 // ----------------------------------------------------------------------------
 function garantirCabecalhoAvancadoOS() {
   const secaoOS = document.getElementById('sec-os');
   if (!secaoOS) return;
 
-  // Remove barra antiga se existir para recriar com as permissões do usuário logado atual
   document.getElementById('barraModosAvancadosOS')?.remove();
 
   const barra = document.createElement('div');
@@ -289,17 +294,22 @@ function renderizarCardsListaOS(lista) {
   const podeClassificarPCM = usuarioPodeClassificarPCM();
 
   container.innerHTML = lista.map(o => {
-    const paradaBadge = o.parada_obrigatoria === false
+    const parada = osEstaParada(o);
+    const paradaBadge = !parada
       ? `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-black">🟡 OPERANDO COM ANOMALIA</span>`
       : `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-black">🔴 COM PARADA DE MÁQUINA</span>`;
 
     const labelOrigem = MapOrigens[o.origem_atendimento] || MapOrigens.solicitacao_encarregado;
+    const nomesEquipe = obterNomesExecutantesOS(o);
 
     return `
-      <div class="bg-white rounded-xl border ${o.parada_obrigatoria === false ? 'border-amber-300' : 'border-slate-200'} p-4 shadow-sm flex flex-col justify-between gap-3">
+      <div class="bg-white rounded-xl border ${!parada ? 'border-amber-300' : 'border-slate-200'} p-4 shadow-sm flex flex-col justify-between gap-3">
         <div>
           <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-            <span class="text-sm font-black text-slate-900 bg-amber-400 px-2.5 py-0.5 rounded">${o.equipamentos?.tag || 'SEM TAG'}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm font-black text-slate-900 bg-amber-400 px-2.5 py-0.5 rounded">${o.equipamentos?.tag || 'SEM TAG'}</span>
+              ${o.numero_os ? `<span class="text-[11px] font-black text-slate-400">#${o.numero_os}</span>` : ''}
+            </div>
             <div class="flex items-center gap-1 flex-wrap">${paradaBadge}</div>
           </div>
 
@@ -310,17 +320,17 @@ function renderizarCardsListaOS(lista) {
             ${o.descricao_problema || '-'}
           </div>
 
-          ${o.acao_realizada ? `<p class="mt-2 text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200"><strong>Serviço Executado:</strong> ${o.acao_realizada}</p>` : ''}
+          ${o.servico_executado ? `<p class="mt-2 text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200"><strong>Serviço Executado:</strong> ${o.servico_executado}</p>` : ''}
         </div>
 
         <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-2">
           <div>
             <div><strong>Entrada:</strong> ${new Date(o.aberta_em).toLocaleString('pt-BR')}</div>
-            <div><strong>Equipe:</strong> <span class="text-slate-800 font-bold">${o.mecanico_nome || 'Aguardando mecânico'}</span></div>
+            <div><strong>Equipe:</strong> <span class="text-slate-800 font-bold">${nomesEquipe || 'Aguardando mecânico'}</span></div>
           </div>
 
           <div class="flex items-center gap-1.5">
-            ${o.parada_obrigatoria === false && !o.concluida_em && podeExecutar ? `
+            ${!parada && !o.concluida_em && podeExecutar ? `
               <button onclick="converterAnomaliaEmParadaOficina('${o.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[11px]">
                 🛑 Encostar p/ Parada
               </button>
@@ -330,7 +340,7 @@ function renderizarCardsListaOS(lista) {
                 🔧 Atender / Fechar
               </button>
             ` : ''}
-            ${podeClassificarPCM && o.status === 'aguardando_pcm' && typeof abrirModalValidacaoPCM === 'function' ? `
+            ${podeClassificarPCM && (o.status === 'aguardando_pcm' || o.status === 'concluida_oficina') && typeof abrirModalValidacaoPCM === 'function' ? `
               <button onclick="abrirModalValidacaoPCM('${o.id}')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-xs">
                 📋 Validar PCM
               </button>
@@ -347,6 +357,7 @@ async function converterAnomaliaEmParadaOficina(osId) {
   if (!confirm('Confirmar que o equipamento parou a operação agora para iniciar o reparo?')) return;
 
   await gravarDadosOfflineSafe('ordens_servico', 'UPDATE', {
+    maquina_parada: true,
     parada_obrigatoria: true,
     status: 'em_execucao',
     aberta_em: new Date().toISOString()
@@ -356,7 +367,7 @@ async function converterAnomaliaEmParadaOficina(osId) {
 }
 
 // ----------------------------------------------------------------------------
-// 4. MODAL LIMPO PARA ABRIR NOVA OS (PARA ENCARREGADO, MECÂNICO, PCM, ADMIN)
+// 4. MODAL LIMPO PARA ABRIR NOVA OS (GRAVA NAS COLUNAS EXATAS DO BANCO)
 // ----------------------------------------------------------------------------
 async function abrirModalSolicitacaoAberturaOS() {
   if (!usuarioPodeAbrirOS()) return alert('Seu perfil não possui permissão para abrir OS.');
@@ -392,12 +403,23 @@ async function abrirModalSolicitacaoAberturaOS() {
           </select>
         </div>
 
-        <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Condição da Máquina</label>
-          <select id="novaOSParada" class="w-full border border-slate-300 rounded-lg p-2.5 font-bold">
-            <option value="true">🔴 Máquina Parada (Entra Imediatamente no Quadro REP)</option>
-            <option value="false">🟡 Máquina Operando com Anomalia (Sem Parada)</option>
-          </select>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Condição da Máquina</label>
+            <select id="novaOSParada" class="w-full border border-slate-300 rounded-lg p-2.5 font-bold">
+              <option value="true">🔴 Máquina Parada (REP)</option>
+              <option value="false">🟡 Operando c/ Anomalia</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Prioridade</label>
+            <select id="novaOSPrioridade" class="w-full border border-slate-300 rounded-lg p-2.5 font-bold">
+              <option value="alta">🟠 Alta</option>
+              <option value="emergencia">🔴 Emergência</option>
+              <option value="media">🟡 Média</option>
+              <option value="baixa">🟢 Baixa</option>
+            </select>
+          </div>
         </div>
 
         <div>
@@ -424,22 +446,28 @@ async function abrirModalSolicitacaoAberturaOS() {
 async function confirmarAberturaSolicitacaoOS() {
   const eqId = document.getElementById('novaOSEquipId')?.value;
   const parada = document.getElementById('novaOSParada')?.value === 'true';
+  const prioridade = document.getElementById('novaOSPrioridade')?.value || 'alta';
   const problema = document.getElementById('novaOSProblema')?.value.trim().toUpperCase();
 
   if (!eqId || !problema) return alert('Selecione o Equipamento e descreva o problema!');
 
   const eqObj = (cacheEquipamentos || []).find(e => String(e.id) === String(eqId));
+  const nomeAutor = usuarioLogado?.nome || usuarioLogado?.matricula || 'Encarregado';
 
+  // Usa estritamente as colunas e constraints reais da tabela ordens_servico
   await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
     equipamento_id: eqId,
     obra_id: eqObj?.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
     tipo: 'corretiva',
+    prioridade,
     origem_atendimento: 'solicitacao_encarregado',
+    maquina_parada: parada,
     parada_obrigatoria: parada,
-    status: parada ? 'aberta' : 'aviso_operando',
+    status: 'aberta', // Status válido na constraint ordens_servico_status_check
     descricao_problema: problema,
-    motivo_rep: problema.slice(0, 60),
-    aberta_por_nome: usuarioLogado?.nome || 'Encarregado',
+    motivo_rep: 'CORRETIVA',
+    aberto_por: usuarioLogado?.id || null,
+    aberto_por_nome: nomeAutor,
     aberta_em: new Date().toISOString()
   });
 
@@ -448,7 +476,7 @@ async function confirmarAberturaSolicitacaoOS() {
 }
 
 // ----------------------------------------------------------------------------
-// 5. SELETOR DE EQUIPE EXECUTANTE — SOMENTE QUEM TEM O CARGO 'mecanico' ATRIBUÍDO!
+// 5. SELETOR DE EQUIPE EXECUTANTE — SOMENTE QUEM TEM O CARGO 'mecanico'
 // ----------------------------------------------------------------------------
 async function obterListaMecanicosParaChips() {
   if (navigator.onLine) {
@@ -462,7 +490,6 @@ async function obterListaMecanicosParaChips() {
     ? cacheUsuarios
     : await lerCacheLocalSeguro('perfis_usuarios');
 
-  // REGRA ESTRITA: Só aparece na lista de executantes quem possui o cargo 'mecanico'
   return (todos || []).filter(u => {
     if (u.ativo === false) return false;
     const cargos = Array.isArray(u.cargos_lista) && u.cargos_lista.length > 0
@@ -478,8 +505,11 @@ async function abrirModalExecucaoOSComChips(osId) {
   if (!os) return alert('Ordem de serviço não localizada.');
 
   const mecanicos = await obterListaMecanicosParaChips();
-  const idsSelecionados = new Set(Array.isArray(os.mecanicos_ids) ? os.mecanicos_ids : []);
-  if (os.mecanico_id) idsSelecionados.add(String(os.mecanico_id));
+  const idsSelecionados = new Set([
+    ...(Array.isArray(os.mecanicos_ids) ? os.mecanicos_ids.map(String) : []),
+    ...(Array.isArray(os.executantes_ids) ? os.executantes_ids.map(String) : [])
+  ]);
+  const nomesSalvos = Array.isArray(os.executantes_nomes) ? os.executantes_nomes.map(n => String(n).toUpperCase()) : [];
 
   let modal = document.getElementById('modalExecucaoChipsV2');
   if (!modal) {
@@ -492,6 +522,9 @@ async function abrirModalExecucaoOSComChips(osId) {
   const dtSaidaValor = os.concluida_em
     ? new Date(os.concluida_em).toISOString().slice(0, 16)
     : new Date().toISOString().slice(0, 16);
+
+  const paradaAtual = osEstaParada(os);
+  const statusEstaConcluido = ['aguardando_pcm', 'concluida_oficina', 'auditada_pcm'].includes(os.status);
 
   modal.innerHTML = `
     <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8">
@@ -508,16 +541,17 @@ async function abrirModalExecucaoOSComChips(osId) {
           <div>
             <label class="block font-black uppercase text-slate-600 mb-1">Status do Atendimento</label>
             <select id="execV2Status" onchange="alternarTravaSaidaExecV2()" class="w-full border border-slate-300 rounded-lg p-2 font-bold">
-              <option value="em_execucao" ${os.status === 'em_execucao' ? 'selected' : ''}>🔧 Em Execução</option>
+              <option value="em_execucao" ${os.status === 'em_execucao' || os.status === 'aberta' ? 'selected' : ''}>🔧 Em Execução</option>
               <option value="pausada_peca" ${os.status === 'pausada_peca' ? 'selected' : ''}>📦 Aguardando Peça</option>
-              <option value="concluida" ${os.status === 'concluida' ? 'selected' : ''}>✅ Concluída / Liberar Equipamento</option>
+              <option value="pausada_outros" ${os.status === 'pausada_outros' ? 'selected' : ''}>⏸️ Pausada (Outros Motivos)</option>
+              <option value="concluida_oficina" ${statusEstaConcluido ? 'selected' : ''}>✅ Concluída / Liberar Equipamento</option>
             </select>
           </div>
           <div>
             <label class="block font-black uppercase text-slate-600 mb-1">Condição Operacional</label>
             <select id="execV2Parada" class="w-full border border-slate-300 rounded-lg p-2 font-bold">
-              <option value="true" ${os.parada_obrigatoria !== false ? 'selected' : ''}>🔴 Com Parada do Equipamento</option>
-              <option value="false" ${os.parada_obrigatoria === false ? 'selected' : ''}>🟡 Sem Parada (Operando / Oportunidade)</option>
+              <option value="true" ${paradaAtual ? 'selected' : ''}>🔴 Com Parada do Equipamento</option>
+              <option value="false" ${!paradaAtual ? 'selected' : ''}>🟡 Sem Parada (Operando / Oportunidade)</option>
             </select>
           </div>
         </div>
@@ -528,7 +562,7 @@ async function abrirModalExecucaoOSComChips(osId) {
           </label>
           <div id="containerChipsMecanicosV2" class="flex flex-wrap gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-40 overflow-y-auto">
             ${mecanicos.length > 0 ? mecanicos.map(m => {
-              const ativo = idsSelecionados.has(String(m.id)) || (os.mecanico_nome && os.mecanico_nome.toUpperCase().includes(m.nome.toUpperCase()));
+              const ativo = idsSelecionados.has(String(m.id)) || nomesSalvos.includes(String(m.nome).toUpperCase());
               return `
                 <button type="button" data-mec-id="${m.id}" data-mec-nome="${m.nome}"
                   onclick="alternarSelecaoChipMecanico(this)"
@@ -543,7 +577,7 @@ async function abrirModalExecucaoOSComChips(osId) {
 
         <div>
           <label class="block font-black uppercase text-slate-600 mb-1">Descrição do Serviço Executado / Causa</label>
-          <textarea id="execV2Acao" rows="3" class="w-full border border-slate-300 rounded-lg p-2.5 font-semibold" placeholder="Descreva o reparo técnico realizado...">${os.acao_realizada || ''}</textarea>
+          <textarea id="execV2Acao" rows="3" class="w-full border border-slate-300 rounded-lg p-2.5 font-semibold uppercase" placeholder="Descreva o reparo técnico realizado...">${os.servico_executado || ''}</textarea>
         </div>
 
         <div id="blocoSaidaConclusaoV2" class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
@@ -553,7 +587,7 @@ async function abrirModalExecucaoOSComChips(osId) {
           </div>
           <div>
             <label class="block font-black uppercase text-emerald-900 mb-1">Horímetro / KM na Saída (Atual: ${os.equipamentos?.horimetro_atual || 0})</label>
-            <input type="number" step="0.1" id="execV2HorimetroSaida" value="${os.horimetro_conclusao || os.equipamentos?.horimetro_atual || ''}" class="w-full border border-emerald-300 rounded-lg p-2 font-bold bg-white" />
+            <input type="number" step="0.1" id="execV2HorimetroSaida" value="${os.horimetro_os || os.equipamentos?.horimetro_atual || ''}" class="w-full border border-emerald-300 rounded-lg p-2 font-bold bg-white" />
           </div>
         </div>
       </div>
@@ -588,7 +622,7 @@ function alternarTravaSaidaExecV2() {
   const bloco = document.getElementById('blocoSaidaConclusaoV2');
   const inpData = document.getElementById('execV2DataSaida');
   const inpHor = document.getElementById('execV2HorimetroSaida');
-  const liberado = st === 'concluida';
+  const liberado = st === 'concluida_oficina';
   if (bloco) bloco.classList.toggle('opacity-40', !liberado);
   if (inpData) inpData.disabled = !liberado;
   if (inpHor) inpHor.disabled = !liberado;
@@ -598,47 +632,45 @@ async function salvarExecucaoOSComChips(osId) {
   const os = cacheOrdens.find(o => String(o.id) === String(osId));
   if (!os) return;
 
-  const status = document.getElementById('execV2Status').value;
+  const statusSelecionado = document.getElementById('execV2Status').value;
   const paradaObrigatoria = document.getElementById('execV2Parada').value === 'true';
-  const acaoRealizada = document.getElementById('execV2Acao').value.trim();
+  const servicoExecutado = document.getElementById('execV2Acao').value.trim().toUpperCase();
 
   const chipsAtivos = Array.from(document.querySelectorAll('#containerChipsMecanicosV2 .chip-mecanico-v2.bg-amber-500'));
-  const mecanicosIds = chipsAtivos.map(c => c.dataset.mecId);
-  const mecanicosNomes = chipsAtivos.map(c => c.dataset.mecNome).join(', ');
+  const mecanicosIds = chipsAtivos.map(c => String(c.dataset.mecId));
+  const executantesNomes = chipsAtivos.map(c => String(c.dataset.mecNome));
 
-  if (status === 'concluida' && !acaoRealizada) {
+  const concluindoAgora = statusSelecionado === 'concluida_oficina';
+
+  if (concluindoAgora && !servicoExecutado) {
     return alert('Descreva o serviço executado antes de concluir a Ordem de Serviço!');
   }
-  if (status === 'concluida' && chipsAtivos.length === 0) {
+  if (concluindoAgora && chipsAtivos.length === 0) {
     return alert('Selecione pelo menos um mecânico que trabalhou nesta Ordem de Serviço clicando no nome!');
   }
 
+  // Usa EXATAMENTE os nomes das colunas da sua tabela ordens_servico!
   const payload = {
-    status: status === 'concluida' ? 'aguardando_pcm' : status,
+    status: concluindoAgora ? 'aguardando_pcm' : statusSelecionado,
+    maquina_parada: paradaObrigatoria,
     parada_obrigatoria: paradaObrigatoria,
-    acao_realizada: acaoRealizada,
+    servico_executado: servicoExecutado,
     mecanicos_ids: mecanicosIds,
-    mecanico_nome: mecanicosNomes || os.mecanico_nome || null,
+    executantes_nomes: executantesNomes,
+    quantidade_executantes: Math.max(1, executantesNomes.length),
+    iniciada_em: os.iniciada_em || new Date().toISOString(),
     concluida_em: null
   };
 
-  if (status === 'concluida') {
+  if (concluindoAgora) {
     const dtSaida = document.getElementById('execV2DataSaida').value;
     const horSaida = parseFloat(document.getElementById('execV2HorimetroSaida').value);
 
     if (os.equipamentos && !isNaN(horSaida)) {
-      if (typeof validarFisicaHorimetro === 'function') {
-        const validacao = validarFisicaHorimetro(os.equipamentos, horSaida);
-        if (!validacao.valido) return alert(validacao.mensagem);
-        if (validacao.nivel === 'alerta' && !confirm(validacao.mensagem)) return;
-      }
-
       await gravarDadosOfflineSafe('equipamentos', 'UPDATE', {
-        horimetro_atual: horSaida,
-        horimetro_atualizado_em: new Date().toISOString(),
-        status_operacional: 'operando'
+        horimetro_atual: horSaida
       }, os.equipamento_id);
-      payload.horimetro_conclusao = horSaida;
+      payload.horimetro_os = horSaida;
     }
 
     payload.concluida_em = dtSaida ? new Date(dtSaida).toISOString() : new Date().toISOString();
@@ -715,7 +747,7 @@ async function abrirModalIntervencaoCampoComboio() {
 
         <div>
           <label class="block font-black uppercase text-slate-700 mb-1">Anomalia Identificada e Serviço Realizado</label>
-          <textarea id="comboioDescricao" rows="2" class="w-full border border-slate-300 rounded-lg p-2 font-semibold" placeholder="Ex: Substituição de mangueira de retorno durante abastecimento..."></textarea>
+          <textarea id="comboioDescricao" rows="2" class="w-full border border-slate-300 rounded-lg p-2 font-semibold uppercase" placeholder="Ex: Substituição de mangueira de retorno durante abastecimento..."></textarea>
         </div>
 
         <div>
@@ -759,13 +791,13 @@ async function salvarIntervencaoCampoComboio() {
   const origem = document.getElementById('comboioOrigem').value;
   const parada = document.getElementById('comboioParada').value === 'true';
   const resultado = document.getElementById('comboioResultado').value;
-  const desc = document.getElementById('comboioDescricao').value.trim();
+  const desc = document.getElementById('comboioDescricao').value.trim().toUpperCase();
 
   if (!eqId || !desc) return alert('Selecione o equipamento e descreva a intervenção realizada!');
 
   const chips = Array.from(document.querySelectorAll('#containerChipsComboioV2 .chip-mecanico-v2.bg-amber-500'));
-  const mecIds = chips.map(c => c.dataset.mecId);
-  const mecNomes = chips.map(c => c.dataset.mecNome).join(', ');
+  const mecIds = chips.map(c => String(c.dataset.mecId));
+  const executantesNomes = chips.map(c => String(c.dataset.mecNome));
 
   const eqObj = (cacheEquipamentos || []).find(e => String(e.id) === String(eqId));
   const agoraISO = new Date().toISOString();
@@ -775,19 +807,24 @@ async function salvarIntervencaoCampoComboio() {
     equipamento_id: eqId,
     obra_id: eqObj?.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
     tipo: 'corretiva',
+    prioridade: parada ? 'alta' : 'media',
     origem_atendimento: origem,
+    maquina_parada: parada,
     parada_obrigatoria: parada,
-    status: resolvidaNaHora ? 'aguardando_pcm' : (parada ? 'aberta' : 'aviso_operando'),
+    status: resolvidaNaHora ? 'aguardando_pcm' : 'aberta',
     descricao_problema: desc,
-    acao_realizada: resolvidaNaHora ? desc : null,
+    servico_executado: resolvidaNaHora ? desc : null,
     mecanicos_ids: mecIds,
-    mecanico_nome: mecNomes || usuarioLogado?.nome || null,
-    aberta_por_nome: usuarioLogado?.nome || 'Campo/Comboio',
+    executantes_nomes: executantesNomes,
+    quantidade_executantes: Math.max(1, executantesNomes.length),
+    aberto_por: usuarioLogado?.id || null,
+    aberto_por_nome: usuarioLogado?.nome || 'Campo/Comboio',
     aberta_em: agoraISO,
+    iniciada_em: agoraISO,
     concluida_em: resolvidaNaHora ? agoraISO : null
   };
 
   await gravarDadosOfflineSafe('ordens_servico', 'INSERT', novaOS);
   document.getElementById('modalIntervencaoComboioV2')?.classList.add('hidden');
-  await carregarOrdensServico(resolvidaNaHora ? 'ativas' : (parada ? 'ativas' : 'avisos_operando'));
+  await carregarOrdensServico(resolvidaNaHora ? 'concluidas' : (parada ? 'ativas' : 'avisos_operando'));
 }
