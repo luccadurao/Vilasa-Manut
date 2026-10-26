@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 9: ADMIN.JS (USUÁRIOS, OBRAS, IMPORTADOR EXCEL E MODO DEUS EDITÁVEL)
+// VILASA CMMS - MÓDULO 9: ADMIN.JS (USUÁRIOS, OBRAS, IMPORTADOR COMPLETO E MODO DEUS)
 // ============================================================================
 
 let subAbaAdminAtual = 'usuarios'; // 'usuarios', 'importador', 'obras', 'modo_deus'
@@ -74,7 +74,7 @@ function renderizarSecaoImportadorPlanilhasExcel() {
         <strong class="font-black uppercase block mb-1">💡 Como importar dados do Excel com zero erro:</strong>
         1. Clique em <strong>"📄 Baixar Planilha Padrão (Com Exemplos)"</strong> no módulo desejado.<br/>
         2. Abra o arquivo no Excel, preencha seus dados seguindo as linhas de exemplo e salve como <strong>CSV (separado por ponto-e-vírgula ou vírgula)</strong>.<br/>
-        3. Clique em <strong>"📤 Selecionar e Importar Planilha"</strong> para gravar tudo no banco de uma só vez!
+        3. Clique em <strong>"📤 Importar Planilha"</strong> para gravar tudo no banco de uma só vez!
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -119,12 +119,12 @@ function renderizarSecaoImportadorPlanilhasExcel() {
           </div>
         </div>
 
-        <!-- CARD 3: IMPORTAR ORDENS DE SERVIÇO (OS) -->
+        <!-- CARD 3: IMPORTAR ORDENS DE SERVIÇO (OS COMPLETA + REP) -->
         <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
           <div>
-            <span class="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 font-black text-[10px] uppercase">Módulo 3 • Histórico</span>
-            <h3 class="text-base font-black text-slate-900 mt-1">🔧 Importar Ordens de Serviço (OS)</h3>
-            <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_PROBLEMA;MECANICO_NOME;STATUS</code></p>
+            <span class="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 font-black text-[10px] uppercase">Módulo 3 • Histórico Completo REP & PCM</span>
+            <h3 class="text-base font-black text-slate-900 mt-1">🔧 Importar Ordens de Serviço (Todos os 19 Campos)</h3>
+            <p class="text-[11px] text-slate-500 mt-1">Inclui Datas, Previsão, Parada, Motivo REP, Tipo, Prioridade, Problema, Causa, Serviço Executado, Componente, Local, Oficina Externa, Horímetro, Executantes e Status.</p>
           </div>
           <div class="space-y-2">
             <button onclick="baixarPlanilhaModeloExemplo('os')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs flex items-center justify-center gap-2 border border-slate-300">
@@ -142,6 +142,19 @@ function renderizarSecaoImportadorPlanilhasExcel() {
       </div>
     </div>
   `;
+}
+
+// Converte datas em formato BR (DD/MM/YYYY HH:mm) ou ISO (YYYY-MM-DD HH:mm) para ISO do Supabase
+function converterDataPlanilhaParaISO(str) {
+  const limpo = String(str || '').trim();
+  if (!limpo) return null;
+  const mBR = limpo.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  if (mBR) {
+    const [_, dia, mes, ano, hora = '08', min = '00'] = mBR;
+    return new Date(`${ano}-${mes}-${dia}T${hora}:${min}:00`).toISOString();
+  }
+  const dt = new Date(limpo);
+  return isNaN(dt.getTime()) ? null : dt.toISOString();
 }
 
 function baixarPlanilhaModeloExemplo(tipo) {
@@ -163,11 +176,11 @@ function baixarPlanilhaModeloExemplo(tipo) {
       'VIL-0002;OLEO HIDRAULICO 68 BALDE 20L;SHELL TELLUS 68, IPIRANGA 68;25;BD;340.00;5'
     ].join('\n');
   } else if (tipo === 'os') {
-    nomeArq = 'MODELO_PADRAO_ORDENS_SERVICO_VILASA.csv';
+    nomeArq = 'MODELO_PADRAO_COMPLETO_OS_REP_VILASA.csv';
     conteudo = [
-      'PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_PROBLEMA;MECANICO_NOME;STATUS',
-      'EH-40;2026-10-20 08:00;2026-10-20 14:30;SIM;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;JOAO SILVA;concluida',
-      'CB-12;2026-10-25 10:00;;NAO;LUZ DE ALERTA NO PAINEL (MAQUINA OPERANDO);CARLOS SOUZA;aberta'
+      'PREFIXO;DATA_ABERTURA;DATA_INICIO;DATA_CONCLUSAO;PREVISAO_LIBERACAO;PARADA_SIM_NAO;MOTIVO_REP;TIPO;PRIORIDADE;DESCRICAO_PROBLEMA;CAUSA_FALHA;SERVICO_EXECUTADO;CODIGO_COMPONENTE;NOME_COMPONENTE;LOCAL_MANUTENCAO;OFICINA_EXTERNA;HORIMETRO_OS;EXECUTANTES_NOMES;STATUS',
+      'EH-40;24/10/2026 08:00;24/10/2026 08:30;24/10/2026 16:30;;SIM;CORRETIVA;corretiva;alta;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;FADIGA DE MATERIAL;SUBSTITUICAO DE MANGUEIRA 1 POL E COMPLETAGEM DE OLEO 68;SIS-HID;COMANDO HIDRAULICO;CAMPO;;4520.5;JOAO SILVA, CARLOS SOUZA;auditada_pcm',
+      'CB-12;25/10/2026 10:00;25/10/2026 10:15;;2026-10-28;SIM;MOTOR;corretiva;emergencia;FALHA DE INJECAO E PERDA DE POTENCIA;BICO INJETOR TRAVADO;RETIRADA DOS BICOS PARA TESTE EM BOMBA INJETORA;MOT-01;SISTEMA DE INJECAO;OFICINA;BOSCH DIESEL SERVICE;89410;PEDRO SANTOS;pausada_peca'
     ].join('\n');
   }
 
@@ -238,31 +251,75 @@ async function processarUploadPlanilhaCSV(event, tipo) {
       importados++;
     }
   } else if (tipo === 'os') {
+    const statusPermitidos = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros', 'aguardando_pcm', 'concluida_oficina', 'auditada_pcm'];
+    const tiposPermitidos = ['corretiva', 'preventiva', 'falha_operacional'];
+    const prioridadesPermitidas = ['baixa', 'media', 'alta', 'emergencia'];
+
     for (const linha of dadosLinhas) {
-      const [tag, dtAb, dtConc, paradaStr, motivo, mecNome, statusStr] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
-      if (!tag || !motivo) continue;
+      const cols = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
+      const [
+        tag, dtAb, dtIni, dtConc, prevLib, paradaStr, motivoRep, tipoOS, prioOS,
+        problema, causa, servico, codComp, nomeComp, localManut, oficExt,
+        horimetroStr, executantesStr, statusStr
+      ] = cols;
+
+      if (!tag || !problema) continue;
 
       const eq = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === tag.toUpperCase());
       if (!eq) continue;
 
-      const parada_obrigatoria = String(paradaStr || 'SIM').toUpperCase() !== 'NAO' && String(paradaStr || 'SIM').toUpperCase() !== 'NÃO';
+      const parada = !['NAO', 'NÃO', 'FALSE', '0'].includes(String(paradaStr || 'SIM').toUpperCase());
+      const abertaISO = converterDataPlanilhaParaISO(dtAb) || new Date().toISOString();
+      const iniciadaISO = converterDataPlanilhaParaISO(dtIni) || abertaISO;
+      const concluidaISO = converterDataPlanilhaParaISO(dtConc);
+
+      const tipoLimpo = tiposPermitidos.includes(String(tipoOS || '').toLowerCase()) ? String(tipoOS).toLowerCase() : 'corretiva';
+      const prioLimpa = prioridadesPermitidas.includes(String(prioOS || '').toLowerCase()) ? String(prioOS).toLowerCase() : 'alta';
+
+      let statusFinal = String(statusStr || '').toLowerCase();
+      if (!statusPermitidos.includes(statusFinal)) {
+        statusFinal = concluidaISO ? 'auditada_pcm' : 'aberta';
+      }
+
+      const listaExec = (executantesStr || '').split(/[,|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+      const horNum = parseFloat(String(horimetroStr || '').replace(',', '.'));
+
       await db.from('ordens_servico').insert([{
         equipamento_id: eq.id,
-        obra_id: eq.obra_id || null,
-        aberta_em: dtAb ? new Date(dtAb).toISOString() : new Date().toISOString(),
-        concluida_em: dtConc ? new Date(dtConc).toISOString() : null,
-        parada_obrigatoria,
-        descricao_problema: motivo.toUpperCase(),
-        motivo_rep: motivo.toUpperCase().slice(0, 60),
-        mecanico_nome: (mecNome || '').toUpperCase(),
-        status: (statusStr || (dtConc ? 'concluida' : 'aberta')).toLowerCase()
+        obra_id: eq.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
+        aberta_em: abertaISO,
+        iniciada_em: iniciadaISO,
+        concluida_em: concluidaISO,
+        previsao_liberacao: prevLib || null,
+        maquina_parada: parada,
+        parada_obrigatoria: parada,
+        motivo_rep: (motivoRep || 'CORRETIVA').toUpperCase(),
+        tipo: tipoLimpo,
+        prioridade: prioLimpa,
+        descricao_problema: problema.toUpperCase(),
+        causa_falha: causa ? causa.toUpperCase() : null,
+        servico_executado: servico ? servico.toUpperCase() : null,
+        codigo_componente: (codComp || '').toUpperCase(),
+        nome_componente: (nomeComp || '').toUpperCase(),
+        local_manutencao_pcm: (localManut || 'OFICINA').toUpperCase(),
+        manutencao_externa: Boolean(oficExt),
+        oficina_externa: (oficExt || '').toUpperCase(),
+        horimetro_os: isNaN(horNum) ? null : horNum,
+        executantes_nomes: listaExec,
+        quantidade_executantes: Math.max(1, listaExec.length),
+        status: statusFinal,
+        origem_atendimento: 'importacao_planilha_pcm',
+        classificada_pcm: true,
+        classificada_por_nome: usuarioLogado?.nome || 'PCM',
+        aberto_por: usuarioLogado?.id || null,
+        aberto_por_nome: usuarioLogado?.nome || 'PCM'
       }]);
       importados++;
     }
   }
 
   event.target.value = '';
-  alert(`✅ Importação concluída! ${importados} registro(s) de ${tipo.toUpperCase()} foram gravados no banco de dados.`);
+  alert(`✅ Importação concluída! ${importados} registro(s) de ${tipo.toUpperCase()} foram gravados com todos os campos.`);
   await carregarUsuariosAdmin('importador');
 }
 
@@ -272,7 +329,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 function renderizarSecaoUsuariosMultiCargo() {
   const listaCargosDisponiveis = [
     { id: 'mecanico', label: '🔧 Mecânico / Comboio (Aparece na Lista de Executantes)' },
-    { id: 'encarregado', label: '👷 Encarregado' },
+    { id: 'encarregado', label: '👷 Encarregado (Apenas abre OS e vê abertas)' },
     { id: 'almoxarife', label: '📦 Almoxarife' },
     { id: 'pcm', label: '📋 Analista PCM' },
     { id: 'engenheiro', label: '⚙️ Engenheiro (Total exceto Admin)' },
