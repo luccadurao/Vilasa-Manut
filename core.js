@@ -537,6 +537,37 @@ function ativarBuscaPorPrefixoEmSelect(selectEl) {
   });
 }
 
+// ============================================================================
+// 7. PONTE DE SEGURANÇA OFFLINE/ONLINE (GARANTE QUE TODAS AS ABAS FUNCIONEM)
+// ============================================================================
+window.lerDadosComFallbackOffline = window.lerDadosComFallbackOffline || async function (chaveCache, fnQuerySupabase) {
+  try {
+    obterClienteSupabase();
+    if (navigator.onLine && typeof fnQuerySupabase === 'function') {
+      const res = await fnQuerySupabase();
+      if (res && !res.error && res.data) {
+        try { localStorage.setItem(`vilasa_cache_${chaveCache}`, JSON.stringify(res.data)); } catch (e) {}
+        return { data: res.data, error: null, offline: false };
+      }
+    }
+  } catch (err) {
+    console.warn(`Fallback offline acionado para ${chaveCache}:`, err);
+  }
+  const salvo = localStorage.getItem(`vilasa_cache_${chaveCache}`);
+  return { data: salvo ? JSON.parse(salvo) : [], error: null, offline: true };
+};
+
+window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function (tabela, operacao, payload, idRegistro = null) {
+  obterClienteSupabase();
+  if (operacao === 'INSERT') {
+    return await db.from(tabela).insert([payload]).select().maybeSingle();
+  } else if (operacao === 'UPDATE') {
+    return await db.from(tabela).update(payload).eq('id', idRegistro).select().maybeSingle();
+  } else if (operacao === 'DELETE') {
+    return await db.from(tabela).delete().eq('id', idRegistro);
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   restaurarSessaoSalva();
 });
