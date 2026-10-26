@@ -1,1018 +1,147 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vilasa - Gestão de Manutenção (CMMS Modular)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vilasa - Gestão de Manutenção (CMMS V2)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="config.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    .trava-oculta { display: none !important; }
-    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    @page { size: landscape; margin: 8mm; }
-    @media print {
-      body { background: #ffffff !important; }
-      .no-print { display: none !important; }
-      .only-print { display: block !important; }
-      .print-single-page { page-break-after: avoid; page-break-inside: avoid; }
-    }
-  </style>
 </head>
-<body class="bg-white text-slate-800 min-h-screen font-sans">
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
-  <!-- ===================================================================== -->
-  <!-- TELA DE LOGIN POR MATRÍCULA                                           -->
-  <!-- ===================================================================== -->
-  <div id="telaLogin" class="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-    <div class="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-xl space-y-6">
-      <div class="text-center space-y-1">
-        <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center mx-auto text-xl mb-2 shadow">
+  <!-- 1. TELA DE LOGIN (FUNDO CLARO E SEM FORÇAR MAIÚSCULAS) -->
+  <div id="telaLogin" class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-5">
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 font-black text-2xl mb-2 shadow-md">
           <i class="fa-solid fa-screwdriver-wrench"></i>
         </div>
-        <h1 class="text-xl font-black tracking-tight text-slate-900">VILASA MANUTENÇÃO</h1>
-        <p class="text-xs text-slate-500">Controle de Frota, Oficina, PCM e Almoxarifado</p>
+        <h1 class="text-xl font-black text-slate-900 tracking-wide">VILASA <span class="text-amber-500">CMMS</span></h1>
+        <p class="text-xs text-slate-500 font-semibold mt-1">Engenharia de Manutenção, Controle de Frota & PCM</p>
       </div>
 
-      <form onsubmit="event.preventDefault(); fazerLogin();" class="space-y-4">
+      <form onsubmit="realizarLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Matrícula / Usuário</label>
-          <input type="text" id="loginMatricula" required placeholder="Ex: admin ou 1020"
-            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
+          <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Matrícula / Usuário</label>
+          <input id="loginMatricula" type="text" required autocapitalize="none" autocorrect="off" spellcheck="false"
+            placeholder="Digite seu usuário ou matrícula..."
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Senha de Acesso</label>
-          <input type="password" id="loginSenha" required placeholder="••••"
-            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-amber-500" />
+          <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Senha</label>
+          <input id="loginSenha" type="password" required autocapitalize="none" autocorrect="off" spellcheck="false"
+            placeholder="••••••"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
         </div>
-        <div id="erroLogin" class="hidden p-2.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-700 text-xs font-semibold"></div>
-        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md">
-          Entrar no Sistema
+        <button type="submit" class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md transition">
+          🔑 Entrar no Sistema
         </button>
       </form>
-
-      <div class="pt-3 border-t border-slate-200 text-center">
-        <a href="qr.html" class="text-xs text-slate-600 hover:text-amber-600 font-semibold inline-flex items-center gap-1.5">
-          <i class="fa-solid fa-qrcode"></i> Sou Operador (Lançar Horímetro / KM)
-        </a>
-      </div>
     </div>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- SISTEMA PRINCIPAL (LOGADO)                                            -->
-  <!-- ===================================================================== -->
-  <div id="appPrincipal" class="hidden min-h-screen flex flex-col md:flex-row bg-white">
+  <!-- 2. APLICAÇÃO PRINCIPAL (TEMA CLARO CORPORATIVO) -->
+  <div id="appPrincipal" class="hidden min-h-screen flex flex-col lg:flex-row bg-slate-50">
 
-    <!-- Menu Lateral (Sidebar) -->
-    <aside class="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-between shrink-0 no-print">
-      <div>
-        <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
-          <div class="flex items-center gap-2.5">
-            <i class="fa-solid fa-screwdriver-wrench text-amber-500"></i>
-            <span class="font-black tracking-tight text-sm text-slate-900">VILASA CMMS</span>
+    <!-- MENU LATERAL CLARO -->
+    <aside class="w-full lg:w-64 bg-white text-slate-800 p-4 flex flex-col justify-between shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 shadow-sm">
+      <div class="space-y-4">
+        <!-- Logo e Usuário Logado -->
+        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black text-slate-900 tracking-wide">VILASA <span class="text-amber-500">CMMS</span></span>
+            <button onclick="encerrarSessao()" class="text-xs text-rose-600 hover:text-rose-700 font-extrabold" title="Sair">
+              <i class="fa-solid fa-right-from-bracket"></i> Sair
+            </button>
           </div>
-          <span id="badgeCargo" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">CARGO</span>
+          <div class="mt-2 pt-2 border-t border-slate-200">
+            <div id="headerNomeUsuario" class="text-xs font-black text-slate-900 truncate">Usuário</div>
+            <div id="headerCargoUsuario" class="text-[10px] font-bold text-slate-500 truncate">Cargo</div>
+          </div>
+          <!-- Seletor de Obra e Status Offline são injetados aqui pelo core.js e offline_sync.js -->
         </div>
 
-        <div class="px-4 py-3 bg-slate-100/70 border-b border-slate-200 flex items-center justify-between">
-          <div class="truncate">
-            <p id="txtNomeUsuario" class="text-xs font-bold text-slate-800 truncate">Usuário</p>
-            <p id="txtMatriculaUsuario" class="text-[11px] text-slate-500">Matrícula: ---</p>
-          </div>
-          <button onclick="fazerLogout()" title="Sair" class="text-xs text-rose-600 hover:text-rose-700 px-2.5 py-1 rounded bg-rose-50 border border-rose-200 flex items-center gap-1 font-bold">
-            <i class="fa-solid fa-right-from-bracket"></i> Sair
+        <!-- Botões de Navegação entre Módulos -->
+        <nav class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
+          <button id="nav-os" onclick="navegarPara('os')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-wrench w-4 text-center"></i>
+            <span>Ordens & REP</span>
           </button>
-        </div>
-
-        <nav class="p-2 flex md:flex-col gap-1 overflow-x-auto">
-          <button onclick="navegarPara('os')" id="nav-os" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-clipboard-list w-4 text-center"></i> Ordens de Serviço & REP
+          <button id="nav-frota" onclick="navegarPara('frota')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-truck-monster w-4 text-center"></i>
+            <span>Frota & QR Codes</span>
           </button>
-          <button onclick="navegarPara('frota')" id="nav-frota" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-truck-monster w-4 text-center"></i> Frota (Própria & Terc.)
+          <button id="nav-preventivas" onclick="navegarPara('preventivas')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-calendar-check w-4 text-center"></i>
+            <span>Preventivas (SAP)</span>
           </button>
-          <button onclick="navegarPara('pcm')" id="nav-pcm" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-calendar-check w-4 text-center"></i> Preventivas (PCM)
+          <button id="nav-estoque" onclick="navegarPara('estoque')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-boxes-stacked w-4 text-center"></i>
+            <span>Almoxarifado</span>
           </button>
-          <button onclick="navegarPara('estoque')" id="nav-estoque" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-boxes-stacked w-4 text-center"></i> Almoxarifado & Serviços
+          <button id="nav-kpis" onclick="navegarPara('kpis')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-chart-line w-4 text-center"></i>
+            <span>Indicadores (KPIs)</span>
           </button>
-          <button onclick="navegarPara('kpis')" id="nav-kpis" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-chart-line w-4 text-center"></i> KPIs & Relatórios
-          </button>
-          <button onclick="navegarPara('admin')" id="nav-admin" class="nav-btn trava-oculta flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition">
-            <i class="fa-solid fa-users-gear w-4 text-center"></i> Admin, Edição & Base
+          <button id="nav-admin" onclick="navegarPara('admin')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-user-shield w-4 text-center"></i>
+            <span>Administração</span>
           </button>
         </nav>
       </div>
-
-      <div class="hidden md:block p-3 border-t border-slate-200 text-[11px] text-slate-500 bg-white">
-        <div class="flex items-center gap-1.5 text-emerald-600 font-bold">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Arquitetura Modular Ativa
-        </div>
-        <p id="resumoPermissaoRodape" class="text-[10px] text-slate-400 mt-1"></p>
-      </div>
     </aside>
 
-    <!-- Conteúdo Principal -->
-    <main class="flex-1 p-4 md:p-6 overflow-y-auto space-y-6 bg-white">
+    <!-- ÁREA DE CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 p-4 lg:p-6 overflow-y-auto space-y-6">
 
-      <!-- ================================================================= -->
-      <!-- MÓDULO 1: ORDENS DE SERVIÇO & REP                                 -->
-      <!-- ================================================================= -->
-      <section id="sec-os" class="modulo-section trava-oculta space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3 no-print">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Ordens de Serviço & Relatório de Equipamentos Parados (REP)</h2>
-            <p class="text-xs text-slate-500">Fluxo de oficina em tempo real e exportação enxuta de máquinas paradas para o fim do turno</p>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <button onclick="abrirModalNovaOS()" id="btnTopoAbrirOS" class="trava-oculta bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-plus"></i> 1. Abrir OS
-            </button>
-            <button onclick="abrirModalManualPCM()" id="btnLancamentoManualREP" class="trava-oculta bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-table-list"></i> 2. Lançar REP (PCM)
-            </button>
-            <button onclick="exportarOSExcel()" id="btnExportarREPExcel" class="trava-oculta bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1">
-              <i class="fa-solid fa-file-excel"></i> Excel
-            </button>
-            <button onclick="imprimirREPEnxuto()" id="btnImprimirREPPdf" class="trava-oculta bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1 shadow-sm">
-              <i class="fa-solid fa-file-pdf"></i> PDF Parados
-            </button>
-            <button onclick="exportarImagemElemento('quadroExportacaoREP', 'REP_Equipamentos_Parados', 'png')" id="btnImgREPPng" class="trava-oculta bg-slate-800 hover:bg-slate-900 text-white font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1">
-              <i class="fa-solid fa-image"></i> PNG
-            </button>
-            <button onclick="exportarImagemElemento('quadroExportacaoREP', 'REP_Equipamentos_Parados', 'jpeg')" id="btnImgREPJpeg" class="trava-oculta bg-slate-700 hover:bg-slate-800 text-white font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1">
-              <i class="fa-solid fa-camera"></i> JPEG
-            </button>
-          </div>
-        </div>
-
-        <!-- BARRA DE FILTRO DO PANORAMA DO REP -->
-        <div id="barraFiltroPeriodoREP" class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-3 text-xs no-print">
-          <div>
-            <label class="block text-slate-600 font-bold mb-1">Visão do Panorama REP</label>
-            <select id="repModoPeriodo" onchange="alternarModoPeriodoREP()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-800">
-              <option value="INTEIRO">Panorama Inteiro (Todo o Histórico)</option>
-              <option value="PERIODO">Apenas um Período Específico</option>
-            </select>
-          </div>
-          <div id="boxDatasFiltroREP" class="hidden flex flex-wrap items-end gap-2">
+      <!-- SEÇÃO 1: ORDENS DE SERVIÇO + QUADRO REP -->
+      <section id="sec-os" class="space-y-5">
+        <div class="bg-white rounded-2xl border-2 border-amber-500 p-4 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
             <div>
-              <label class="block text-slate-600 mb-1">De (Data Inicial)</label>
-              <input type="date" id="repDataInicio" onchange="carregarOrdensServico(abaOSAtual)" class="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800" />
-            </div>
-            <div>
-              <label class="block text-slate-600 mb-1">Até (Data Final)</label>
-              <input type="date" id="repDataFim" onchange="carregarOrdensServico(abaOSAtual)" class="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800" />
-            </div>
-          </div>
-          <button onclick="carregarOrdensServico(abaOSAtual)" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-lg">
-            <i class="fa-solid fa-filter"></i> Aplicar Filtro
-          </button>
-        </div>
-
-        <div id="painelGraficosOS" class="grid grid-cols-1 lg:grid-cols-3 gap-4 no-print">
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-            <h3 class="text-xs font-black uppercase tracking-wider text-amber-600">Panorama das Ordens e Serviços Externos</h3>
-            <div id="graficoStatusOS" class="space-y-2 text-xs"></div>
-          </div>
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 lg:col-span-2 shadow-sm">
-            <h3 class="text-xs font-black uppercase tracking-wider text-blue-600">Top Sistemas / Componentes com Mais Ocorrências (Padrão REP)</h3>
-            <div id="graficoComponentesOS" class="space-y-1.5 text-xs"></div>
-          </div>
-        </div>
-
-        <!-- QUADRO OFICIAL DE EXPORTAÇÃO DO REP -->
-        <div id="quadroExportacaoREP" class="bg-white border-2 border-slate-300 rounded-xl p-4 space-y-3 shadow-sm print-single-page">
-          <div class="flex items-center justify-between border-b-2 border-amber-500 pb-2">
-            <div>
-              <h3 class="text-base font-black text-slate-900 uppercase tracking-tight">RELATÓRIO DE EQUIPAMENTOS PARADOS (REP - FIM DE EXPEDIENTE)</h3>
-              <p class="text-[11px] text-slate-600 font-semibold">Relação objetiva de máquinas em manutenção para acompanhamento da oficina e gestores</p>
+              <span class="text-[10px] font-black uppercase tracking-widest text-amber-600">RELATÓRIO DE EQUIPAMENTOS PARADOS (REP)</span>
+              <h3 class="text-base font-black text-slate-900">Quadro Geral de Indisponibilidade em Tempo Real</h3>
             </div>
             <div class="text-right">
-              <span id="dataHoraCabecalhoREP" class="text-xs font-black text-amber-600 block"></span>
-              <span id="contadorParadosCabecalhoREP" class="text-[11px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-300">0 Equipamentos Parados</span>
+              <span id="contadorParadosCabecalhoREP" class="inline-block bg-rose-600 text-white text-xs font-black px-3 py-1 rounded-lg">0 Parado(s)</span>
+              <div id="dataHoraCabecalhoREP" class="text-[10px] font-bold text-slate-400 mt-0.5"></div>
             </div>
           </div>
-          <div id="tabelaEnxutaParadosREP" class="overflow-x-auto text-xs"></div>
+          <div id="tabelaEnxutaParadosREP" class="overflow-x-auto"></div>
         </div>
 
-        <!-- Filtros de Etapa dos Cards Operacionais -->
-        <div class="flex flex-wrap items-center justify-between gap-2 no-print">
-          <div class="flex flex-wrap gap-2">
-            <button onclick="carregarOrdensServico('ativas')" id="tabOS-ativas" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white shadow-sm">
-              1. Fila da Oficina (Abertas / Em Execução)
-            </button>
-            <button onclick="carregarOrdensServico('triagem')" id="tabOS-triagem" class="trava-oculta px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-amber-700 border border-amber-400">
-              2. Aguardando Classificação PCM (<span id="contadorTriagemPCM">0</span>)
-            </button>
-            <button onclick="carregarOrdensServico('externas')" id="tabOS-externas" class="trava-oculta px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-rose-700 border border-rose-300">
-              3. Manutenções Externas / Oficinas Fora
-            </button>
-            <button onclick="carregarOrdensServico('concluidas')" id="tabOS-concluidas" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-300">
-              4. Histórico Concluídas
-            </button>
-          </div>
-        </div>
-
-        <div id="listaOS" class="grid grid-cols-1 lg:grid-cols-2 gap-4 no-print"></div>
+        <div id="listaOrdensServico" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- MÓDULO 2: FROTA (COM PLANILHA PADRÃO E IMPORTAÇÃO EM MASSA)       -->
-      <!-- ================================================================= -->
-      <section id="sec-frota" class="modulo-section trava-oculta space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Cadastro Geral da Frota (Própria & Terceiros)</h2>
-            <p class="text-xs text-slate-500">Cadastre individualmente ou baixe a planilha padrão para importar dezenas de equipamentos de uma vez</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="baixarPlanilhaPadraoFrota()" id="btnBaixarModeloFrota" class="trava-oculta bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-file-arrow-down text-emerald-600"></i> Baixar Planilha Padrão (.xlsx)
-            </button>
-            <button onclick="abrirModalImportarFrotaMassa()" id="btnImportarFrotaMassa" class="trava-oculta bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-file-import"></i> Importar Frota em Massa
-            </button>
-            <button onclick="abrirModalEquipamento()" id="btnCadastrarEquipamento" class="trava-oculta bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-plus"></i> + Novo Equipamento
-            </button>
-          </div>
-        </div>
+      <!-- SEÇÃO 2: FROTA -->
+      <section id="sec-frota" class="hidden"></section>
 
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap gap-2">
-            <button onclick="filtrarCardsFrota('TODOS')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white">Todos (<span id="countFrotaTodos">0</span>)</button>
-            <button onclick="filtrarCardsFrota('VILASA')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">Próprios Vilasa</button>
-            <button onclick="filtrarCardsFrota('TERCEIRO')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300">Terceiros / Locados</button>
-          </div>
-          <div class="flex-1 max-w-md bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
-            <input type="text" id="buscaRapidaAbaFrota" oninput="filtrarCardsFrotaPorTexto()" placeholder="Pesquisar TAG, Marca, Modelo ou Placa na frota..."
-              class="w-full bg-transparent text-xs text-slate-900 font-semibold focus:outline-none" />
-          </div>
-        </div>
+      <!-- SEÇÃO 3: PREVENTIVAS (SAP PM) -->
+      <section id="sec-preventivas" class="hidden"></section>
 
-        <div id="listaEquipamentos" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-      </section>
+      <!-- SEÇÃO 4: ALMOXARIFADO -->
+      <section id="sec-estoque" class="hidden"></section>
 
-      <!-- ================================================================= -->
-      <!-- MÓDULO 3: PCM PREVENTIVAS                                         -->
-      <!-- ================================================================= -->
-      <section id="sec-pcm" class="modulo-section trava-oculta space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Controle de Preventivas Acumulativas (PCM)</h2>
-            <p class="text-xs text-slate-500">Exibe equipamentos com Preventiva Própria e permite gerar a OS já reservando o material no estoque</p>
-          </div>
-          <button onclick="abrirModalPlanoPreventiva()" id="btnNovoPlanoPCM" class="trava-oculta bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow-sm">
-            <i class="fa-solid fa-plus"></i> Configurar Plano Acumulativo
-          </button>
-        </div>
+      <!-- SEÇÃO 5: INDICADORES (KPIS) -->
+      <section id="sec-kpis" class="hidden"></section>
 
-        <div id="listaPlanosPCM" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-      </section>
-
-      <!-- ================================================================= -->
-      <!-- MÓDULO 4: ALMOXARIFADO (NOTAS MULTI-ITENS E SAÍDAS EM MASSA)      -->
-      <!-- ================================================================= -->
-      <section id="sec-estoque" class="modulo-section trava-oculta space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Almoxarifado (Notas Multi-Itens, Controle de Paralelos & FIFO)</h2>
-            <p class="text-xs text-slate-500">Lance vários itens de uma mesma Nota Fiscal ou várias Saídas Avulsas de uma só vez</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="abrirModalNovaPeca()" id="btnEstCadastrarPeca" class="trava-oculta bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-box"></i> 1. Cadastrar Item (ID Paralelo)
-            </button>
-            <button onclick="abrirModalEntradaNF()" id="btnEstEntradaNF" class="trava-oculta bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-file-invoice-dollar"></i> 2. Entrada de NF (Multi-Itens)
-            </button>
-            <button onclick="abrirModalReservaMaterial()" id="btnEstReservar" class="trava-oculta bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-bookmark"></i> 3. Reservar Material
-            </button>
-            <button onclick="abrirModalSaidaAvulsa()" id="btnEstSaidaAvulsa" class="trava-oculta bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-arrow-right-from-bracket"></i> 4. Saída Avulsa (Multi-Itens)
-            </button>
-            <button onclick="abrirModalServicoTerceiro()" id="btnEstServicoTerceiro" class="trava-oculta bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-              <i class="fa-solid fa-fire-burner"></i> 5. Lançar Serviço
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
-          <button onclick="alternarAbaEstoque('pecas')" id="btnSubEstoque-pecas" class="px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white">
-            <i class="fa-solid fa-boxes-stacked"></i> Catálogo Unificado (ID Paralelos), Lotes FIFO & Reservas
-          </button>
-          <button onclick="alternarAbaEstoque('servicos')" id="btnSubEstoque-servicos" class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-purple-700 border border-purple-300">
-            <i class="fa-solid fa-screwdriver-wrench"></i> Aba de Serviços (Solda, Limpeza, Usinagem...)
-          </button>
-        </div>
-
-        <div id="subEstoque-pecas" class="space-y-4">
-          <div class="bg-slate-50 border border-slate-300 rounded-xl p-3 flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-slate-400 pl-2"></i>
-            <input type="text" id="buscaEstoqueInput" oninput="filtrarTabelaEstoque()" placeholder="Pesquisar por ID Paralelo, Código, Part Number Equivalente (CAT, Donaldson, Tecfil...), Descrição ou Máquina..."
-              class="w-full bg-transparent text-xs text-slate-900 focus:outline-none font-medium" />
-          </div>
-
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-2">
-              <i class="fa-solid fa-bookmark"></i> Materiais Reservados / Pendentes de Baixa (Desconta do Lote Mais Antigo - FIFO)
-            </h3>
-            <div id="listaBaixasPendentes" class="space-y-2 text-xs"></div>
-          </div>
-
-          <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-            <h3 class="text-xs font-black uppercase tracking-wider text-slate-700">Catálogo de Peças Estocáveis (Múltiplos Fabricantes/PNs unificados pelo Número de Cadastro)</h3>
-            <div id="listaCatalogoPecas" class="overflow-x-auto"></div>
-          </div>
-
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <h3 class="text-xs font-black uppercase tracking-wider text-emerald-700">Fila de Lotes Reais em Estoque (PEPS / FIFO)</h3>
-            <div id="listaLotesFIFO" class="overflow-x-auto text-xs"></div>
-          </div>
-        </div>
-
-        <div id="subEstoque-servicos" class="hidden space-y-4">
-          <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-            <h3 class="text-xs font-black uppercase tracking-wider text-purple-700">Histórico de Serviços Executados por Fornecedores (Solda, Limpeza, Terceiros)</h3>
-            <div id="listaServicosTerceiros" class="overflow-x-auto text-xs"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================================================================= -->
-      <!-- MÓDULO 5: KPIs (EXPORTAÇÃO DE 1 FOLHA SÓ COM INDICADORES)         -->
-      <!-- ================================================================= -->
-      <section id="sec-kpis" class="modulo-section trava-oculta space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3 no-print">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Painel de Indicadores (KPIs) & Comparativo de Frota</h2>
-            <p class="text-xs text-slate-500">Exportação executiva em página única colorida (PDF, PNG, JPEG) ou planilha Excel</p>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <button onclick="exportarRelatorioKPIsExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1 shadow-sm">
-              <i class="fa-solid fa-file-excel"></i> Excel
-            </button>
-            <button onclick="window.print()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1 shadow-sm">
-              <i class="fa-solid fa-file-pdf"></i> PDF (1 Folha)
-            </button>
-            <button onclick="exportarImagemElemento('quadroExportacaoKPIs', 'Indicadores_KPIs_Vilasa', 'png')" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1">
-              <i class="fa-solid fa-image"></i> PNG
-            </button>
-            <button onclick="exportarImagemElemento('quadroExportacaoKPIs', 'Indicadores_KPIs_Vilasa', 'jpeg')" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1">
-              <i class="fa-solid fa-camera"></i> JPEG
-            </button>
-          </div>
-        </div>
-
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs no-print">
-          <div>
-            <label class="block text-amber-700 font-bold mb-1">Visão de Propriedade</label>
-            <select id="kpiFiltroProprietario" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold">
-              <option value="GERAL">1. Frota Geral (Todos)</option>
-              <option value="VILASA">2. Apenas Frota Própria (Vilasa)</option>
-              <option value="TERCEIRO">3. Apenas Equip. Terceiros</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-slate-600 font-bold mb-1">Equipamento Específico</label>
-            <select id="kpiFiltroEquipamento" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-              <option value="TODOS">Todos da Seleção</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-slate-600 font-bold mb-1">Data Inicial</label>
-            <input type="date" id="kpiDataInicio" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
-          </div>
-          <div>
-            <label class="block text-slate-600 font-bold mb-1">Data Final</label>
-            <input type="date" id="kpiDataFim" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
-          </div>
-          <div>
-            <label class="block text-blue-700 font-bold mb-1">Missão Confiab. R(t)</label>
-            <select id="kpiTempoMissao" onchange="calcularSuperKPIs()" class="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-blue-700 font-bold">
-              <option value="24" selected>24 Horas</option>
-              <option value="168">1 Semana</option>
-              <option value="720">1 Mês</option>
-            </select>
-          </div>
-          <div class="flex items-end">
-            <button onclick="calcularSuperKPIs()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg transition shadow-sm">
-              <i class="fa-solid fa-rotate"></i> Calcular
-            </button>
-          </div>
-        </div>
-
-        <div id="quadroExportacaoKPIs" class="bg-white p-4 rounded-2xl border border-slate-200 space-y-5 print-single-page">
-          <div class="flex items-center justify-between border-b-2 border-amber-500 pb-2">
-            <div>
-              <h3 class="text-base font-black text-slate-900 uppercase">RESUMO EXECUTIVO DE INDICADORES DE MANUTENÇÃO (KPIs - VILASA)</h3>
-              <p id="subtituloPeriodoKPIs" class="text-xs text-slate-600 font-semibold"></p>
-            </div>
-            <span class="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full border border-amber-300">Relatório Oficial</span>
-          </div>
-
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-emerald-800">Disponibilidade Física (DF)</span>
-              <p id="kpiCardDF" class="text-2xl font-black text-emerald-600 mt-1">--%</p>
-              <span class="text-[11px] text-emerald-700">Base Turno 10h20/dia</span>
-            </div>
-            <div class="bg-cyan-50 border border-cyan-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-cyan-800">Confiabilidade R(t)</span>
-              <p id="kpiCardConfiabilidade" class="text-2xl font-black text-cyan-600 mt-1">--%</p>
-              <span id="kpiSubConfiabilidade" class="text-[11px] text-cyan-700">Missão selecionada</span>
-            </div>
-            <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-blue-800">MTBF (Tempo Entre Falhas)</span>
-              <p id="kpiCardMTBF" class="text-2xl font-black text-blue-600 mt-1">-- h</p>
-              <span class="text-[11px] text-blue-700">Operação entre corretivas</span>
-            </div>
-            <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-amber-800">MTTR (Tempo Médio Reparo)</span>
-              <p id="kpiCardMTTR" class="text-2xl font-black text-amber-600 mt-1">-- h</p>
-              <span class="text-[11px] text-amber-700">Média por parada</span>
-            </div>
-            <div class="bg-rose-50 border border-rose-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-rose-800">Total de Tempo Parado</span>
-              <p id="kpiCardTempoParado" class="text-2xl font-black text-rose-600 mt-1">-- h</p>
-              <span class="text-[11px] text-rose-700">Horas úteis paradas</span>
-            </div>
-            <div class="bg-purple-50 border border-purple-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-purple-800">Manutenções Externas</span>
-              <p id="kpiCardExternas" class="text-2xl font-black text-purple-600 mt-1">0</p>
-              <span class="text-[11px] text-purple-700">Oficinas fora / Terceiros</span>
-            </div>
-            <div class="bg-orange-50 border border-orange-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-orange-800">Gasto Total Aplicado</span>
-              <p id="kpiCardGastoPeriodo" class="text-2xl font-black text-orange-600 mt-1">R$ 0</p>
-              <span class="text-[11px] text-orange-700">Peças (FIFO/NF) + Serviços</span>
-            </div>
-            <div class="bg-teal-50 border border-teal-200 p-4 rounded-xl">
-              <span class="text-xs font-bold text-teal-800">Valor Atual em Estoque</span>
-              <p id="kpiCardValorEstoque" class="text-2xl font-black text-teal-600 mt-1">R$ 0</p>
-              <span class="text-[11px] text-teal-700">Soma dos Lotes Reais</span>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-slate-50 border border-emerald-300 rounded-xl p-4">
-              <h3 class="text-xs font-black uppercase text-emerald-700 mb-2"><i class="fa-solid fa-building-shield"></i> Indicadores: Frota Própria (VILASA)</h3>
-              <div id="resumoComparativoVilasa" class="grid grid-cols-4 gap-2 text-xs"></div>
-            </div>
-            <div class="bg-slate-50 border border-amber-300 rounded-xl p-4">
-              <h3 class="text-xs font-black uppercase text-amber-700 mb-2"><i class="fa-solid fa-handshake"></i> Indicadores: Equipamentos de Terceiros</h3>
-              <div id="resumoComparativoTerceiros" class="grid grid-cols-4 gap-2 text-xs"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm no-print">
-          <h3 class="text-xs font-black uppercase tracking-wider text-slate-700">Detalhamento por Equipamento (Exportável em Excel)</h3>
-          <div id="tabelaKpisPorEquipamento" class="overflow-x-auto text-xs"></div>
-        </div>
-      </section>
-
-      <!-- ================================================================= -->
-      <!-- MÓDULO 6: ADMIN (COM PLANILHA PADRÃO DO REP E TABELA SEM LIMITE)  -->
-      <!-- ================================================================= -->
-      <section id="sec-admin" class="modulo-section trava-oculta space-y-6">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-black text-slate-900">Central do Administrador (Edição Total, Importador REP Padrão & Backup)</h2>
-            <p class="text-xs text-slate-500">Área restrita a Administradores: modifique qualquer registro sem limite de 100 itens, importe o REP via modelo padrão e faça backups</p>
-          </div>
-          <button onclick="document.getElementById('modalUsuario').classList.remove('hidden')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow-sm">
-            <i class="fa-solid fa-user-plus"></i> Novo Usuário
-          </button>
-        </div>
-
-        <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-          <button onclick="AlternarAbaAdmin('editor')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white" id="btnAbaAdmin-editor">
-            <i class="fa-solid fa-pen-to-square"></i> 1. Editor Universal (Sem Limite de Linhas)
-          </button>
-          <button onclick="AlternarAbaAdmin('importador')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300" id="btnAbaAdmin-importador">
-            <i class="fa-solid fa-file-excel"></i> 2. Importar Histórico REP (Planilha Padrão)
-          </button>
-          <button onclick="AlternarAbaAdmin('backup')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300" id="btnAbaAdmin-backup">
-            <i class="fa-solid fa-cloud-arrow-down"></i> 3. Backup Geral & Expurgo da Nuvem
-          </button>
-          <button onclick="AlternarAbaAdmin('usuarios')" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300" id="btnAbaAdmin-usuarios">
-            <i class="fa-solid fa-users"></i> 4. Gestão de Usuários e Cargos
-          </button>
-        </div>
-
-        <!-- ABA ADMIN 1: EDITOR UNIVERSAL SEM LIMITE DE 100 ITENS -->
-        <div id="abaAdmin-editor" class="aba-admin-content bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 class="text-sm font-bold text-slate-900">Editor Universal (Exibe Todos os Registros com Busca e Paginação)</h3>
-              <p class="text-xs text-slate-500">Escolha a tabela abaixo para pesquisar, editar ou excluir qualquer lançamento do banco.</p>
-            </div>
-            <select id="selectTabelaEditorAdmin" onchange="carregarTabelaEditorAdmin()" class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900">
-              <option value="equipamentos">Frota / Equipamentos</option>
-              <option value="ordens_servico">Ordens de Serviço (OS / REP)</option>
-              <option value="diario_horimetro">Lançamentos de Horímetro / KM</option>
-              <option value="pecas_estoque">Catálogo de Peças</option>
-              <option value="lotes_estoque">Lotes Reais FIFO (Notas Fiscais)</option>
-              <option value="itens_os_estoque">Movimentações e Reservas de Estoque</option>
-              <option value="servicos_almoxarifado">Serviços de Terceiros (Solda/Limpeza)</option>
-              <option value="planos_preventiva">Planos de Preventiva</option>
-            </select>
-          </div>
-          <div id="containerTabelaEditorAdmin" class="overflow-x-auto text-xs bg-white p-3 rounded-lg border border-slate-200"></div>
-        </div>
-
-        <!-- ABA ADMIN 2: PLANILHA PADRÃO DO REP PARA IMPORTAÇÃO EM MASSA -->
-        <div id="abaAdmin-importador" class="aba-admin-content hidden bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-5">
-          <div class="bg-white border border-slate-200 p-5 rounded-xl space-y-4 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-              <div>
-                <h3 class="text-base font-black text-slate-900"><i class="fa-solid fa-file-import text-blue-600"></i> Importar Histórico do REP em Massa (Via Planilha Padrão)</h3>
-                <p class="text-xs text-slate-500">Baixe o modelo padrão do REP, cole as colunas da sua planilha lá dentro e suba todo o histórico limpo e validado</p>
-              </div>
-              <button onclick="baixarPlanilhaPadraoREP()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 shadow-sm">
-                <i class="fa-solid fa-file-arrow-down"></i> 1. Baixar Planilha Padrão do REP (.xlsx)
-              </button>
-            </div>
-
-            <div class="space-y-3 text-xs">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                <div>
-                  <label class="block text-slate-700 font-bold mb-1">2. Selecionar Planilha Padrão do REP Preenchida (.xlsx ou .csv)</label>
-                  <input type="file" id="inputArquivoREPPadrao" accept=".xlsx,.xls,.csv" onchange="lerPlanilhaPadraoREP(event)"
-                    class="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:font-bold" />
-                </div>
-                <div class="flex items-center gap-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                  <input type="checkbox" id="chkLimparOSAntesImportarREP" class="rounded text-amber-600" />
-                  <label for="chkLimparOSAntesImportarREP" class="text-amber-900 font-bold cursor-pointer">Limpar OS antigas do banco antes de subir esta planilha (Evita duplicar)</label>
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-slate-700 font-bold mb-1">Prévia das Ordens de Serviço Lidas (PATRIMONIO ; DESCRICAO_EQ ; MARCA ; LOCAL_PCM ; MOTIVO ; COD_COMPONENTE ; DESC_COMPONENTE ; PROBLEMA ; ENTRADA ; SAIDA ; HORIMETRO ; MECANICOS ; SERVICO_EXECUTADO ; STATUS)</label>
-                <textarea id="textoPreviaREPMassa" rows="7" placeholder="As linhas da sua planilha padrão aparecerão aqui automaticamente (ou você pode colar direto do Excel)..."
-                  class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono text-[11px] text-slate-900"></textarea>
-              </div>
-
-              <div class="flex items-center justify-between pt-2">
-                <p id="statusImportacaoREP" class="text-xs font-mono font-bold text-emerald-700"></p>
-                <button onclick="confirmarImportacaoREPPadrao()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-6 py-2.5 rounded-lg text-xs shadow">
-                  <i class="fa-solid fa-cloud-arrow-up"></i> 3. Confirmar e Importar Todas as OS para o Site
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="abaAdmin-backup" class="aba-admin-content hidden bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-5">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
-              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Passo 1 (Obrigatório)</span>
-              <h4 class="text-sm font-bold text-slate-900">Baixar Backup Completo (.XLSX)</h4>
-              <p class="text-xs text-slate-500">Exporta todas as tabelas num único arquivo Excel.</p>
-              <button onclick="gerarBackupCompletoExcel()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 shadow">
-                <i class="fa-solid fa-download"></i> 1. Baixar Backup Completo (.XLSX)
-              </button>
-            </div>
-
-            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
-              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-rose-100 text-rose-800">Passo 2 (Liberar Espaço)</span>
-              <h4 class="text-sm font-bold text-slate-900">Expurgar Histórico Antigo da Nuvem</h4>
-              <div class="text-xs space-y-2">
-                <label class="block text-slate-600">Apagar OS Concluídas e Horímetros anteriores à data:</label>
-                <input type="date" id="dataCorteExpurgo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" />
-              </div>
-              <button id="btnExecutarExpurgo" disabled onclick="executarExpurgoNuvem()" class="w-full bg-slate-200 text-slate-400 cursor-not-allowed font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 transition">
-                <i class="fa-solid fa-trash-can"></i> 2. Faça o Backup no Passo 1 para Liberar
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div id="abaAdmin-usuarios" class="aba-admin-content hidden bg-white border border-slate-200 rounded-xl p-4">
-          <div id="listaUsuariosAdmin" class="overflow-x-auto"></div>
-        </div>
-      </section>
+      <!-- SEÇÃO 6: ADMINISTRAÇÃO -->
+      <section id="sec-admin" class="hidden"></section>
 
     </main>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- MODAIS DO SISTEMA                                                     -->
-  <!-- ===================================================================== -->
-
-  <div id="modalImportarFrotaMassa" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-6 w-full max-w-2xl space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-        <h3 class="text-base font-black text-slate-900"><i class="fa-solid fa-file-import text-blue-600"></i> Importar Equipamentos em Massa (Planilha Padrão)</h3>
-        <button onclick="baixarPlanilhaPadraoFrota()" class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-lg hover:bg-emerald-100">
-          <i class="fa-solid fa-download"></i> Baixar Planilha Modelo (.xlsx)
-        </button>
-      </div>
-      <div class="space-y-3 text-xs">
-        <div>
-          <label class="block text-slate-700 font-bold mb-1">Selecionar Planilha Preenchida (.xlsx ou .csv)</label>
-          <input type="file" id="inputArquivoFrotaPadrao" accept=".xlsx,.xls,.csv" onchange="lerPlanilhaPadraoFrota(event)"
-            class="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:font-bold" />
-        </div>
-        <div>
-          <label class="block text-slate-700 font-bold mb-1">Prévia dos Equipamentos Lidos</label>
-          <textarea id="textoPreviaFrotaMassa" rows="6" placeholder="As linhas da sua planilha aparecerão aqui..."
-            class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono text-[11px] text-slate-900"></textarea>
-        </div>
-        <p id="statusImportFrotaMassa" class="font-bold text-emerald-700"></p>
-      </div>
-      <div class="flex justify-end gap-2 pt-2 border-t border-slate-200">
-        <button onclick="document.getElementById('modalImportarFrotaMassa').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Fechar</button>
-        <button onclick="confirmarImportacaoFrotaMassa()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-lg text-xs shadow">
-          <i class="fa-solid fa-check-double"></i> Cadastrar Todos os Equipamentos
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalPeca" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-lg space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-slate-900">1. Cadastrar Item Estocável (Grupo de Paralelos)</h3>
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-3 gap-3">
-          <div><label class="block text-amber-700 font-bold mb-1">Nº Cadastro Aleatório</label><input type="text" id="pecaCodigo" readonly class="w-full px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-mono font-black" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Unidade</label><input type="text" id="pecaUnidade" value="UN" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase font-bold" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Local / Prateleira</label><input type="text" id="pecaLocal" placeholder="Ex: Rua B - Prat 2" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Descrição Unificada da Peça *</label><input type="text" id="pecaDescricao" placeholder="Ex: FILTRO LUBRIFICANTE DO MOTOR" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase font-semibold" /></div>
-        <div><label class="block text-blue-700 font-bold mb-1">Fabricantes e Part Numbers Equivalentes</label><input type="text" id="pecaEquivalentes" placeholder="Ex: CAT: 1R-1808 | Donaldson: P551808" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        <div><label class="block text-emerald-700 font-bold mb-1">Equipamentos onde aplica</label><input type="text" id="pecaEquipamentos" placeholder="Ex: EH-40, TE-09, PT-37" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div class="grid grid-cols-3 gap-3">
-          <div><label class="block text-slate-700 mb-1">Saldo Inicial</label><input type="number" step="0.01" id="pecaSaldo" value="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-          <div><label class="block text-slate-700 mb-1">Estoque Mínimo</label><input type="number" step="0.01" id="pecaMinimo" value="2" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-          <div><label class="block text-slate-700 mb-1">Custo Inicial (R$)</label><input type="number" step="0.01" id="pecaCusto" value="0.00" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        </div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalPeca').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarPecaEstoque()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Salvar Cadastro Unificado</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalEntradaNF" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-5xl space-y-4 shadow-2xl max-h-[92vh] flex flex-col">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-        <div>
-          <h3 class="text-base font-black text-emerald-700"><i class="fa-solid fa-file-invoice-dollar"></i> 2. Entrada de Nota Fiscal em Massa (Múltiplos Itens)</h3>
-          <p class="text-[11px] text-slate-500">Informe o cabeçalho da NF uma vez e adicione quantos itens vieram na nota</p>
-        </div>
-        <button onclick="adicionarLinhaItemEntradaNF()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-          <i class="fa-solid fa-plus"></i> + Adicionar Item na Nota
-        </button>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-xs">
-        <div><label class="block text-emerald-900 font-bold mb-1">Número da Nota Fiscal *</label><input type="text" id="nfNumero" placeholder="Ex: NF 45892" class="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-slate-900 font-black" /></div>
-        <div><label class="block text-emerald-900 font-bold mb-1">Fornecedor *</label><input type="text" id="nfFornecedor" placeholder="Ex: Sotreq" class="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-slate-900 font-semibold uppercase" /></div>
-        <div class="flex flex-col justify-center bg-white px-4 py-2 rounded-lg border border-emerald-200 text-right">
-          <span class="text-[10px] text-slate-500 font-bold uppercase">Valor Total Calculado da NF</span>
-          <span id="txtTotalGeralEntradaNF" class="text-lg font-black text-emerald-700">R$ 0,00</span>
-        </div>
-      </div>
-      <div id="containerLinhasEntradaNF" class="space-y-2.5 overflow-y-auto flex-1 pr-1 text-xs"></div>
-      <div class="flex justify-between items-center pt-3 border-t border-slate-200">
-        <button onclick="adicionarLinhaItemEntradaNF()" class="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1"><i class="fa-solid fa-circle-plus"></i> Adicionar mais uma linha</button>
-        <div class="flex gap-2">
-          <button onclick="document.getElementById('modalEntradaNF').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-          <button onclick="confirmarEntradaNFMulti()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-lg text-xs shadow">Registrar Todos os Itens da Nota Fiscal</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalSaidaAvulsa" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-5xl space-y-4 shadow-2xl max-h-[92vh] flex flex-col">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-        <div>
-          <h3 class="text-base font-black text-rose-600"><i class="fa-solid fa-arrow-right-from-bracket"></i> 4. Saída Avulsa em Massa (Múltiplos Itens)</h3>
-          <p class="text-[11px] text-slate-500">Dê baixa em vários itens do armazém (FIFO) ou lance vários itens livres de uma só vez</p>
-        </div>
-        <button onclick="adicionarLinhaSaidaAvulsa()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-          <i class="fa-solid fa-plus"></i> + Adicionar Item na Saída
-        </button>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-rose-50/70 p-3 rounded-xl border border-rose-200 text-xs">
-        <div><label class="block text-rose-900 font-bold mb-1">Nº NF / Documento (Opcional)</label><input type="text" id="saidaNFGeral" placeholder="Ex: NF 50120" class="w-full px-3 py-2 bg-white border border-rose-300 rounded-lg text-slate-900 font-bold" /></div>
-        <div><label class="block text-rose-900 font-bold mb-1">Quem Retirou / Observação Geral</label><input type="text" id="saidaObservacaoGeral" placeholder="Ex: Aplicado no campo" class="w-full px-3 py-2 bg-white border border-rose-300 rounded-lg text-slate-900" /></div>
-        <div class="flex flex-col justify-center bg-white px-4 py-2 rounded-lg border border-rose-200 text-right">
-          <span class="text-[10px] text-slate-500 font-bold uppercase">Total de Itens na Lista</span>
-          <span id="txtTotalLinhasSaida" class="text-lg font-black text-rose-600">1 Item</span>
-        </div>
-      </div>
-      <div id="containerLinhasSaidaAvulsa" class="space-y-2.5 overflow-y-auto flex-1 pr-1 text-xs"></div>
-      <div class="flex justify-between items-center pt-3 border-t border-slate-200">
-        <button onclick="adicionarLinhaSaidaAvulsa()" class="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1"><i class="fa-solid fa-circle-plus"></i> Adicionar mais uma linha</button>
-        <div class="flex gap-2">
-          <button onclick="document.getElementById('modalSaidaAvulsa').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-          <button onclick="confirmarSaidaAvulsaMulti()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2.5 rounded-lg text-xs shadow">Confirmar Todas as Saídas</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalEquipamento" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-lg space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-slate-900">Cadastrar Equipamento na Frota</h3>
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-3 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">TAG / Prefixo *</label><input type="text" id="eqTag" placeholder="Ex: CB-14" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase font-bold" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Unidade *</label><select id="eqUnidade" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-amber-700 font-bold"><option value="HORAS">HORAS (h)</option><option value="KM">QUILÔMETROS (km)</option></select></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Leitura Atual</label><input type="number" step="0.1" id="eqHorimetro" value="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Descrição do Equipamento *</label><input type="text" id="eqNome" placeholder="Ex: CAMINHÃO BASCULANTE" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div class="grid grid-cols-3 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Marca</label><input type="text" id="eqMarca" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Modelo</label><input type="text" id="eqModelo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Ano Fabr.</label><input type="text" id="eqAno" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Placa</label><input type="text" id="eqPlaca" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Nº de Série / Chassi</label><input type="text" id="eqSerie" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-          <div><label class="block text-amber-700 font-bold mb-1">Proprietário *</label><select id="eqProprietario" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold"><option value="VILASA">Próprio (VILASA)</option><option value="TERCEIRO">Terceiro / Locado</option></select></div>
-          <div><label class="block text-emerald-700 font-bold mb-1">Preventiva é Nossa? *</label><select id="eqPreventivaPropria" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold"><option value="true">Sim (Nossa)</option><option value="false">Não (Terceiro)</option></select></div>
-        </div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalEquipamento').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarEquipamento()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Salvar Equipamento</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalNovaOS" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-slate-900">1. Abrir Ordem de Serviço (Campo)</h3>
-      <div class="space-y-3 text-xs">
-        <div><label class="block text-slate-700 font-bold mb-1">Equipamento *</label><select id="osEquipamentoSelect" onchange="verificarDuplicidadeOS()" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-semibold"></select></div>
-        <div id="alertaDuplicidadeOS" class="hidden p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 space-y-1"><p class="font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Já existe OS ativa para esta máquina:</p><p id="textoDuplicidadeOS" class="text-[11px]"></p></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-amber-700 font-bold mb-1">Localização Física Atual *</label><input type="text" id="osLocalizacao" placeholder="Ex: KM 98, Posto Ipiranga..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Aberta por</label><input type="text" id="osAbertoPorNome" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-700 font-semibold" /></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Descrição do Problema *</label><textarea id="osDescricao" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></textarea></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalNovaOS').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarNovaOS()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Enviar para Oficina</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalConcluirOS" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-emerald-700">2. Encerrar Execução Técnica (Mecânico)</h3>
-      <input type="hidden" id="concluirOsId" /><input type="hidden" id="concluirEqId" />
-      <div class="space-y-3 text-xs">
-        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-          <div class="flex items-center justify-between"><label class="text-amber-700 font-bold">Horímetro / KM na Saída *</label><span id="txtUltimoHorimetroModalOS" class="text-[11px] text-slate-500">Último: ---</span></div>
-          <div class="flex gap-2">
-            <input type="number" step="0.1" id="concluirHorimetroOS" required class="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold text-sm" />
-            <button type="button" onclick="usarUltimoHorimetroOS()" class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-lg text-[10px]">Repetir Último</button>
-          </div>
-        </div>
-        <div>
-          <label class="block text-slate-700 font-bold mb-1">Executantes que trabalharam nesta OS *</label>
-          <div id="listaCheckboxesMecanicos" class="max-h-36 overflow-y-auto bg-slate-50 border border-slate-300 rounded-lg p-2.5 space-y-1.5"></div>
-          <input type="text" id="concluirExecutantesExtras" placeholder="Outros nomes / Oficina externa" class="w-full mt-1.5 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" />
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Serviço Executado *</label><textarea id="concluirServicoTexto" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase"></textarea></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalConcluirOS').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="confirmarFechamentoMecanico()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Liberar Máquina</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalClassificarPCM" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-2xl space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-        <h3 class="text-base font-black text-slate-900"><i class="fa-solid fa-clipboard-check text-amber-500"></i> Classificação Analista PCM / Registro Completo REP</h3>
-      </div>
-      <input type="hidden" id="repOsId" value="" />
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-        <div><label class="block text-slate-700 font-bold mb-1">Equipamento *</label><select id="repEquipamentoId" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold"></select></div>
-        <div>
-          <label class="block text-slate-700 font-bold mb-1">Status da OS *</label>
-          <select id="repStatusOS" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-emerald-700 font-bold">
-            <option value="auditada_pcm">EXECUTADO / CLASSIFICADA</option>
-            <option value="em_execucao">EM EXECUÇÃO (Máquina Parada)</option>
-            <option value="pausada_peca">AGUARDANDO PEÇA / TERCEIRO</option>
-            <option value="aguardando_pcm">AGUARDANDO TRIAGEM PCM</option>
-          </select>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Horímetro / KM</label><input type="number" step="0.1" id="repHorimetro" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-        <div><label class="block text-slate-600 mb-1">Local Físico (Campo)</label><input type="text" id="repLocalFisico" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        <div>
-          <label class="block text-amber-700 font-bold mb-1">Onde foi Consertada? (PCM) *</label>
-          <select id="repLocalPCM" onchange="verificarSelecaoTerceiroPCM()" class="w-full px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold">
-            <option value="OFICINA">OFICINA</option><option value="TRECHO">TRECHO (Na Obra)</option><option value="TERCEIRO">TERCEIRO (Oficina Fora)</option><option value="USINA">USINA</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-amber-700 font-bold mb-1">Motivo *</label>
-          <select id="repMotivo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold">
-            <option value="CORRETIVA">CORRETIVA</option><option value="PREVENTIVA">PREVENTIVA</option><option value="FALHA OPERACIONAL">FALHA OPERACIONAL</option>
-          </select>
-        </div>
-        <div class="md:col-span-2">
-          <label class="block text-blue-700 font-bold mb-1">Sistema / Componente (Padrão REP) *</label>
-          <select id="repComponenteSelect" onchange="ajustarMotivoPorComponente()" class="w-full px-3 py-2 bg-blue-50 border border-blue-300 rounded-lg text-slate-900 font-bold">
-            <option value="">-- Selecione o Código COR --</option>
-            <option value="COR01|MOTOR">COR01 - MOTOR</option>
-            <option value="COR02|TRANSMISSAO/ CAIXA DE MARCHA">COR02 - TRANSMISSÃO / CAIXA DE MARCHA</option>
-            <option value="COR03|ACIDENTES E FALHAS OPERACIONAIS">COR03 - ACIDENTES E FALHAS OPERACIONAIS</option>
-            <option value="COR04|DIFERENCIAL, CARDAN E CUBOS DE RODAS">COR04 - DIFERENCIAL, CARDAN E CUBOS DE RODAS</option>
-            <option value="COR05|COMANDO FINAL E REDUTOR DE TRACAO">COR05 - COMANDO FINAL E REDUTOR DE TRAÇÃO</option>
-            <option value="COR06|SISTEMA HIDRAULICO">COR06 - SISTEMA HIDRÁULICO</option>
-            <option value="COR07|IMPLEMENTO">COR07 - IMPLEMENTO</option>
-            <option value="COR08|MATERIAL RODANTE">COR08 - MATERIAL RODANTE</option>
-            <option value="COR09|PNEU">COR09 - PNEU / BORRACHARIA</option>
-            <option value="COR10|LANTERNAGEM E PINTURA">COR10 - LANTERNAGEM E PINTURA</option>
-            <option value="COR11|FREIOS, RODAS E SISTEMA PNEUMATICO">COR11 - FREIOS, RODAS E SISTEMA PNEUMÁTICO</option>
-            <option value="COR12|CONSERVACAO RAPIDA / FILTROS AR / NIVEIS">COR12 - CONSERVAÇÃO RÁPIDA (Filtros Ar / Níveis)</option>
-            <option value="COR13|MATERIAL DESGASTE E FPS">COR13 - MATERIAL DE DESGASTE E FPS</option>
-            <option value="COR14|CONCHA, LAMINA E ESCARIFICADOR">COR14 - CONCHA, LÂMINA E ESCARIFICADOR</option>
-            <option value="COR15|ELETRICA">COR15 - ELÉTRICA</option>
-            <option value="COR16|AR CONDICIONADO">COR16 - AR CONDICIONADO</option>
-            <option value="COR17|CHASSI, ESTRUTURA E SISTEMAS DIVERSOS">COR17 - CHASSI, ESTRUTURA E SISTEMAS DIVERSOS</option>
-            <option value="COR18|LUBRIFICAÇÃO">COR18 - LUBRIFICAÇÃO</option>
-            <option value="PRE18|MANUTENÇÃO PREVENTIVA PROGRAMADA">PRE18 - MANUTENÇÃO PREVENTIVA PROGRAMADA</option>
-            <option value="PRE01|LAVAGEM">PRE01 - LAVAGEM</option>
-          </select>
-        </div>
-        <div><label class="block text-rose-700 font-bold mb-1">Oficina Externa?</label><input type="text" id="repOficinaExterna" placeholder="Ex: REAL DIESEL" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div><label class="block text-slate-700 font-bold mb-1">ENTRADA *</label><input type="datetime-local" id="repDataEntrada" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        <div><label class="block text-slate-700 font-bold mb-1">SAÍDA</label><input type="datetime-local" id="repDataSaida" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        <div><label class="block text-slate-700 font-bold mb-1">Previsão Liberação</label><input type="date" id="repPrevisaoLiberacao" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        <div class="md:col-span-3"><label class="block text-slate-700 font-bold mb-1">Mecânicos (Separados por /)</label><input type="text" id="repMecanicosTexto" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div class="md:col-span-3"><label class="block text-slate-700 font-bold mb-1">Descrição do Problema *</label><input type="text" id="repProblemaTexto" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div class="md:col-span-3"><label class="block text-slate-700 font-bold mb-1">Serviço Executado</label><textarea id="repServicoTexto" rows="2" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase"></textarea></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
-        <button onclick="document.getElementById('modalClassificarPCM').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarClassificacaoOuManualPCM()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-2 rounded-lg text-xs shadow">Salvar no REP</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalReservaMaterial" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-amber-600">3. Reservar Material no Almoxarifado</h3>
-      <div class="space-y-3 text-xs">
-        <div><label class="block text-slate-700 font-bold mb-1">Peça *</label><select id="resPecaSelect" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></select></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Quantidade *</label><input type="number" step="0.01" id="resQuantidade" value="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Equipamento *</label><select id="resEquipamentoSelect" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></select></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Vincular a OS aberta</label><select id="resOsSelect" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></select></div>
-        <div><label class="block text-slate-700 font-bold mb-1">Observação</label><input type="text" id="resObservacao" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalReservaMaterial').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="confirmarReservaUniversal()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Reservar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalServicoTerceiro" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-purple-700">5. Registrar Serviço (Solda, Limpeza, Torno, etc.)</h3>
-      <div class="space-y-3 text-xs">
-        <div><label class="block text-slate-700 font-bold mb-1">Equipamento *</label><select id="srvEquipamentoSelect" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold"></select></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Fornecedor *</label><input type="text" id="srvFornecedor" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-          <div><label class="block text-emerald-700 font-bold mb-1">Custo (R$) *</label><input type="number" step="0.01" id="srvCusto" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Data *</label><input type="date" id="srvData" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Nº NF / Recibo</label><input type="text" id="srvNF" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Descrição do Serviço *</label><textarea id="srvDescricao" rows="2" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></textarea></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalServicoTerceiro').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarServicoTerceiro()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Salvar Serviço</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalGerarOSPreventivaKit" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-lg space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-blue-700">Gerar OS Preventiva + Reservar Material</h3>
-      <input type="hidden" id="kitPlanoId" /><input type="hidden" id="kitEqId" /><input type="hidden" id="kitProxAlvo" />
-      <div class="space-y-3 text-xs">
-        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><p id="kitResumoEquipamento" class="font-bold text-slate-900 text-sm"></p><p id="kitResumoChecklist" class="text-slate-600 mt-1 text-[11px]"></p></div>
-        <div><label class="block text-amber-700 font-bold mb-1">Selecione os Materiais do Almoxarifado:</label><div id="listaPecasParaKitPreventiva" class="max-h-48 overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-2.5 space-y-2"></div></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalGerarOSPreventivaKit').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="confirmarCriacaoOSPreventivaComKit()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Criar OS e Reservar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalQrCode" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white text-slate-900 rounded-2xl p-6 w-full max-w-sm text-center space-y-4 shadow-2xl">
-      <div class="border-2 border-slate-900 rounded-xl p-4 space-y-2">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">VILASA - DIÁRIO DE EQUIPAMENTO</p>
-        <h3 id="qrModalTag" class="text-2xl font-black text-slate-900">ESC-01</h3>
-        <p id="qrModalNome" class="text-xs text-slate-600">Escavadeira</p>
-        <div id="qrcodeCanvas" class="flex justify-center py-3"></div>
-        <p class="text-xs font-mono bg-slate-100 py-1 rounded border border-slate-300">TAG Manual: <strong id="qrModalCurto">---</strong></p>
-      </div>
-      <div class="flex justify-between gap-2 no-print">
-        <button onclick="document.getElementById('modalQrCode').classList.add('hidden')" class="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-200 text-slate-800">Fechar</button>
-        <button onclick="window.print()" class="flex-1 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white"><i class="fa-solid fa-print"></i> Imprimir</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalPlanoPCM" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-lg space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-slate-900">Configurar Plano Preventivo em Cascata</h3>
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Equipamento *</label><select id="pcmEquipamentoSelect" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></select></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Passo Base *</label><select id="pcmIntervaloBase" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-amber-700 font-bold"><option value="250">250h (250/500/1000)</option><option value="5000">5.000 km</option><option value="10000">10.000 km</option></select></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Última Preventiva Realizada (H/KM)</label><input type="number" step="0.1" id="pcmUltimoHorimetro" value="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold" /></div>
-        <div><label class="block text-emerald-700 font-bold mb-1">Tarefas Base (250h / 5.000km)</label><textarea id="pcmTarefas250" rows="2" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></textarea></div>
-        <div><label class="block text-amber-700 font-bold mb-1">Tarefas Adicionais (+500h / +10.000km)</label><textarea id="pcmTarefas500" rows="2" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></textarea></div>
-        <div><label class="block text-rose-700 font-bold mb-1">Tarefas Adicionais (+1000h / +20.000km)</label><textarea id="pcmTarefas1000" rows="2" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"></textarea></div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalPlanoPCM').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarPlanoPCM()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Salvar Plano</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalEditorUniversal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-lg space-y-4 max-h-[90vh] flex flex-col shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-        <h3 class="text-base font-black text-amber-600">Modificar Registro (Modo Admin)</h3>
-        <span id="labelTabelaEditorModal" class="text-xs font-mono text-slate-500"></span>
-      </div>
-      <input type="hidden" id="editorRegistroId" />
-      <div id="camposDinamicosEditor" class="space-y-3 text-xs overflow-y-auto pr-1 flex-1"></div>
-      <div class="flex justify-between gap-2 pt-3 border-t border-slate-200">
-        <button onclick="excluirRegistroModoDeus()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-3 py-2 rounded-lg text-xs font-bold">Excluir Registro</button>
-        <div class="flex gap-2">
-          <button onclick="document.getElementById('modalEditorUniversal').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-          <button onclick="salvarEdicaoModoDeus()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Salvar Alterações</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalUsuario" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white border border-slate-300 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
-      <h3 class="text-base font-black text-slate-900">Cadastrar Usuário</h3>
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-700 font-bold mb-1">Matrícula (Login)</label><input type="text" id="usrMatricula" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-          <div><label class="block text-slate-700 font-bold mb-1">Senha</label><input type="text" id="usrSenha" value="1234" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900" /></div>
-        </div>
-        <div><label class="block text-slate-700 font-bold mb-1">Nome Completo</label><input type="text" id="usrNome" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 uppercase" /></div>
-        <div>
-          <label class="block text-slate-700 font-bold mb-1">Função / Perfil</label>
-          <select id="usrCargo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold">
-            <option value="encarregado">Encarregado de Campo</option>
-            <option value="mecanico">Mecânico / Executante</option>
-            <option value="almoxarife">Almoxarife</option>
-            <option value="pcm">Analista / Planejador PCM</option>
-            <option value="gestor">Gestor / Engenharia</option>
-            <option value="admin">Administrador Geral</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="document.getElementById('modalUsuario').classList.add('hidden')" class="px-4 py-2 rounded-lg text-xs text-slate-600 font-bold">Cancelar</button>
-        <button onclick="salvarNovoUsuario()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow">Criar Acesso</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Carrega todo o Motor JavaScript Separado -->
-  <script src="app.js"></script>
+  <!-- 3. SCRIPTS DA ARQUITETURA MODULAR V2 -->
+  <script src="config.js"></script>
+  <script src="core.js"></script>
+  <script src="offline_sync.js"></script>
+  <script src="os_rep.js"></script>
+  <script src="uber_mecanicos.js"></script>
+  <script src="pcm_sap.js"></script>
+  <script src="frota.js"></script>
+  <script src="estoque.js"></script>
+  <script src="kpis.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>
