@@ -29,7 +29,7 @@ const MATRIZ_PERMISSOES_CARGOS = {
   operador: {
     label: 'Operador de Equipamento',
     abas_visiveis: ['os'],
-    acoes: ['lancar_horimetro_qr', 'exportar_relatorios']
+    acoes: ['lancar_horimetro_qr']
   },
   mecanico: {
     label: 'Mecânico / Eletricista',
@@ -56,19 +56,14 @@ const MATRIZ_PERMISSOES_CARGOS = {
     ]
   },
   encarregado: {
-    label: 'Encarregado de Manutenção',
-    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
+    label: 'Encarregado',
+    abas_visiveis: ['os'],
     acoes: [
       'abrir_os',
-      'executar_os',
-      'classificar_rep_pcm',
-      'solicitar_peca_os',
-      'gerenciar_frota',
-      'gerenciar_preventivas',
-      'transferir_equipamento_obra',
       'exportar_relatorios'
     ]
   },
+
   pcm: {
     label: 'Analista de PCM',
     abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
