@@ -120,7 +120,7 @@ function obterCargosUsuario(user = usuarioLogado) {
   if (!user) return [];
   const lista = Array.isArray(user.cargos_lista) && user.cargos_lista.length > 0
     ? [...user.cargos_lista]
-    : (user.cargo_base ? [user.cargo_base] : ['admin']);
+    : (user.cargo_base ? [user.cargo_base] : (user.cargo ? [user.cargo] : ['admin']));
   return [...new Set(lista.map(c => String(c).toLowerCase().trim()).filter(Boolean))];
 }
 
@@ -169,7 +169,7 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
 }
 
 // ----------------------------------------------------------------------------
-// 2. AUTENTICAÇÃO E SESSÃO (ACEITA MINÚSCULAS/MAIÚSCULAS E LOGIN POR MATRÍCULA OU NOME)
+// 2. AUTENTICAÇÃO E SESSÃO (LENDO A COLUNA 'senha_acesso' + CASE-INSENSITIVE)
 // ----------------------------------------------------------------------------
 async function realizarLogin(event) {
   if (event) event.preventDefault();
@@ -204,7 +204,8 @@ async function realizarLogin(event) {
     const matBanco = String(u.matricula || '').trim().toLowerCase();
     const nomeBanco = String(u.nome || '').trim().toLowerCase();
     const userCol = String(u.usuario || u.login || '').trim().toLowerCase();
-    const senhaBanco = String(u.senha || '').trim().toLowerCase();
+    // Lê prioritariamente a coluna oficial 'senha_acesso' do seu Supabase
+    const senhaBanco = String(u.senha_acesso || u.senha || '').trim().toLowerCase();
 
     const bateUsuario =
       matBanco === loginLower ||
