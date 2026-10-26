@@ -193,7 +193,7 @@ function preencherUsuarioParaEdicaoAdmin(userId) {
 
   document.getElementById('admUserIdEdit').value = u.id;
   document.getElementById('admUserMatricula').value = u.matricula || '';
-  document.getElementById('admUserSenha').value = u.senha || '';
+  document.getElementById('admUserSenha').value = u.senha_acesso || u.senha || '';
   document.getElementById('admUserNome').value = u.nome || '';
 
   const cargos = Array.isArray(u.cargos_lista) && u.cargos_lista.length > 0 ? u.cargos_lista : [u.cargo_base];
@@ -222,7 +222,7 @@ async function salvarUsuarioMultiCargoAdmin() {
 
   const payload = {
     matricula,
-    senha,
+    senha_acesso: senha,
     nome,
     cargo_base: cargosSelecionados[0], // Mantém compatibilidade com coluna antiga
     cargos_lista: cargosSelecionados,
