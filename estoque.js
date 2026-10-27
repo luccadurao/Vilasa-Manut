@@ -1,41 +1,15 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 7: ESTOQUE.JS (AUTO-MIGRAÇÃO DE LEGADO + 3 BOTÕES + EDIÇÃO EM LOTE)
+// VILASA CMMS V2 - MÓDULO 7: ESTOQUE.JS (100% CASADO COM AS COLUNAS LIMPAS)
 // ============================================================================
 
 let cacheMovimentacoesAlmox = [];
 let abaVisualizacaoEstoque = 'catalogo'; // 'catalogo', 'edicao_rapida_lote', 'historico_nf_saidas'
 
-// Normaliza registros vindos do sistema antigo para nunca quebrar valores nem descrições
-function normalizarPecaLegado(p, idx = 0) {
-  const idInterno = p.id_interno || `VIL-${String(idx + 1).padStart(4, '0')}`;
-  const codigoFab = p.codigo || p.codigo_peca || p.referencia || p.part_number || idInterno;
-  const descricao = p.descricao || p.nome || p.nome_peca || p.item || 'ITEM SEM DESCRIÇÃO';
-  const quantidade = parseFloat(p.quantidade ?? p.saldo ?? p.saldo_atual ?? p.qtd ?? 0) || 0;
-  const estoqueMin = parseFloat(p.estoque_minimo ?? p.minimo ?? 0) || 0;
-  const custoUnit = parseFloat(p.custo_unitario ?? p.valor_unitario ?? p.preco ?? p.valor ?? 0) || 0;
-  const paralelos = Array.isArray(p.codigos_paralelos) && p.codigos_paralelos.length > 0
-    ? p.codigos_paralelos
-    : (codigoFab ? [codigoFab] : []);
-
-  return {
-    ...p,
-    id_interno: idInterno,
-    codigo: codigoFab,
-    descricao,
-    quantidade,
-    estoque_minimo: estoqueMin,
-    custo_unitario: custoUnit,
-    codigos_paralelos: paralelos,
-    unidade: p.unidade || 'UN',
-    estocavel: p.estocavel !== false
-  };
-}
-
 async function carregarEstoque(aba = abaVisualizacaoEstoque) {
   abaVisualizacaoEstoque = aba;
 
   const [resPecas, resMovs, resEq] = await Promise.all([
-    lerDadosComFallbackOffline('pecas_estoque', () => db.from('pecas_estoque').select('*').order('id')),
+    lerDadosComFallbackOffline('pecas_estoque', () => db.from('pecas_estoque').select('*').order('id_interno')),
     lerDadosComFallbackOffline('movimentacoes_almoxarifado', () =>
       db.from('movimentacoes_almoxarifado').select('*').order('registrado_em', { ascending: false }).limit(400)
     ),
@@ -44,7 +18,7 @@ async function carregarEstoque(aba = abaVisualizacaoEstoque) {
       : lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'))
   ]);
 
-  cachePecas = (resPecas.data || []).map((p, i) => normalizarPecaLegado(p, i));
+  cachePecas = resPecas.data || [];
   cacheMovimentacoesAlmox = resMovs.data || [];
   cacheEquipamentos = resEq.data || [];
 
@@ -68,16 +42,10 @@ function bateComBuscaPecaOuParalelo(peca, termoDigitado) {
   if (!termo) return true;
 
   const idInterno = String(peca.id_interno || '').toUpperCase();
-  const codFabricante = String(peca.codigo || '').toUpperCase();
   const desc = String(peca.descricao || '').toUpperCase();
   const paralelos = Array.isArray(peca.codigos_paralelos) ? peca.codigos_paralelos.map(c => String(c).toUpperCase()) : [];
 
-  return (
-    idInterno.includes(termo) ||
-    codFabricante.includes(termo) ||
-    desc.includes(termo) ||
-    paralelos.some(p => p.includes(termo))
-  );
+  return idInterno.includes(termo) || desc.includes(termo) || paralelos.some(p => p.includes(termo));
 }
 
 function renderizarPainelAlmoxarifado3Botoes() {
@@ -88,31 +56,21 @@ function renderizarPainelAlmoxarifado3Botoes() {
   const termo = (document.getElementById('buscaRapidaAlmoxInput')?.value || '').trim().toUpperCase();
 
   let listaPecas = [...cachePecas];
-  if (typeof filtrarListaPorObraAtiva === 'function') {
-    listaPecas = filtrarListaPorObraAtiva(listaPecas);
-  }
-  if (termo) {
-    listaPecas = listaPecas.filter(p => bateComBuscaPecaOuParalelo(p, termo));
-  }
+  if (typeof filtrarListaPorObraAtiva === 'function') listaPecas = filtrarListaPorObraAtiva(listaPecas);
+  if (termo) listaPecas = listaPecas.filter(p => bateComBuscaPecaOuParalelo(p, termo));
 
   sec.innerHTML = `
     <div class="space-y-5">
-      <!-- PAINEL CENTRAL COM OS 3 BOTÕES + RECADASTRO RÁPIDO -->
       <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-xl">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">ALMOXARIFADO CENTRAL & CONTROLE DE EQUIVALÊNCIAS</span>
-            <h2 class="text-lg font-black">Gestão por Código Interno Mestre, Entrada de NF e Saída Direta</h2>
+            <h2 class="text-lg font-black">Gestão por Código Interno Mestre, Entrada de NF e Saída p/ Máquina</h2>
           </div>
           ${podeOperar ? `
-            <div class="flex flex-wrap gap-2">
-              <button onclick="repararEMigrarBaseAntigaAlmox()" class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 font-black text-xs">
-                🔧 Reparar Dados do Sistema Antigo (1 Clique)
-              </button>
-              <button onclick="carregarEstoque('edicao_rapida_lote')" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
-                ⚡ Recadastro Rápido em Planilha na Tela
-              </button>
-            </div>
+            <button onclick="carregarEstoque('edicao_rapida_lote')" class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
+              ⚡ Edição & Recadastro Rápido em Planilha na Tela
+            </button>
           ` : ''}
         </div>
 
@@ -123,7 +81,7 @@ function renderizarPainelAlmoxarifado3Botoes() {
               <div class="bg-slate-950 text-amber-400 w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0">1</div>
               <div>
                 <div class="font-black text-sm uppercase">📦 Cadastrar Item Mestre</div>
-                <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Gera <strong>Nosso Código Interno</strong> para atrelar vários códigos paralelos.</p>
+                <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Gera <strong>Nosso Código (VIL-XXXX)</strong> e atrela códigos paralelos.</p>
               </div>
             </button>
 
@@ -132,7 +90,7 @@ function renderizarPainelAlmoxarifado3Botoes() {
               <div class="bg-slate-950 text-blue-400 w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0">2</div>
               <div>
                 <div class="font-black text-sm uppercase">📥 Entrada de NF</div>
-                <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Entrada de itens estocáveis ou não, atrelando ao Nosso Código.</p>
+                <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Soma saldo na prateleira e atualiza preço unitário.</p>
               </div>
             </button>
 
@@ -148,7 +106,6 @@ function renderizarPainelAlmoxarifado3Botoes() {
         ` : ''}
       </div>
 
-      <!-- Barra de Abas e Busca -->
       <div class="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <div class="flex flex-wrap gap-1.5">
           <button onclick="carregarEstoque('catalogo')" class="px-3.5 py-1.5 rounded-lg text-xs font-black ${abaVisualizacaoEstoque === 'catalogo' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">
@@ -156,7 +113,7 @@ function renderizarPainelAlmoxarifado3Botoes() {
           </button>
           ${podeOperar ? `
             <button onclick="carregarEstoque('edicao_rapida_lote')" class="px-3.5 py-1.5 rounded-lg text-xs font-black ${abaVisualizacaoEstoque === 'edicao_rapida_lote' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">
-              ⚡ Edição & Recadastro Rápido em Grade
+              ⚡ Planilha de Edição Rápida
             </button>
           ` : ''}
           <button onclick="carregarEstoque('historico_nf_saidas')" class="px-3.5 py-1.5 rounded-lg text-xs font-black ${abaVisualizacaoEstoque === 'historico_nf_saidas' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">
@@ -176,47 +133,21 @@ function renderizarPainelAlmoxarifado3Botoes() {
   `;
 }
 
-// Repara automaticamente itens antigos que ficaram sem id_interno ou com saldo nulo
-async function repararEMigrarBaseAntigaAlmox() {
-  if (!confirm('Deseja padronizar automaticamente todos os itens antigos do almoxarifado (gerando Nosso Código VIL-XXXX e recuperando saldos/códigos paralelos)?')) return;
-
-  let corrigidos = 0;
-  for (let i = 0; i < cachePecas.length; i++) {
-    const p = cachePecas[i];
-    const idInterno = p.id_interno || `VIL-${String(i + 1).padStart(4, '0')}`;
-    const paralelos = Array.isArray(p.codigos_paralelos) && p.codigos_paralelos.length > 0
-      ? p.codigos_paralelos
-      : (p.codigo ? [p.codigo] : []);
-
-    await db.from('pecas_estoque').update({
-      id_interno: idInterno,
-      descricao: p.descricao,
-      quantidade: p.quantidade,
-      codigos_paralelos: paralelos,
-      estocavel: p.estocavel !== false
-    }).eq('id', p.id);
-    corrigidos++;
-  }
-
-  alert(`✅ ${corrigidos} item(ns) do sistema antigo foram padronizados e recuperados com sucesso!`);
-  await carregarEstoque('catalogo');
-}
-
-// GRADE ESTILO EXCEL PARA RECADASTRO RÁPIDO E CORREÇÃO DE SALDOS SEM RETRABALHO
+// GRADE ESTILO PLANILHA PARA RECADASTRO RÁPIDO EM LOTE
 function renderizarGradeRecadastroRapidoEmLote(listaPecas) {
   return `
     <div class="bg-white p-5 rounded-2xl border-2 border-amber-500 shadow-sm space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
         <div>
           <h3 class="text-sm font-black uppercase text-slate-900">⚡ Planilha de Recadastro Rápido & Correção de Saldos</h3>
-          <p class="text-xs text-slate-500">Altere quantas linhas quiser direto abaixo ou adicione novas linhas em lote e clique em <strong>Salvar Tudo de Uma Vez</strong>.</p>
+          <p class="text-xs text-slate-500">Altere ou adicione quantas linhas quiser e clique em <strong>Salvar Todas as Linhas</strong>.</p>
         </div>
         <div class="flex gap-2">
           <button onclick="adicionarLinhaNovaNaGradeRapidaEstoque()" class="px-3 py-2 rounded-xl bg-slate-900 text-amber-400 font-black text-xs">
-            + Adicionar Nova Linha em Branco
+            + Nova Linha
           </button>
           <button onclick="salvarTodaGradeRapidaEstoque()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
-            💾 Salvar Todas as Linhas de Uma Vez
+            💾 Salvar Todas as Linhas
           </button>
         </div>
       </div>
@@ -225,13 +156,14 @@ function renderizarGradeRecadastroRapidoEmLote(listaPecas) {
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-slate-900 text-amber-400 uppercase text-[10px]">
-              <th class="p-2">Nosso Código (VIL-...)</th>
+              <th class="p-2">Nosso Código</th>
               <th class="p-2">Descrição do Item</th>
               <th class="p-2">Códigos Paralelos (Separados por vírgula)</th>
               <th class="p-2">Saldo Atual</th>
+              <th class="p-2">Est. Mín.</th>
               <th class="p-2">Unid.</th>
               <th class="p-2">Custo Unit. (R$)</th>
-              <th class="p-2 text-center">Excluir</th>
+              <th class="p-2 text-center">X</th>
             </tr>
           </thead>
           <tbody id="tbodyGradeRapidaEstoque" class="divide-y divide-slate-200">
@@ -240,11 +172,12 @@ function renderizarGradeRecadastroRapidoEmLote(listaPecas) {
                 <td class="p-1.5"><input type="text" value="${p.id_interno || ''}" class="gr-id-interno w-28 border rounded p-1.5 font-black uppercase bg-amber-50" /></td>
                 <td class="p-1.5"><input type="text" value="${p.descricao || ''}" class="gr-desc w-full min-w-[200px] border rounded p-1.5 font-bold uppercase" /></td>
                 <td class="p-1.5"><input type="text" value="${(p.codigos_paralelos || []).join(', ')}" class="gr-paralelos w-full min-w-[180px] border rounded p-1.5 font-semibold uppercase" /></td>
-                <td class="p-1.5"><input type="number" step="0.1" value="${p.quantidade || 0}" class="gr-qtd w-24 border rounded p-1.5 font-black text-emerald-800" /></td>
-                <td class="p-1.5"><input type="text" value="${p.unidade || 'UN'}" class="gr-un w-16 border rounded p-1.5 font-bold uppercase" /></td>
+                <td class="p-1.5"><input type="number" step="0.1" value="${p.quantidade || 0}" class="gr-qtd w-20 border rounded p-1.5 font-black text-emerald-800" /></td>
+                <td class="p-1.5"><input type="number" step="0.1" value="${p.estoque_minimo || 0}" class="gr-min w-20 border rounded p-1.5 font-bold" /></td>
+                <td class="p-1.5"><input type="text" value="${p.unidade || 'UN'}" class="gr-un w-14 border rounded p-1.5 font-bold uppercase" /></td>
                 <td class="p-1.5"><input type="number" step="0.01" value="${p.custo_unitario || 0}" class="gr-custo w-24 border rounded p-1.5 font-bold" /></td>
                 <td class="p-1.5 text-center">
-                  <button onclick="excluirItemAlmoxDireto('${p.id}', this)" class="text-rose-600 hover:text-rose-800 font-black px-2 py-1">🗑️</button>
+                  <button onclick="excluirItemAlmoxDireto('${p.id}', this)" class="text-rose-600 font-black px-2 py-1">🗑️</button>
                 </td>
               </tr>
             `).join('')}
@@ -258,9 +191,7 @@ function renderizarGradeRecadastroRapidoEmLote(listaPecas) {
 function adicionarLinhaNovaNaGradeRapidaEstoque() {
   const tbody = document.getElementById('tbodyGradeRapidaEstoque');
   if (!tbody) return;
-  const numNovo = tbody.querySelectorAll('tr').length + 1;
-  const codSug = `VIL-${String(numNovo).padStart(4, '0')}`;
-
+  const codSug = `VIL-${String(tbody.querySelectorAll('tr').length + 1).padStart(4, '0')}`;
   const tr = document.createElement('tr');
   tr.className = 'linha-grade-rapida-est bg-emerald-50/40';
   tr.dataset.id = '';
@@ -268,8 +199,9 @@ function adicionarLinhaNovaNaGradeRapidaEstoque() {
     <td class="p-1.5"><input type="text" value="${codSug}" class="gr-id-interno w-28 border rounded p-1.5 font-black uppercase bg-amber-50" /></td>
     <td class="p-1.5"><input type="text" placeholder="DESCRIÇÃO DA PEÇA..." class="gr-desc w-full min-w-[200px] border rounded p-1.5 font-bold uppercase" /></td>
     <td class="p-1.5"><input type="text" placeholder="EX: 1R-1808, P551808" class="gr-paralelos w-full min-w-[180px] border rounded p-1.5 font-semibold uppercase" /></td>
-    <td class="p-1.5"><input type="number" step="0.1" value="0" class="gr-qtd w-24 border rounded p-1.5 font-black text-emerald-800" /></td>
-    <td class="p-1.5"><input type="text" value="UN" class="gr-un w-16 border rounded p-1.5 font-bold uppercase" /></td>
+    <td class="p-1.5"><input type="number" step="0.1" value="0" class="gr-qtd w-20 border rounded p-1.5 font-black text-emerald-800" /></td>
+    <td class="p-1.5"><input type="number" step="0.1" value="0" class="gr-min w-20 border rounded p-1.5 font-bold" /></td>
+    <td class="p-1.5"><input type="text" value="UN" class="gr-un w-14 border rounded p-1.5 font-bold uppercase" /></td>
     <td class="p-1.5"><input type="number" step="0.01" value="0" class="gr-custo w-24 border rounded p-1.5 font-bold" /></td>
     <td class="p-1.5 text-center"><button onclick="this.closest('tr').remove()" class="text-rose-600 font-black px-2">✖</button></td>
   `;
@@ -286,32 +218,30 @@ async function salvarTodaGradeRapidaEstoque() {
     const descricao = tr.querySelector('.gr-desc')?.value.trim().toUpperCase();
     const rawPar = tr.querySelector('.gr-paralelos')?.value || '';
     const quantidade = parseFloat(tr.querySelector('.gr-qtd')?.value) || 0;
+    const estoque_minimo = parseFloat(tr.querySelector('.gr-min')?.value) || 0;
     const unidade = tr.querySelector('.gr-un')?.value.trim().toUpperCase() || 'UN';
     const custo_unitario = parseFloat(tr.querySelector('.gr-custo')?.value) || 0;
 
     if (!descricao) continue;
 
-    const codigos_paralelos = rawPar.split(/[,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    const codigos_paralelos = rawPar.split(/[,;|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
     const payload = {
       id_interno: id_interno || gerarProximoNossoCodigoInterno(),
-      codigo: codigos_paralelos[0] || id_interno,
       descricao,
       codigos_paralelos,
       quantidade,
+      estoque_minimo,
       unidade,
       custo_unitario,
-      estocavel: true
+      obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
     };
 
-    if (id) {
-      await db.from('pecas_estoque').update(payload).eq('id', id);
-    } else {
-      await db.from('pecas_estoque').insert([payload]);
-    }
+    if (id) await db.from('pecas_estoque').update(payload).eq('id', id);
+    else await db.from('pecas_estoque').insert([payload]);
     salvos++;
   }
 
-  alert(`✅ ${salvos} item(ns) atualizados/cadastrados de uma só vez!`);
+  alert(`✅ ${salvos} item(ns) salvos com sucesso!`);
   await carregarEstoque('catalogo');
 }
 
@@ -323,7 +253,7 @@ async function excluirItemAlmoxDireto(id, btnEl) {
 
 function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
   if (listaPecas.length === 0) {
-    return `<div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500 font-bold">Nenhum item encontrado no almoxarifado. Use o Botão 1, a Edição Rápida em Grade ou o Importador de Planilhas no Admin.</div>`;
+    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum item encontrado. Use o Botão 1, a Planilha Rápida ou o Importador no Admin.</div>`;
   }
 
   return `
@@ -331,47 +261,36 @@ function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
       <table class="w-full text-left border-collapse text-xs">
         <thead>
           <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
-            <th class="p-3">Nosso Código Mestre</th>
-            <th class="p-3">Descrição Padrão no Almoxarifado</th>
-            <th class="p-3">Códigos Paralelos / Equivalentes Atrelados</th>
+            <th class="p-3">Nosso Código</th>
+            <th class="p-3">Descrição do Material</th>
+            <th class="p-3">Códigos Paralelos / Equivalentes</th>
             <th class="p-3">Saldo Atual</th>
             <th class="p-3">Custo Unit.</th>
-            <th class="p-3 text-right">Ações Rápidas</th>
+            <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
           ${listaPecas.map(p => {
             const paralelos = Array.isArray(p.codigos_paralelos) ? p.codigos_paralelos : [];
-            const todosCodigos = [...new Set([p.codigo, ...paralelos].filter(Boolean))];
-            const abaixoMin = parseFloat(p.quantidade || 0) <= parseFloat(p.estoque_minimo || 0) && p.estocavel !== false;
+            const abaixoMin = parseFloat(p.quantidade || 0) <= parseFloat(p.estoque_minimo || 0);
 
             return `
               <tr class="hover:bg-slate-50">
-                <td class="p-3">
-                  <span class="bg-amber-400 text-slate-950 font-black px-2.5 py-1 rounded text-xs">${p.id_interno || 'VIL-S/N'}</span>
-                </td>
+                <td class="p-3"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-1 rounded text-xs">${p.id_interno || 'VIL-S/N'}</span></td>
                 <td class="p-3 font-extrabold text-slate-900">${p.descricao || '-'}</td>
                 <td class="p-3">
                   <div class="flex flex-wrap gap-1">
-                    ${todosCodigos.length > 0
-                      ? todosCodigos.map(c => `<span class="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-800 font-bold text-[11px]">${c}</span>`).join('')
+                    ${paralelos.length > 0
+                      ? paralelos.map(c => `<span class="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-800 font-bold text-[11px]">${c}</span>`).join('')
                       : `<span class="text-slate-400 italic">Sem paralelo</span>`}
                   </div>
                 </td>
-                <td class="p-3 font-black text-sm ${abaixoMin ? 'text-rose-600' : 'text-emerald-700'}">
-                  ${p.quantidade || 0} ${p.unidade || 'UN'}
-                </td>
-                <td class="p-3 font-bold text-slate-700">
-                  R$ ${Number(p.custo_unitario || 0).toFixed(2)}
-                </td>
+                <td class="p-3 font-black text-sm ${abaixoMin ? 'text-rose-600' : 'text-emerald-700'}">${p.quantidade || 0} ${p.unidade || 'UN'}</td>
+                <td class="p-3 font-bold text-slate-700">R$ ${Number(p.custo_unitario || 0).toFixed(2)}</td>
                 <td class="p-3 text-right space-x-1 whitespace-nowrap">
                   ${podeOperar ? `
-                    <button onclick="ajustarSaldoRapidoPeca('${p.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-black text-[11px]">
-                      ✏️ Saldo/Preço
-                    </button>
-                    <button onclick="adicionarNovoCodigoParaleloRapido('${p.id}')" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-[11px]">
-                      + Paralelo
-                    </button>
+                    <button onclick="ajustarSaldoRapidoPeca('${p.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-black text-[11px]">✏️ Saldo/Preço</button>
+                    <button onclick="adicionarNovoCodigoParaleloRapido('${p.id}')" class="px-2.5 py-1 rounded-lg bg-slate-900 text-amber-400 font-black text-[11px]">+ Paralelo</button>
                   ` : ''}
                 </td>
               </tr>
@@ -386,26 +305,22 @@ function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
 async function ajustarSaldoRapidoPeca(pecaId) {
   const peca = cachePecas.find(p => String(p.id) === String(pecaId));
   if (!peca) return;
-
-  const novoSaldo = parseFloat(prompt(`Informe o Saldo Atual correto para ${peca.id_interno} - ${peca.descricao}:`, peca.quantidade || 0));
+  const novoSaldo = parseFloat(prompt(`Saldo Atual para ${peca.id_interno} - ${peca.descricao}:`, peca.quantidade || 0));
   if (isNaN(novoSaldo)) return;
-
-  const novoCusto = parseFloat(prompt(`Informe o Custo Unitário (R$) para ${peca.descricao}:`, peca.custo_unitario || 0));
+  const novoCusto = parseFloat(prompt(`Custo Unitário (R$):`, peca.custo_unitario || 0));
 
   await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
     quantidade: novoSaldo,
     custo_unitario: isNaN(novoCusto) ? (peca.custo_unitario || 0) : novoCusto
   }, pecaId);
-
   await carregarEstoque('catalogo');
 }
 
 async function adicionarNovoCodigoParaleloRapido(pecaId) {
   const peca = cachePecas.find(p => String(p.id) === String(pecaId));
   if (!peca) return;
-
-  const novoCod = prompt(`Atrelar novo Código Paralelo ao item ${peca.id_interno} (${peca.descricao}):`);
-  if (!novoCod || !novoCod.trim()) return;
+  const novoCod = prompt(`Novo Código Paralelo para ${peca.id_interno} (${peca.descricao}):`);
+  if (!novoCod?.trim()) return;
 
   const listaAtual = Array.isArray(peca.codigos_paralelos) ? [...peca.codigos_paralelos] : [];
   const limpo = novoCod.trim().toUpperCase();
@@ -415,32 +330,29 @@ async function adicionarNovoCodigoParaleloRapido(pecaId) {
   await carregarEstoque('catalogo');
 }
 
-// Mantém os Modais dos Botões 1, 2 e 3
+// MODAIS DOS 3 BOTÕES (100% CASADOS COM AS COLUNAS ENXUTAS)
 function abrirModalBotao1CadastrarItem() {
   const sugerido = gerarProximoNossoCodigoInterno();
   let modal = document.getElementById('modalAlmoxBotao1');
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modalAlmoxBotao1';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
+    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4';
     document.body.appendChild(modal);
   }
 
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8">
-      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">📦 1. Cadastrar Item com Nosso Código Interno</h3>
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border">
+      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">📦 1. Cadastrar Item Mestre no Almoxarifado</h3>
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Nosso Número (SKU)</label>
+            <label class="block font-black uppercase text-slate-700 mb-1">Nosso Código (SKU)</label>
             <input id="b1IdInterno" type="text" value="${sugerido}" class="w-full border-2 border-amber-400 bg-amber-50 rounded-lg p-2 font-black uppercase" />
           </div>
           <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Natureza</label>
-            <select id="b1Estocavel" class="w-full border rounded-lg p-2 font-bold">
-              <option value="true">📦 Estocável</option>
-              <option value="false">⚡ Não Estocável</option>
-            </select>
+            <label class="block font-black uppercase text-slate-700 mb-1">Unidade</label>
+            <input id="b1Unidade" type="text" value="UN" class="w-full border rounded-lg p-2 font-bold uppercase" />
           </div>
         </div>
         <div>
@@ -448,17 +360,17 @@ function abrirModalBotao1CadastrarItem() {
           <input id="b1Descricao" type="text" placeholder="Ex: FILTRO LUBRIFICANTE MOTOR CAT 320" class="w-full border rounded-lg p-2 font-bold uppercase" />
         </div>
         <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Códigos Paralelos (Separe por vírgula)</label>
+          <label class="block font-black uppercase text-slate-700 mb-1">Códigos Paralelos / Equivalentes (Separe por vírgula)</label>
           <textarea id="b1Paralelos" rows="2" placeholder="Ex: 1R-1808, P551808, LF16015" class="w-full border rounded-lg p-2 font-bold uppercase"></textarea>
         </div>
         <div class="grid grid-cols-3 gap-2">
           <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Unidade</label>
-            <input id="b1Unidade" type="text" value="UN" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-          <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Saldo Inicial</label>
             <input id="b1SaldoInicial" type="number" step="0.1" value="0" class="w-full border rounded-lg p-2 font-bold" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Estoque Mín.</label>
+            <input id="b1EstoqueMin" type="number" step="0.1" value="1" class="w-full border rounded-lg p-2 font-bold" />
           </div>
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Custo Unit. (R$)</label>
@@ -478,19 +390,17 @@ function abrirModalBotao1CadastrarItem() {
 async function salvarBotao1CadastroItem() {
   const id_interno = document.getElementById('b1IdInterno').value.trim().toUpperCase();
   const descricao = document.getElementById('b1Descricao').value.trim().toUpperCase();
-  const estocavel = document.getElementById('b1Estocavel').value === 'true';
   const rawParalelos = document.getElementById('b1Paralelos').value;
   if (!id_interno || !descricao) return alert('Informe o Nosso Código e a Descrição!');
 
-  const codigos_paralelos = rawParalelos.split(/[,;\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+  const codigos_paralelos = rawParalelos.split(/[,;\n|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   await gravarDadosOfflineSafe('pecas_estoque', 'INSERT', {
     id_interno,
-    codigo: codigos_paralelos[0] || id_interno,
-    codigos_paralelos,
     descricao,
-    estocavel,
+    codigos_paralelos,
     unidade: document.getElementById('b1Unidade').value.trim().toUpperCase() || 'UN',
     quantidade: parseFloat(document.getElementById('b1SaldoInicial').value) || 0,
+    estoque_minimo: parseFloat(document.getElementById('b1EstoqueMin').value) || 0,
     custo_unitario: parseFloat(document.getElementById('b1CustoUnit').value) || 0,
     obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
   });
@@ -504,12 +414,12 @@ function abrirModalBotao2EntradaNF() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modalAlmoxBotao2';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
+    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4';
     document.body.appendChild(modal);
   }
 
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border">
       <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">📥 2. Entrada de Nota Fiscal no Almoxarifado</h3>
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-2 gap-3">
@@ -517,20 +427,16 @@ function abrirModalBotao2EntradaNF() {
           <input id="b2Fornecedor" type="text" placeholder="Fornecedor" class="border rounded-lg p-2 font-bold uppercase" />
         </div>
         <div class="bg-blue-50 p-3 rounded-xl border border-blue-200">
-          <label class="block font-black uppercase text-blue-950 mb-1">🔗 Atrelar a um Item Cadastrado (Nosso Código) — Opcional:</label>
+          <label class="block font-black uppercase text-blue-950 mb-1">🔗 Vincular ao Item do Catálogo (Soma Saldo):</label>
           <select id="b2PecaCadastradaId" onchange="preencherDadosPecaAoSelecionarNaNF(this.value)" class="w-full border rounded-lg p-2 font-bold bg-white">
-            <option value="">-- Item Avulso / Não atrelar --</option>
-            ${cachePecas.map(p => `<option value="${p.id}">${p.id_interno} - ${p.descricao}</option>`).join('')}
+            <option value="">-- Item Avulso (Sem vínculo com estoque) --</option>
+            ${cachePecas.map(p => `<option value="${p.id}">${p.id_interno} - ${p.descricao} (${(p.codigos_paralelos || []).join(', ')})</option>`).join('')}
           </select>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <input id="b2CodigoNaNF" type="text" placeholder="Código que veio na NF (Paralelo)" class="border rounded-lg p-2 font-bold uppercase" />
-          <select id="b2Estocavel" class="border rounded-lg p-2 font-bold">
-            <option value="true">📦 Estocável (Soma Saldo)</option>
-            <option value="false">⚡ Não Estocável</option>
-          </select>
+          <input id="b2CodigoNaNF" type="text" placeholder="Novo Código Paralelo na NF (Opcional)" class="border rounded-lg p-2 font-bold uppercase" />
+          <input id="b2Descricao" type="text" placeholder="Descrição do Item..." class="border rounded-lg p-2 font-bold uppercase" />
         </div>
-        <input id="b2Descricao" type="text" placeholder="Descrição do Item..." class="w-full border rounded-lg p-2 font-bold uppercase" />
         <div class="grid grid-cols-2 gap-3">
           <input id="b2Quantidade" type="number" step="0.1" value="1" placeholder="Quantidade" class="border rounded-lg p-2 font-black" />
           <input id="b2ValorUnit" type="number" step="0.01" value="0.00" placeholder="Valor Unit. R$" class="border rounded-lg p-2 font-bold" />
@@ -547,31 +453,26 @@ function abrirModalBotao2EntradaNF() {
 
 function preencherDadosPecaAoSelecionarNaNF(pecaId) {
   const peca = cachePecas.find(p => String(p.id) === String(pecaId));
-  if (!peca) return;
-  document.getElementById('b2Descricao').value = peca.descricao || '';
-  document.getElementById('b2Estocavel').value = String(peca.estocavel !== false);
+  if (peca) document.getElementById('b2Descricao').value = peca.descricao || '';
 }
 
 async function salvarBotao2EntradaNF() {
   const numero_nf = document.getElementById('b2NumeroNF').value.trim().toUpperCase();
   const fornecedor = document.getElementById('b2Fornecedor').value.trim().toUpperCase();
   const pecaId = document.getElementById('b2PecaCadastradaId').value || null;
-  const codigo_nf_paralelo = document.getElementById('b2CodigoNaNF').value.trim().toUpperCase();
-  const estocavel = document.getElementById('b2Estocavel').value === 'true';
+  const codigoNovo = document.getElementById('b2CodigoNaNF').value.trim().toUpperCase();
   const descricao_item = document.getElementById('b2Descricao').value.trim().toUpperCase();
   const quantidade = parseFloat(document.getElementById('b2Quantidade').value) || 0;
   const valor_unitario = parseFloat(document.getElementById('b2ValorUnit').value) || 0;
 
   if (!numero_nf || !descricao_item || quantidade <= 0) return alert('Preencha Nº da NF, Descrição e Quantidade!');
 
-  let idInternoSnapshot = 'AVULSO';
   if (pecaId) {
     const peca = cachePecas.find(p => String(p.id) === String(pecaId));
     if (peca) {
-      idInternoSnapshot = peca.id_interno || peca.codigo;
       const paralelos = Array.isArray(peca.codigos_paralelos) ? [...peca.codigos_paralelos] : [];
-      if (codigo_nf_paralelo && !paralelos.includes(codigo_nf_paralelo)) paralelos.push(codigo_nf_paralelo);
-      const novoSaldo = estocavel ? Number((parseFloat(peca.quantidade || 0) + quantidade).toFixed(2)) : parseFloat(peca.quantidade || 0);
+      if (codigoNovo && !paralelos.includes(codigoNovo)) paralelos.push(codigoNovo);
+      const novoSaldo = Number((parseFloat(peca.quantidade || 0) + quantidade).toFixed(2));
 
       await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
         quantidade: novoSaldo,
@@ -587,14 +488,10 @@ async function salvarBotao2EntradaNF() {
     numero_nf,
     fornecedor,
     peca_id: pecaId,
-    id_interno_snapshot: idInternoSnapshot,
-    codigo_nf_paralelo,
     descricao_item,
-    estocavel,
     quantidade,
-    saldo_restante_lote_fifo: estocavel ? quantidade : 0,
     valor_unitario,
-    responsavel_nome: usuarioLogado?.nome || 'Almoxarifado',
+    observacao: codigoNovo ? `Cód. NF: ${codigoNovo}` : '',
     registrado_em: new Date().toISOString()
   });
 
@@ -607,17 +504,17 @@ function abrirModalBotao3SaidaMaquina() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modalAlmoxBotao3';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
+    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4';
     document.body.appendChild(modal);
   }
 
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border">
       <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">📤 3. Saída de Material para Máquina</h3>
       <div class="space-y-3 text-xs">
         <select id="b3ModoSaida" onchange="alternarModoSaidaBotao3(this.value)" class="w-full border-2 border-emerald-500 bg-emerald-50 rounded-lg p-2.5 font-black">
-          <option value="SAIDA_ESTOQUE">📦 1. Saída Normal de Item em Estoque (Baixa Prateleira)</option>
-          <option value="SAIDA_DIRETA_NF_MAQUINA">⚡ 2. Nota Fiscal Acabou de Entrar e Foi Direto p/ Máquina</option>
+          <option value="SAIDA_ESTOQUE">📦 1. Saída de Estoque (Baixa Saldo da Prateleira)</option>
+          <option value="SAIDA_DIRETA_NF_MAQUINA">⚡ 2. NF Direto p/ Máquina (Sem passar pela prateleira)</option>
         </select>
 
         <div>
@@ -628,23 +525,18 @@ function abrirModalBotao3SaidaMaquina() {
           </select>
         </div>
 
-        <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Item do Nosso Catálogo</label>
+        <div id="blocoB3SelectCatalogo">
+          <label class="block font-black uppercase text-slate-700 mb-1">Item do Catálogo</label>
           <select id="b3PecaId" onchange="preencherDescSaidaBotao3(this.value)" class="w-full border rounded-lg p-2 font-bold">
-            <option value="">-- Selecione pelo Nosso Código ou Paralelo --</option>
+            <option value="">-- Selecione pelo Nosso Código ou Descrição --</option>
             ${cachePecas.map(p => `<option value="${p.id}">${p.id_interno} - ${p.descricao} (Saldo: ${p.quantidade})</option>`).join('')}
           </select>
         </div>
 
-        <div id="blocoB3DadosNFDireta" class="hidden bg-amber-50 p-3 rounded-xl border border-amber-300 space-y-2">
-          <div class="grid grid-cols-2 gap-2">
-            <input id="b3NumeroNFDireta" type="text" placeholder="Nº da NF" class="border rounded-lg p-2 font-black uppercase bg-white" />
-            <input id="b3FornecedorDireta" type="text" placeholder="Fornecedor" class="border rounded-lg p-2 font-bold uppercase bg-white" />
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <input id="b3CodigoParaleloDireta" type="text" placeholder="Código na NF" class="border rounded-lg p-2 font-bold uppercase bg-white" />
-            <input id="b3ValorUnitDireta" type="number" step="0.01" placeholder="Valor Unit. R$" class="border rounded-lg p-2 font-bold bg-white" />
-          </div>
+        <div id="blocoB3DadosNFDireta" class="hidden bg-amber-50 p-3 rounded-xl border border-amber-300 grid grid-cols-3 gap-2">
+          <input id="b3NumeroNFDireta" type="text" placeholder="Nº da NF" class="border rounded-lg p-2 font-black uppercase bg-white" />
+          <input id="b3FornecedorDireta" type="text" placeholder="Fornecedor" class="border rounded-lg p-2 font-bold uppercase bg-white" />
+          <input id="b3ValorUnitDireta" type="number" step="0.01" placeholder="Valor Unit. R$" class="border rounded-lg p-2 font-bold bg-white" />
         </div>
 
         <div class="grid grid-cols-3 gap-2">
@@ -683,30 +575,22 @@ async function salvarBotao3SaidaMaquina() {
 
   if (!equipId || !descricao_item || quantidade <= 0) return alert('Selecione a Máquina, Descrição e Quantidade!');
 
-  let idInternoSnapshot = 'DIRETO-NF';
   let numero_nf = '';
   let fornecedor = '';
-  let codigo_nf_paralelo = '';
   let valor_unitario = 0;
 
   if (modo === 'SAIDA_ESTOQUE') {
     if (!pecaId) return alert('Selecione o item do estoque!');
     const peca = cachePecas.find(p => String(p.id) === String(pecaId));
     if (!peca) return;
-    if (peca.estocavel !== false && parseFloat(peca.quantidade || 0) < quantidade) {
-      return alert(`Saldo insuficiente! Disponível: ${peca.quantidade}`);
-    }
-    idInternoSnapshot = peca.id_interno || peca.codigo;
+    if (parseFloat(peca.quantidade || 0) < quantidade) return alert(`Saldo insuficiente! Disponível: ${peca.quantidade}`);
     valor_unitario = parseFloat(peca.custo_unitario || 0);
-    if (peca.estocavel !== false) {
-      await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
-        quantidade: Number((parseFloat(peca.quantidade || 0) - quantidade).toFixed(2))
-      }, pecaId);
-    }
+    await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
+      quantidade: Number((parseFloat(peca.quantidade || 0) - quantidade).toFixed(2))
+    }, pecaId);
   } else {
     numero_nf = document.getElementById('b3NumeroNFDireta').value.trim().toUpperCase();
     fornecedor = document.getElementById('b3FornecedorDireta').value.trim().toUpperCase();
-    codigo_nf_paralelo = document.getElementById('b3CodigoParaleloDireta').value.trim().toUpperCase();
     valor_unitario = parseFloat(document.getElementById('b3ValorUnitDireta').value) || 0;
     if (!numero_nf) return alert('Informe o Nº da NF!');
   }
@@ -717,14 +601,10 @@ async function salvarBotao3SaidaMaquina() {
     numero_nf,
     fornecedor,
     peca_id: pecaId,
-    id_interno_snapshot: idInternoSnapshot,
-    codigo_nf_paralelo,
     descricao_item,
-    estocavel: modo === 'SAIDA_ESTOQUE',
     quantidade,
     valor_unitario,
     equipamento_id: equipId,
-    responsavel_nome: usuarioLogado?.nome || 'Almoxarifado',
     observacao,
     registrado_em: new Date().toISOString()
   });
@@ -735,7 +615,7 @@ async function salvarBotao3SaidaMaquina() {
 
 function renderizarTabelaMovimentacoesNFEsaidas() {
   if (cacheMovimentacoesAlmox.length === 0) {
-    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhuma movimentação registrada ainda.</div>`;
+    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhuma movimentação registrada.</div>`;
   }
   return `
     <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
@@ -744,9 +624,10 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
           <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
             <th class="p-3">Data/Hora</th>
             <th class="p-3">Operação</th>
-            <th class="p-3">Código / NF</th>
+            <th class="p-3">Nº NF</th>
             <th class="p-3">Material</th>
             <th class="p-3">Qtd</th>
+            <th class="p-3">Valor Unit.</th>
             <th class="p-3">Máquina / Fornecedor</th>
           </tr>
         </thead>
@@ -757,9 +638,10 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
               <tr>
                 <td class="p-3 font-semibold text-slate-600">${new Date(m.registrado_em).toLocaleString('pt-BR')}</td>
                 <td class="p-3 font-black">${m.tipo_movimento}</td>
-                <td class="p-3 font-bold">${m.id_interno_snapshot || '-'} ${m.numero_nf ? `(${m.numero_nf})` : ''}</td>
+                <td class="p-3 font-bold">${m.numero_nf || '-'}</td>
                 <td class="p-3 font-extrabold">${m.descricao_item}</td>
                 <td class="p-3 font-black">${m.quantidade}</td>
+                <td class="p-3 font-bold">R$ ${Number(m.valor_unitario || 0).toFixed(2)}</td>
                 <td class="p-3 font-bold">${eq ? eq.tag : (m.fornecedor || '-')}</td>
               </tr>
             `;
@@ -771,14 +653,11 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
 }
 
 function exportarInventarioAlmoxCSV() {
-  const cab = ['NOSSO_CODIGO', 'DESCRICAO', 'CODIGOS_PARALELOS', 'SALDO_ATUAL', 'UNIDADE', 'CUSTO_UNITARIO'];
+  const cab = ['NOSSO_CODIGO', 'DESCRICAO', 'CODIGOS_PARALELOS', 'SALDO_ATUAL', 'UNIDADE', 'CUSTO_UNITARIO', 'ESTOQUE_MINIMO'];
   const linhas = cachePecas.map(p => [
-    p.id_interno || '',
-    (p.descricao || '').replace(/;/g, ','),
-    (p.codigos_paralelos || []).join(' | '),
-    String(p.quantidade || 0).replace('.', ','),
-    p.unidade || 'UN',
-    String(p.custo_unitario || 0).replace('.', ',')
+    p.id_interno || '', (p.descricao || '').replace(/;/g, ','), (p.codigos_paralelos || []).join(' | '),
+    String(p.quantidade || 0).replace('.', ','), p.unidade || 'UN',
+    String(p.custo_unitario || 0).replace('.', ','), String(p.estoque_minimo || 0).replace('.', ',')
   ].join(';'));
 
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
