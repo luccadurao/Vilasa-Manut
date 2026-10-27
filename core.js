@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 1: CORE.JS (NÚCLEO CENTRAL + EXPORTADOR PDF/PNG/CSV)
+// VILASA CMMS V2 - MÓDULO 1: CORE.JS (NÚCLEO PADRONIZADO SEM REDUNDÂNCIAS)
 // ============================================================================
 
 let usuarioLogado = null;
@@ -22,64 +22,35 @@ function obterClienteSupabase() {
   return null;
 }
 
-// ----------------------------------------------------------------------------
 // 1. MATRIZ DE PERMISSÕES POR CARGO (RBAC)
-// ----------------------------------------------------------------------------
 const MATRIZ_PERMISSOES_CARGOS = {
   operador: {
     label: 'Operador de Equipamento',
     abas_visiveis: ['os'],
-    acoes: ['lancar_horimetro_qr']
+    acoes: ['lancar_horimetro_qr', 'exportar_relatorios']
   },
   mecanico: {
     label: 'Mecânico / Eletricista',
     abas_visiveis: ['os', 'preventivas', 'estoque'],
-    acoes: [
-      'abrir_os',
-      'executar_os',
-      'aceitar_chamado_uber',
-      'solicitar_peca_os',
-      'lancar_horimetro_qr',
-      'exportar_relatorios'
-    ]
+    acoes: ['abrir_os', 'executar_os', 'lancar_horimetro_qr', 'exportar_relatorios']
   },
   almoxarife: {
     label: 'Almoxarife / Compras',
     abas_visiveis: ['estoque', 'os', 'frota'],
-    acoes: [
-      'gerenciar_catalogo_estoque',
-      'lancar_nf_entrada',
-      'dar_baixa_estoque',
-      'atender_reserva_os',
-      'transferir_estoque_obras',
-      'exportar_relatorios'
-    ]
+    acoes: ['gerenciar_catalogo_estoque', 'lancar_nf_entrada', 'dar_baixa_estoque', 'exportar_relatorios']
   },
   encarregado: {
     label: 'Encarregado',
     abas_visiveis: ['os'],
-    acoes: [
-      'abrir_os',
-      'exportar_relatorios'
-    ]
+    acoes: ['abrir_os', 'exportar_relatorios']
   },
-
   pcm: {
     label: 'Analista de PCM',
     abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
-    acoes: [
-      'abrir_os',
-      'executar_os',
-      'classificar_rep_pcm',
-      'gerenciar_frota',
-      'gerenciar_preventivas',
-      'solicitar_peca_os',
-      'transferir_equipamento_obra',
-      'exportar_relatorios'
-    ]
+    acoes: ['abrir_os', 'executar_os', 'classificar_rep_pcm', 'gerenciar_frota', 'gerenciar_preventivas', 'exportar_relatorios']
   },
   gestor: {
-    label: 'Gestor / Diretoria (Somente Visualização)',
+    label: 'Gestor / Diretoria',
     abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
     acoes: ['exportar_relatorios']
   },
@@ -87,21 +58,9 @@ const MATRIZ_PERMISSOES_CARGOS = {
     label: 'Engenheiro de Manutenção',
     abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
     acoes: [
-      'abrir_os',
-      'executar_os',
-      'aceitar_chamado_uber',
-      'classificar_rep_pcm',
-      'gerenciar_frota',
-      'gerenciar_preventivas',
-      'gerenciar_catalogo_estoque',
-      'lancar_nf_entrada',
-      'dar_baixa_estoque',
-      'atender_reserva_os',
-      'solicitar_peca_os',
-      'transferir_equipamento_obra',
-      'transferir_estoque_obras',
-      'lancar_horimetro_qr',
-      'exportar_relatorios'
+      'abrir_os', 'executar_os', 'classificar_rep_pcm', 'gerenciar_frota',
+      'gerenciar_preventivas', 'gerenciar_catalogo_estoque', 'lancar_nf_entrada',
+      'dar_baixa_estoque', 'lancar_horimetro_qr', 'exportar_relatorios'
     ]
   },
   admin: {
@@ -112,21 +71,13 @@ const MATRIZ_PERMISSOES_CARGOS = {
 };
 
 function obterCargosUsuario(user = usuarioLogado) {
-  if (!user) return [];
-  const lista = Array.isArray(user.cargos_lista) && user.cargos_lista.length > 0
-    ? [...user.cargos_lista]
-    : (user.cargo_base ? [user.cargo_base] : (user.cargo ? [user.cargo] : []));
-  return [...new Set(lista.map(c => String(c).toLowerCase().trim()).filter(Boolean))];
+  if (!user || !Array.isArray(user.cargos_lista)) return [];
+  return [...new Set(user.cargos_lista.map(c => String(c).toLowerCase().trim()).filter(Boolean))];
 }
 
-// FILTRO ESTRITO DE EXECUTANTES: Retorna SOMENTE quem possui o cargo 'mecanico' atribuído!
 function obterApenasMecanicosExecutantes(listaUsuarios = cacheUsuarios) {
   if (!Array.isArray(listaUsuarios)) return [];
-  return listaUsuarios.filter(u => {
-    if (u.ativo === false) return false;
-    const cargos = obterCargosUsuario(u);
-    return cargos.includes('mecanico');
-  });
+  return listaUsuarios.filter(u => u.ativo !== false && obterCargosUsuario(u).includes('mecanico'));
 }
 
 function podeVerAba(abaId, user = usuarioLogado) {
@@ -134,89 +85,54 @@ function podeVerAba(abaId, user = usuarioLogado) {
   const cargos = obterCargosUsuario(user);
   if (cargos.includes('admin')) return true;
   if (abaId === 'admin') return false;
-
-  return cargos.some(cargo => {
-    const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
-    return cfg && cfg.abas_visiveis.includes(abaId);
-  });
+  return cargos.some(cargo => MATRIZ_PERMISSOES_CARGOS[cargo]?.abas_visiveis.includes(abaId));
 }
 
 function podeExecutarAcao(acao, exibirAlerta = false) {
   if (!usuarioLogado) return false;
   const cargos = obterCargosUsuario(usuarioLogado);
-
   if (cargos.includes('admin')) return true;
   if (acao === 'acesso_modo_deus') {
-    if (exibirAlerta) alert('Acesso restrito exclusivamente ao Administrador do Sistema.');
+    if (exibirAlerta) alert('Acesso restrito ao Administrador.');
     return false;
   }
-
   if (acao === 'exportar_relatorios') return true;
 
-  const ehApenasGestor = cargos.length === 1 && cargos[0] === 'gestor';
-  if (ehApenasGestor) {
-    if (exibirAlerta) alert('Perfil Gestor possui acesso exclusivo de visualização e extração de relatórios.');
-    return false;
-  }
-
-  const permitidoPorCargo = cargos.some(cargo => {
+  const resultado = cargos.some(cargo => {
     const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
     return cfg && (cfg.acoes.includes('*') || cfg.acoes.includes(acao));
   });
 
-  const permitidoExtra = Boolean(usuarioLogado.permissoes_extras && usuarioLogado.permissoes_extras[acao]);
-  const resultado = permitidoPorCargo || permitidoExtra;
-
   if (!resultado && exibirAlerta) {
-    alert('Seu perfil atual não possui permissão para executar esta alteração.');
+    alert('Seu perfil não possui permissão para executar esta ação.');
   }
   return resultado;
 }
 
-// ----------------------------------------------------------------------------
-// 2. AUTENTICAÇÃO E SESSÃO
-// ----------------------------------------------------------------------------
+// 2. AUTENTICAÇÃO E SESSÃO (COLUNA ÚNICA: senha_acesso)
 async function realizarLogin(event) {
   if (event) event.preventDefault();
   const clienteDB = obterClienteSupabase();
-  if (!clienteDB) {
-    return alert('Erro de conexão: Verifique se o arquivo config.js está presente!');
-  }
+  if (!clienteDB) return alert('Erro de conexão com o banco (verifique config.js).');
 
-  const matInput = document.getElementById('loginMatricula');
-  const senInput = document.getElementById('loginSenha');
-  const loginDigitado = (matInput?.value || '').trim();
-  const senDigitada = (senInput?.value || '').trim();
+  const loginDigitado = (document.getElementById('loginMatricula')?.value || '').trim().toLowerCase();
+  const senDigitada = (document.getElementById('loginSenha')?.value || '').trim().toLowerCase();
 
-  if (!loginDigitado || !senDigitada) {
-    return alert('Informe seu usuário/matrícula e senha!');
-  }
+  if (!loginDigitado || !senDigitada) return alert('Informe usuário e senha!');
 
   const { data: listaPerfis, error } = await clienteDB.from('perfis_usuarios').select('*');
-  if (error) return alert('Erro ao consultar usuários no banco: ' + error.message);
-
-  const loginLower = loginDigitado.toLowerCase();
-  const senLower = senDigitada.toLowerCase();
+  if (error) return alert('Erro ao consultar usuários: ' + error.message);
 
   const usuarioEncontrado = (listaPerfis || []).find(u => {
     if (u.ativo === false) return false;
-    const matBanco = String(u.matricula || '').trim().toLowerCase();
-    const nomeBanco = String(u.nome || '').trim().toLowerCase();
-    const userCol = String(u.usuario || u.login || '').trim().toLowerCase();
-    const senhaBanco = String(u.senha_acesso || u.senha || '').trim().toLowerCase();
-
-    const bateUsuario =
-      matBanco === loginLower ||
-      nomeBanco === loginLower ||
-      userCol === loginLower ||
-      nomeBanco.split(' ')[0] === loginLower;
-
-    return bateUsuario && (senhaBanco === senLower);
+    const mat = String(u.matricula || '').trim().toLowerCase();
+    const nome = String(u.nome || '').trim().toLowerCase();
+    const senha = String(u.senha_acesso || '').trim().toLowerCase();
+    const bateUser = mat === loginDigitado || nome === loginDigitado || nome.split(' ')[0] === loginDigitado;
+    return bateUser && senha === senDigitada;
   });
 
-  if (!usuarioEncontrado) {
-    return alert('Usuário ou senha incorretos! Verifique seus dados.');
-  }
+  if (!usuarioEncontrado) return alert('Usuário ou senha incorretos!');
 
   usuarioLogado = usuarioEncontrado;
   localStorage.setItem('vilasa_sessao_v2', JSON.stringify(usuarioEncontrado));
@@ -232,22 +148,15 @@ function encerrarSessao() {
 
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
-  const telaLogin = document.getElementById('telaLogin');
-  const appPrincipal = document.getElementById('appPrincipal');
-
-  const raw = localStorage.getItem('vilasa_sessao_v2') || localStorage.getItem('vilasa_user');
+  const raw = localStorage.getItem('vilasa_sessao_v2');
   if (!raw) {
-    if (telaLogin) telaLogin.classList.remove('hidden');
-    if (appPrincipal) appPrincipal.classList.add('hidden');
+    document.getElementById('telaLogin')?.classList.remove('hidden');
+    document.getElementById('appPrincipal')?.classList.add('hidden');
     return;
   }
-
   try {
     const cache = JSON.parse(raw);
-    if (!cache || !cache.id) {
-      if (telaLogin) telaLogin.classList.remove('hidden');
-      return;
-    }
+    if (!cache?.id) return encerrarSessao();
     if (navigator.onLine && typeof db !== 'undefined') {
       const { data } = await db.from('perfis_usuarios').select('*').eq('id', cache.id).maybeSingle();
       if (data && data.ativo !== false) {
@@ -261,7 +170,7 @@ async function restaurarSessaoSalva() {
     }
     await inicializarSistemaPosLogin();
   } catch (e) {
-    if (telaLogin) telaLogin.classList.remove('hidden');
+    document.getElementById('telaLogin')?.classList.remove('hidden');
   }
 }
 
@@ -278,23 +187,15 @@ async function inicializarSistemaPosLogin() {
   if (elCargo) elCargo.innerText = `${usuarioLogado.matricula || ''} • ${nomesCargos}`;
 
   await carregarObrasEMontarSeletorTopo();
-  aplicarVisibilidadeAbasMenu();
+  ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].forEach(aba => {
+    document.getElementById(`nav-${aba}`)?.classList.toggle('hidden', !podeVerAba(aba));
+  });
 
   const primeiraAba = ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].find(a => podeVerAba(a));
   if (primeiraAba) navegarPara(primeiraAba);
 }
 
-function aplicarVisibilidadeAbasMenu() {
-  const todasAbas = ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'];
-  todasAbas.forEach(aba => {
-    const btn = document.getElementById(`nav-${aba}`);
-    if (btn) btn.classList.toggle('hidden', !podeVerAba(aba));
-  });
-}
-
-// ----------------------------------------------------------------------------
-// 3. GESTÃO DE MÚLTIPLAS OBRAS E VISÃO CONSOLIDADA
-// ----------------------------------------------------------------------------
+// 3. SELETOR GLOBAL DE OBRAS
 async function carregarObrasEMontarSeletorTopo() {
   try {
     const { data } = await db.from('obras').select('*').eq('ativa', true).order('codigo');
@@ -370,18 +271,14 @@ function filtrarListaPorObraAtiva(lista) {
   if (!Array.isArray(lista)) return [];
   if (!obraAtivaId || obraAtivaId === 'TODAS') return lista;
   return lista.filter(item => {
-    const idObraItem = item.obra_id || item.equipamentos?.obra_id || null;
+    const idObraItem = item.obra_id || item.equipamentos?.obra_id || item.equipamento?.obra_id || null;
     return !idObraItem || String(idObraItem) === String(obraAtivaId);
   });
 }
 
-// ----------------------------------------------------------------------------
-// 4. NAVEGAÇÃO ENTRE MÓDULOS + ATUALIZAÇÃO DO TÍTULO DA BARRA DE RELATÓRIOS
-// ----------------------------------------------------------------------------
+// 4. NAVEGAÇÃO ENTRE MÓDULOS
 function navegarPara(modulo) {
-  if (!podeVerAba(modulo)) {
-    return alert('Seu perfil não possui acesso a este módulo.');
-  }
+  if (!podeVerAba(modulo)) return alert('Seu perfil não possui acesso a este módulo.');
   abaAtivaGlobal = modulo;
 
   const nomesAbas = {
@@ -395,8 +292,7 @@ function navegarPara(modulo) {
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
   if (elTit) elTit.innerText = `Relatórios: ${nomesAbas[modulo] || modulo.toUpperCase()}`;
 
-  const modulos = ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'];
-  modulos.forEach(m => {
+  ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].forEach(m => {
     document.getElementById(`sec-${m}`)?.classList.add('hidden');
     const btn = document.getElementById(`nav-${m}`);
     if (btn) {
@@ -420,9 +316,7 @@ function navegarPara(modulo) {
   if (modulo === 'admin' && typeof carregarUsuariosAdmin === 'function') carregarUsuariosAdmin();
 }
 
-// ----------------------------------------------------------------------------
-// 5. MOTOR UNIVERSAL DE EXPORTAÇÃO (CSV + PDF COMPLETO FILTRADO + PNG EXECUTIVO 1 PÁGINA)
-// ----------------------------------------------------------------------------
+// 5. MOTOR UNIVERSAL DE EXPORTAÇÃO (CSV + PDF FILTRADO + PNG EXECUTIVO 1 PÁGINA)
 function acionarExportacaoUniversalCSV() {
   if (abaAtivaGlobal === 'os' && typeof exportarPlanilhaOSFiltradaCSV === 'function') return exportarPlanilhaOSFiltradaCSV();
   if (abaAtivaGlobal === 'frota' && typeof exportarRelatorioFrotaCSV === 'function') return exportarRelatorioFrotaCSV();
@@ -430,7 +324,6 @@ function acionarExportacaoUniversalCSV() {
   if (abaAtivaGlobal === 'estoque' && typeof exportarInventarioAlmoxCSV === 'function') return exportarInventarioAlmoxCSV();
   if (abaAtivaGlobal === 'kpis' && typeof exportarRelatorioKPIsCSV === 'function') return exportarRelatorioKPIsCSV();
 
-  // Fallback genérico que lê a tabela visível da aba atual
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const table = sec?.querySelector('table');
   if (!table) return alert('Nenhuma tabela visível para exportar nesta seção.');
@@ -445,32 +338,31 @@ function acionarExportacaoUniversalCSV() {
   a.click();
 }
 
-// Coleta dados estruturados e respeitando o filtro atual da aba aberta
 function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
   const obraNome = obterNomeObraAtiva();
-  const dataHora = new Date().toLocaleString('pt-BR');
 
   if (abaAtivaGlobal === 'os') {
-    const termo = (document.getElementById('filtroPrefixoOSInput')?.value || '').trim().toUpperCase();
+    const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
     let lista = filtrarListaPorObraAtiva(cacheOrdens || []);
     if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
-    const paradas = lista.filter(o => o.status !== 'concluida' && o.parada_obrigatoria !== false);
+    const paradas = lista.filter(o => !o.concluida_em && o.parada_obrigatoria !== false);
 
     return {
       titulo: 'Relatório de Ordens de Serviço & Equipamentos Parados (REP)',
       subtitulo: `Obra: ${obraNome} | Filtro Prefixo: ${termo || 'TODOS'}`,
       kpisResumo: [
-        { label: 'Total de OS Filtradas', valor: lista.length },
+        { label: 'Total Filtrado', valor: lista.length },
         { label: 'Máquinas Paradas (REP)', valor: paradas.length },
-        { label: 'Avisos Sem Parada', valor: lista.filter(o => o.parada_obrigatoria === false && o.status !== 'concluida').length },
-        { label: 'Concluídas na Lista', valor: lista.filter(o => o.status === 'concluida').length }
+        { label: 'Operando c/ Anomalia', valor: lista.filter(o => o.parada_obrigatoria === false && !o.concluida_em).length },
+        { label: 'Concluídas', valor: lista.filter(o => Boolean(o.concluida_em) || o.status === 'concluida').length }
       ],
-      colunas: ['Prefixo', 'Equipamento', 'Status / Tipo', 'Motivo / Problema', 'Abertura', 'Mecânico / Equipe'],
+      colunas: ['Prefixo', 'Equipamento', 'Status / Local', 'Motivo / Problema', 'Serviço Executado', 'Entrada', 'Equipe'],
       linhas: lista.map(o => [
         o.equipamentos?.tag || '-',
         o.equipamentos?.nome || '-',
-        `${(o.status || '').toUpperCase()} ${o.parada_obrigatoria === false ? '(SEM PARADA)' : '(PARADO)'}`,
-        o.descricao_problema || o.motivo_rep || '-',
+        `${(o.status || '').toUpperCase()} (${o.local_manutencao_pcm || 'OFICINA'})`,
+        `${o.motivo_rep || 'CORRETIVA'}: ${o.descricao_problema || '-'}`,
+        o.servico_executado || '-',
         o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-',
         o.mecanico_nome || 'Aguardando'
       ])
@@ -488,10 +380,10 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
       titulo: 'Relatório Oficial de Frota e Mobilização de Ativos',
       subtitulo: `Obra: ${obraNome} | Situação: ${sit.toUpperCase()} | Prefixo: ${termo || 'TODOS'}`,
       kpisResumo: [
-        { label: 'Total na Lista Filtrada', valor: lista.length },
-        { label: 'Equipamentos Próprios', valor: lista.filter(e => e.propriedade !== 'alugado').length },
-        { label: 'Equipamentos Alugados', valor: lista.filter(e => e.propriedade === 'alugado').length },
-        { label: 'Ativos Mobilizados', valor: lista.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length }
+        { label: 'Total Filtrado', valor: lista.length },
+        { label: 'Próprios', valor: lista.filter(e => e.propriedade !== 'alugado').length },
+        { label: 'Locados', valor: lista.filter(e => e.propriedade === 'alugado').length },
+        { label: 'Ativos na Obra', valor: lista.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length }
       ],
       colunas: ['Prefixo', 'Descrição', 'Marca / Modelo', 'Vínculo', 'Horímetro / KM', 'Situação'],
       linhas: lista.map(e => [
@@ -514,45 +406,43 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
     const valorTotal = lista.reduce((acc, p) => acc + (parseFloat(p.quantidade || 0) * parseFloat(p.custo_unitario || 0)), 0);
 
     return {
-      titulo: 'Posição de Almoxarifado & Catálogo Mestre de Equivalências',
-      subtitulo: `Obra: ${obraNome} | Busca Aplicada: ${termo || 'TODOS OS ITENS'}`,
+      titulo: 'Posição de Almoxarifado & Catálogo Mestre',
+      subtitulo: `Obra: ${obraNome} | Busca: ${termo || 'TODOS'}`,
       kpisResumo: [
         { label: 'Itens Listados', valor: lista.length },
-        { label: 'Itens com Saldo > 0', valor: lista.filter(p => parseFloat(p.quantidade || 0) > 0).length },
+        { label: 'Com Saldo > 0', valor: lista.filter(p => parseFloat(p.quantidade || 0) > 0).length },
         { label: 'Abaixo do Mínimo', valor: lista.filter(p => parseFloat(p.quantidade || 0) <= parseFloat(p.estoque_minimo || 0)).length },
-        { label: 'Valor Imobilizado', valor: valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
+        { label: 'Valor em Estoque', valor: valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
       ],
-      colunas: ['Nosso Código', 'Descrição do Material', 'Códigos Paralelos', 'Saldo Atual', 'Custo Unit.'],
+      colunas: ['Nosso Código', 'Descrição', 'Códigos Paralelos', 'Saldo Atual', 'Custo Unit.'],
       linhas: lista.map(p => [
-        p.id_interno || p.codigo || '-',
-        p.descricao || p.nome || '-',
-        Array.isArray(p.codigos_paralelos) ? p.codigos_paralelos.join(', ') : (p.codigo || '-'),
+        p.id_interno || '-',
+        p.descricao || '-',
+        Array.isArray(p.codigos_paralelos) ? p.codigos_paralelos.join(', ') : '-',
         `${p.quantidade || 0} ${p.unidade || 'UN'}`,
         Number(p.custo_unitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ])
     };
   }
 
-  // Fallback para Preventivas, KPIs ou Admin (captura tabelas e cards visíveis da seção)
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const trs = Array.from(sec?.querySelectorAll('table tbody tr') || []);
   const ths = Array.from(sec?.querySelectorAll('table thead th') || []).map(th => th.innerText.trim());
 
   return {
     titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || 'Relatório Gerencial Vilasa',
-    subtitulo: `Obra: ${obraNome} | Emitido em: ${dataHora}`,
+    subtitulo: `Obra: ${obraNome} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
     kpisResumo: [
       { label: 'Registros Filtrados', valor: trs.length },
       { label: 'Obra / Frente', valor: obraNome.split(' ')[0] },
-      { label: 'Data de Emissão', valor: new Date().toLocaleDateString('pt-BR') },
-      { label: 'Responsável', valor: usuarioLogado?.nome || 'Engenharia' }
+      { label: 'Data', valor: new Date().toLocaleDateString('pt-BR') },
+      { label: 'Emitido por', valor: usuarioLogado?.nome || 'Engenharia' }
     ],
     colunas: ths.length > 0 ? ths.slice(0, 7) : ['Informação'],
     linhas: trs.map(tr => Array.from(tr.querySelectorAll('td')).slice(0, 7).map(td => td.innerText.replace(/\n+/g, ' ').trim()))
   };
 }
 
-// BOTÃO 2: RELATÓRIO COMPLETO EM PDF (RESPEITANDO O FILTRO APLICADO NA PÁGINA)
 function gerarRelatorioCompletoPDF() {
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio();
   const win = window.open('', '_blank');
@@ -566,21 +456,10 @@ function gerarRelatorioCompletoPDF() {
   `).join('');
 
   const thHtml = rel.colunas.map(c => `<th style="padding:8px; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:10px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
-  const trHtml = rel.linhas.map(l => `
-    <tr>
-      ${l.map(cel => `<td style="padding:7px; border:1px solid #cbd5e1; font-size:10px; color:#1e293b;">${cel}</td>`).join('')}
-    </tr>
-  `).join('');
+  const trHtml = rel.linhas.map(l => `<tr>${l.map(cel => `<td style="padding:7px; border:1px solid #cbd5e1; font-size:10px; color:#1e293b;">${cel}</td>`).join('')}</tr>`).join('');
 
   win.document.write(`
-    <html>
-    <head>
-      <title>${rel.titulo}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; color: #0f172a; }
-        @media print { body { margin: 10px; } }
-      </style>
-    </head>
+    <html><head><title>${rel.titulo}</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#0f172a;}</style></head>
     <body onload="setTimeout(() => window.print(), 500)">
       <div style="border-bottom:3px solid #f59e0b; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
         <div>
@@ -588,49 +467,31 @@ function gerarRelatorioCompletoPDF() {
           <h1 style="margin:4px 0; font-size:18px;">${rel.titulo}</h1>
           <div style="font-size:11px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
         </div>
-        <div style="text-align:right; font-size:10px; color:#64748b;">
-          Emitido em: ${new Date().toLocaleString('pt-BR')}<br/>
-          Por: ${usuarioLogado?.nome || 'Sistema'}
-        </div>
+        <div style="text-align:right; font-size:10px; color:#64748b;">Emitido em: ${new Date().toLocaleString('pt-BR')}</div>
       </div>
-
       <div style="display:flex; gap:10px; margin-bottom:16px;">${kpisHtml}</div>
-
-      <table style="width:100%; border-collapse:collapse;">
-        <thead><tr>${thHtml}</tr></thead>
-        <tbody>${trHtml}</tbody>
-      </table>
-    </body>
-    </html>
+      <table style="width:100%; border-collapse:collapse;"><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table>
+    </body></html>
   `);
   win.document.close();
 }
 
-// BOTÃO 3: GERADOR DE PNG DE 1 PÁGINA DO RELATÓRIO EXECUTIVO RESUMIDO (DIRETO PARA WHATSAPP / DIRETORIA)
 async function gerarResumoExecutivoPNG() {
-  if (typeof html2canvas === 'undefined') {
-    return alert('Biblioteca de imagem carregando. Tente novamente em 2 segundos.');
-  }
-
+  if (typeof html2canvas === 'undefined') return alert('Aguarde 2 segundos, biblioteca de imagem carregando...');
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio();
-  const topLinhas = rel.linhas.slice(0, 15); // Resumo executivo de 1 página (Top 15 registros filtrados)
+  const topLinhas = rel.linhas.slice(0, 15);
 
   const cardExecutivo = document.createElement('div');
   cardExecutivo.style.cssText = 'position:fixed; left:-9999px; top:0; width:960px; background:#ffffff; padding:28px; font-family:sans-serif; color:#0f172a; border:4px solid #0f172a;';
-
   cardExecutivo.innerHTML = `
     <div style="background:#0f172a; color:#ffffff; padding:18px 22px; border-radius:14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
       <div>
-        <div style="color:#fbbf24; font-size:11px; font-weight:900; letter-spacing:1px;">VILASA CMMS • RESUMO EXECUTIVO DE 1 PÁGINA</div>
+        <div style="color:#fbbf24; font-size:11px; font-weight:900;">VILASA CMMS • RESUMO EXECUTIVO DE 1 PÁGINA</div>
         <div style="font-size:20px; font-weight:900; margin-top:4px;">${rel.titulo}</div>
         <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">${rel.subtitulo}</div>
       </div>
-      <div style="text-align:right; font-size:11px; color:#fbbf24; font-weight:800;">
-        ${new Date().toLocaleString('pt-BR')}<br/>
-        <span style="color:#94a3b8;">Total Filtrado: ${rel.linhas.length} reg.</span>
-      </div>
+      <div style="text-align:right; font-size:11px; color:#fbbf24; font-weight:800;">${new Date().toLocaleString('pt-BR')}</div>
     </div>
-
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:18px;">
       ${rel.kpisResumo.map(k => `
         <div style="background:#f8fafc; border:2px solid #e2e8f0; border-left:5px solid #f59e0b; border-radius:10px; padding:12px;">
@@ -639,25 +500,11 @@ async function gerarResumoExecutivoPNG() {
         </div>
       `).join('')}
     </div>
-
     <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <thead>
-        <tr style="background:#1e293b; color:#fbbf24;">
-          ${rel.colunas.map(c => `<th style="padding:8px; text-align:left; border:1px solid #334155;">${c}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${topLinhas.map((l, idx) => `
-          <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-            ${l.map(cel => `<td style="padding:7px 8px; border:1px solid #cbd5e1; font-weight:600;">${cel}</td>`).join('')}
-          </tr>
-        `).join('')}
-      </tbody>
+      <thead><tr style="background:#1e293b; color:#fbbf24;">${rel.colunas.map(c => `<th style="padding:8px; text-align:left; border:1px solid #334155;">${c}</th>`).join('')}</tr></thead>
+      <tbody>${topLinhas.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map(cel => `<td style="padding:7px 8px; border:1px solid #cbd5e1; font-weight:600;">${cel}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>
-
-    ${rel.linhas.length > 15 ? `<div style="margin-top:10px; font-size:11px; font-weight:800; color:#64748b; text-align:right;">* Exibindo os 15 principais registros de um total de ${rel.linhas.length} filtrados na página.</div>` : ''}
   `;
-
   document.body.appendChild(cardExecutivo);
   try {
     const canvas = await html2canvas(cardExecutivo, { scale: 2, backgroundColor: '#ffffff' });
@@ -670,21 +517,16 @@ async function gerarResumoExecutivoPNG() {
   }
 }
 
-// ----------------------------------------------------------------------------
-// 6. BUSCA PAGINADA E FILTRO ESTRITO POR PREFIXO
-// ----------------------------------------------------------------------------
+// 6. BUSCA PAGINADA E FILTRO POR PREFIXO
 async function buscarTudoSemLimite(tabela, colunaOrdem = 'id', ascendente = true, selectQuery = '*') {
   let todosRegistros = [];
   let de = 0;
   const passo = 1000;
-
   while (true) {
     let query = db.from(tabela).select(selectQuery).range(de, de + passo - 1);
     if (colunaOrdem) query = query.order(colunaOrdem, { ascending: ascendente });
-
     const { data, error } = await query;
     if (error || !data || data.length === 0) break;
-
     todosRegistros = todosRegistros.concat(data);
     if (data.length < passo) break;
     de += passo;
@@ -694,27 +536,23 @@ async function buscarTudoSemLimite(tabela, colunaOrdem = 'id', ascendente = true
 
 function extrairPrefixoTag(textoOpcao) {
   const limpo = String(textoOpcao || '').trim().toUpperCase();
-  const partes = limpo.split(/\s+-\s+|\s+\|\s+|\s+/);
-  return partes[0] || limpo;
+  return limpo.split(/\s+-\s+|\s+\|\s+|\s+/)[0] || limpo;
 }
 
 function bateComPrefixoEquipamento(tagOuTexto, termoDigitado) {
   const termo = String(termoDigitado || '').trim().toUpperCase();
   if (!termo) return true;
   const prefixo = extrairPrefixoTag(tagOuTexto);
-  const prefixoSemTraco = prefixo.replace(/[^A-Z0-9]/g, '');
-  const termoSemTraco = termo.replace(/[^A-Z0-9]/g, '');
-  return prefixo.startsWith(termo) || prefixoSemTraco.startsWith(termoSemTraco);
+  return prefixo.startsWith(termo) || prefixo.replace(/[^A-Z0-9]/g, '').startsWith(termo.replace(/[^A-Z0-9]/g, ''));
 }
 
 function ativarBuscaPorPrefixoEmSelect(selectEl) {
   if (!selectEl || selectEl.dataset.prefixSearchBound === '1') return;
   if (selectEl.id === 'selectObraGlobalTopo' || selectEl.id === 'editorTabelaSelect') return;
-
   selectEl.dataset.prefixSearchBound = '1';
+
   const wrapper = document.createElement('div');
   wrapper.className = 'mb-1';
-
   const inputFiltro = document.createElement('input');
   inputFiltro.type = 'text';
   inputFiltro.placeholder = '🔍 Prefixo (ex: CB-05, EH-40)...';
@@ -725,32 +563,14 @@ function ativarBuscaPorPrefixoEmSelect(selectEl) {
 
   const salvarOpcoesOriginais = () => {
     if (inputFiltro.value.trim() !== '') return;
-    selectEl._opcoesOriginais = Array.from(selectEl.options).map(opt => ({
-      value: opt.value,
-      text: opt.text,
-      selected: opt.selected
-    }));
+    selectEl._opcoesOriginais = Array.from(selectEl.options).map(opt => ({ value: opt.value, text: opt.text }));
   };
   salvarOpcoesOriginais();
-
-  const observer = new MutationObserver(() => {
-    if (document.activeElement !== inputFiltro) {
-      inputFiltro.value = '';
-      salvarOpcoesOriginais();
-    }
-  });
-  observer.observe(selectEl, { childList: true });
 
   inputFiltro.addEventListener('input', () => {
     if (!selectEl._opcoesOriginais || selectEl._opcoesOriginais.length === 0) salvarOpcoesOriginais();
     const termo = inputFiltro.value.trim().toUpperCase();
-    const valorAtual = selectEl.value;
-
-    const filtradas = selectEl._opcoesOriginais.filter((opt, idx) => {
-      if (opt.value === '' && idx === 0) return true;
-      return bateComPrefixoEquipamento(opt.text, termo);
-    });
-
+    const filtradas = selectEl._opcoesOriginais.filter((opt, idx) => (opt.value === '' && idx === 0) || bateComPrefixoEquipamento(opt.text, termo));
     selectEl.innerHTML = '';
     filtradas.forEach(opt => {
       const o = document.createElement('option');
@@ -758,14 +578,11 @@ function ativarBuscaPorPrefixoEmSelect(selectEl) {
       o.text = opt.text;
       selectEl.appendChild(o);
     });
-
     const primeiraValida = filtradas.find(o => o.value !== '');
     if (termo && primeiraValida) selectEl.value = primeiraValida.value;
-    else if (filtradas.some(o => o.value === valorAtual)) selectEl.value = valorAtual;
   });
 }
 
-// Ponte de Segurança Offline/Online
 window.lerDadosComFallbackOffline = window.lerDadosComFallbackOffline || async function (chaveCache, fnQuerySupabase) {
   try {
     obterClienteSupabase();
@@ -788,6 +605,4 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
   if (operacao === 'DELETE') return await db.from(tabela).delete().eq('id', idRegistro);
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  restaurarSessaoSalva();
-});
+document.addEventListener('DOMContentLoaded', () => restaurarSessaoSalva());
