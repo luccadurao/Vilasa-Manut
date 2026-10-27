@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (9 COLUNAS LIMPAS, SEM TABELAS EXTRAS)
+// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (SÉRIE, PLACA E SELEÇÃO PARA QR CODE)
 // ============================================================================
 
 let filtroSituacaoFrota = 'ativo';
@@ -45,7 +45,7 @@ function renderizarPainelFrota() {
       <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3">
         <div>
           <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">GESTÃO DE ATIVOS E MOBILIZAÇÃO</span>
-          <h2 class="text-lg font-black">Controle de Frota, Obras & QR Codes</h2>
+          <h2 class="text-lg font-black">Controle de Frota, Série, Placa & QR Codes</h2>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           ${podeGerenciar ? `
@@ -53,8 +53,8 @@ function renderizarPainelFrota() {
               + Cadastrar Equipamento
             </button>
           ` : ''}
-          <button onclick="imprimirEtiquetasQREmLote()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-black text-xs">
-            <i class="fa-solid fa-qrcode mr-1"></i> Imprimir QR Codes (${lista.length})
+          <button onclick="imprimirQRCodesSelecionados()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-black text-xs shadow">
+            <i class="fa-solid fa-qrcode mr-1"></i> Imprimir QR Codes Selecionados
           </button>
         </div>
       </div>
@@ -67,19 +67,22 @@ function renderizarPainelFrota() {
           <button onclick="carregarFrota('vendido_baixado')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'vendido_baixado' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700'}">🏷️ Vendidos (${contVendidos})</button>
           <button onclick="carregarFrota('todos')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'todos' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">🌐 Todos</button>
         </div>
-        <input id="filtroPrefixoFrotaInput" type="text" value="${termoPrefixo}" oninput="renderizarPainelFrota()" placeholder="🔍 Buscar Prefixo..." class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase" />
+        <input id="filtroPrefixoFrotaInput" type="text" value="${termoPrefixo}" oninput="renderizarPainelFrota()" placeholder="🔍 Buscar Prefixo..." class="px-3 py-1.5 rounded-lg border text-xs font-bold uppercase" />
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
+              <th class="p-3 text-center w-10">
+                <input type="checkbox" id="chkSelecionarTodosQR" onclick="alternarSelecaoTodosQR(this)" class="rounded text-amber-500 cursor-pointer" title="Selecionar Todos" />
+              </th>
               <th class="p-3">Prefixo</th>
               <th class="p-3">Descrição / Marca / Modelo</th>
+              <th class="p-3">Nº Série / Placa</th>
               <th class="p-3">Vínculo</th>
               <th class="p-3">Obra Atual</th>
               <th class="p-3">Horímetro / KM</th>
-              <th class="p-3">Situação</th>
               <th class="p-3 text-right">Ações</th>
             </tr>
           </thead>
@@ -93,15 +96,21 @@ function renderizarPainelFrota() {
 
               return `
                 <tr class="hover:bg-slate-50">
+                  <td class="p-3 text-center">
+                    <input type="checkbox" value="${e.id}" class="chk-qr-equipamento rounded text-amber-500 cursor-pointer" />
+                  </td>
                   <td class="p-3 font-black"><span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${e.tag}</span></td>
                   <td class="p-3">
                     <div class="font-extrabold text-slate-900">${e.nome || '-'}</div>
                     <div class="text-[11px] text-slate-500">${e.marca || ''} ${e.modelo || ''}</div>
                   </td>
+                  <td class="p-3">
+                    <div class="font-bold text-slate-800">Série: ${e.numero_serie || 'N/I'}</div>
+                    ${e.placa ? `<div class="text-[11px] font-black text-amber-700">Placa: ${e.placa}</div>` : ''}
+                  </td>
                   <td class="p-3">${propBadge}</td>
                   <td class="p-3 font-bold text-slate-700">📍 ${nomeObra}</td>
                   <td class="p-3 font-black text-slate-900">${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}</td>
-                  <td class="p-3 font-bold uppercase text-[11px]">${e.situacao_ciclo || 'ativo'}</td>
                   <td class="p-3 text-right space-x-1 whitespace-nowrap">
                     <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
                     ${podeGerenciar ? `
@@ -119,45 +128,84 @@ function renderizarPainelFrota() {
   `;
 }
 
+function alternarSelecaoTodosQR(masterChk) {
+  const checks = document.querySelectorAll('.chk-qr-equipamento');
+  checks.forEach(chk => { chk.checked = masterChk.checked; });
+}
+
 function abrirModalCadastroEquipamentoV2() {
   if (!podeExecutarAcao('gerenciar_frota', true)) return;
   let modal = document.getElementById('modalNovoEquipV2');
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modalNovoEquipV2';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4';
+    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
     document.body.appendChild(modal);
   }
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border my-8 max-h-[90vh] overflow-y-auto">
       <h3 class="text-lg font-black text-slate-900 border-b pb-2 mb-4">Cadastrar Equipamento na Frota</h3>
       <div class="space-y-3 text-xs">
         <div class="grid grid-cols-2 gap-2">
-          <input id="eqV2Tag" type="text" placeholder="Prefixo (Ex: EH-45)" class="border rounded-lg p-2 font-black uppercase" />
-          <select id="eqV2Prop" class="border rounded-lg p-2 font-bold">
-            <option value="proprio">🏢 Próprio</option>
-            <option value="alugado">🤝 Alugado</option>
-          </select>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Prefixo (TAG)</label>
+            <input id="eqV2Tag" type="text" placeholder="Ex: EH-45" class="w-full border rounded-lg p-2 font-black uppercase" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Propriedade</label>
+            <select id="eqV2Prop" class="w-full border rounded-lg p-2 font-bold">
+              <option value="proprio">🏢 Próprio</option>
+              <option value="alugado">🤝 Alugado</option>
+            </select>
+          </div>
         </div>
-        <input id="eqV2Nome" type="text" placeholder="Descrição (Ex: ESCAVADEIRA HIDRÁULICA)" class="w-full border rounded-lg p-2 font-bold uppercase" />
+        <div>
+          <label class="block font-black uppercase text-slate-700 mb-1">Descrição</label>
+          <input id="eqV2Nome" type="text" placeholder="Ex: ESCAVADEIRA HIDRÁULICA" class="w-full border rounded-lg p-2 font-bold uppercase" />
+        </div>
         <div class="grid grid-cols-2 gap-2">
-          <input id="eqV2Marca" type="text" placeholder="Marca" class="border rounded-lg p-2 font-bold uppercase" />
-          <input id="eqV2Modelo" type="text" placeholder="Modelo" class="border rounded-lg p-2 font-bold uppercase" />
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Marca</label>
+            <input id="eqV2Marca" type="text" placeholder="Marca" class="w-full border rounded-lg p-2 font-bold uppercase" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Modelo</label>
+            <input id="eqV2Modelo" type="text" placeholder="Modelo" class="w-full border rounded-lg p-2 font-bold uppercase" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Número de Série</label>
+            <input id="eqV2Serie" type="text" placeholder="Nº de Série" class="w-full border rounded-lg p-2 font-bold uppercase" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Placa (Opcional)</label>
+            <input id="eqV2Placa" type="text" placeholder="Ex: ABC-1234" class="w-full border rounded-lg p-2 font-bold uppercase" />
+          </div>
         </div>
         <div class="grid grid-cols-3 gap-2">
-          <select id="eqV2Unidade" class="border rounded-lg p-2 font-bold">
-            <option value="H">Horas (H)</option>
-            <option value="KM">KM</option>
-          </select>
-          <input id="eqV2Horimetro" type="number" step="0.1" value="0" placeholder="Horímetro" class="border rounded-lg p-2 font-bold" />
-          <select id="eqV2Obra" class="border rounded-lg p-2 font-bold">
-            ${cacheObras.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>${o.codigo}</option>`).join('')}
-          </select>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Unidade</label>
+            <select id="eqV2Unidade" class="w-full border rounded-lg p-2 font-bold">
+              <option value="H">Horas (H)</option>
+              <option value="KM">KM</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Horímetro</label>
+            <input id="eqV2Horimetro" type="number" step="0.1" value="0" class="w-full border rounded-lg p-2 font-bold" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Obra</label>
+            <select id="eqV2Obra" class="w-full border rounded-lg p-2 font-bold">
+              ${cacheObras.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>${o.codigo}</option>`).join('')}
+            </select>
+          </div>
         </div>
       </div>
       <div class="mt-5 flex justify-end gap-2">
         <button onclick="document.getElementById('modalNovoEquipV2').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
-        <button onclick="salvarNovoEquipamentoV2()" class="px-5 py-2 rounded-lg bg-amber-500 font-black text-xs text-slate-950">Salvar</button>
+        <button onclick="salvarNovoEquipamentoV2()" class="px-5 py-2 rounded-lg bg-amber-500 font-black text-xs text-slate-950 shadow">Salvar Ativo</button>
       </div>
     </div>
   `;
@@ -174,6 +222,8 @@ async function salvarNovoEquipamentoV2() {
     nome,
     marca: document.getElementById('eqV2Marca').value.trim().toUpperCase(),
     modelo: document.getElementById('eqV2Modelo').value.trim().toUpperCase(),
+    numero_serie: document.getElementById('eqV2Serie').value.trim().toUpperCase(),
+    placa: document.getElementById('eqV2Placa').value.trim().toUpperCase(),
     propriedade: document.getElementById('eqV2Prop').value,
     situacao_ciclo: 'ativo',
     unidade_medida: document.getElementById('eqV2Unidade').value,
@@ -251,9 +301,13 @@ function abrirEtiquetaQRIndividual(equipId) {
   if (eq) imprimirJanelaEtiquetasQR([eq]);
 }
 
-function imprimirEtiquetasQREmLote() {
-  const lista = cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === filtroSituacaoFrota);
-  if (lista.length > 0) imprimirJanelaEtiquetasQR(lista);
+function imprimirQRCodesSelecionados() {
+  const selecionadosIds = Array.from(document.querySelectorAll('.chk-qr-equipamento:checked')).map(chk => chk.value);
+  if (selecionadosIds.length === 0) {
+    return alert('Selecione pelo menos um equipamento na caixa de seleção da tabela para imprimir o QR Code!');
+  }
+  const lista = cacheEquipamentos.filter(e => selecionadosIds.includes(String(e.id)));
+  imprimirJanelaEtiquetasQR(lista);
 }
 
 function imprimirJanelaEtiquetasQR(listaEquipamentos) {
@@ -265,7 +319,8 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
       <div style="border:3px solid #0f172a; border-radius:14px; padding:14px; width:240px; text-align:center; font-family:sans-serif; page-break-inside:avoid;">
         <div style="background:#f59e0b; color:#0f172a; font-weight:900; font-size:20px; padding:4px 8px; border-radius:8px;">${eq.tag}</div>
         <div style="font-size:11px; font-weight:700; margin:6px 0;">${eq.nome || ''}</div>
-        <img src="${imgApi}" style="width:170px; height:170px; margin:6px auto;" />
+        <div style="font-size:9px; font-weight:600; color:#475569;">Série: ${eq.numero_serie || 'N/I'} ${eq.placa ? `| Placa: ${eq.placa}` : ''}</div>
+        <img src="${imgApi}" style="width:160px; height:160px; margin:4px auto;" />
         <div style="font-size:10px; font-weight:800;">LEITURA DE HORÍMETRO / OS</div>
       </div>
     `;
@@ -275,10 +330,11 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
 }
 
 function exportarRelatorioFrotaCSV() {
-  const cab = ['PREFIXO', 'DESCRICAO', 'MARCA', 'MODELO', 'PROPRIEDADE', 'SITUACAO', 'HORIMETRO_ATUAL', 'UNIDADE'];
+  const cab = ['PREFIXO', 'DESCRICAO', 'MARCA', 'MODELO', 'NUMERO_SERIE', 'PLACA', 'PROPRIEDADE', 'SITUACAO', 'HORIMETRO_ATUAL', 'UNIDADE'];
   const linhas = cacheEquipamentos.map(e => [
     e.tag || '', (e.nome || '').replace(/;/g, ','), (e.marca || '').replace(/;/g, ','),
-    (e.modelo || '').replace(/;/g, ','), e.propriedade || 'proprio', e.situacao_ciclo || 'ativo',
+    (e.modelo || '').replace(/;/g, ','), e.numero_serie || '', e.placa || '',
+    e.propriedade || 'proprio', e.situacao_ciclo || 'ativo',
     String(e.horimetro_atual || 0).replace('.', ','), e.unidade_medida || 'H'
   ].join(';'));
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
