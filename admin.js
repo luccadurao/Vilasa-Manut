@@ -1,8 +1,8 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 9: ADMIN.JS (USUÁRIOS, OBRAS, IMPORTADOR COMPLETO E MODO DEUS)
+// VILASA CMMS V2 - MÓDULO 9: ADMIN.JS (100% CASADO COM AS 9 TABELAS LIMPAS)
 // ============================================================================
 
-let subAbaAdminAtual = 'usuarios'; // 'usuarios', 'importador', 'obras', 'modo_deus'
+let subAbaAdminAtual = 'usuarios';
 let cacheLinhasModoDeus = [];
 
 async function carregarUsuariosAdmin(subAba = subAbaAdminAtual) {
@@ -59,92 +59,67 @@ function renderizarPainelAdminV2() {
     </div>
   `;
 
-  if (subAbaAdminAtual === 'modo_deus') {
-    carregarTabelaEditorAdmin();
-  }
+  if (subAbaAdminAtual === 'modo_deus') carregarTabelaEditorAdmin();
 }
 
-// ----------------------------------------------------------------------------
-// 1. CENTRAL DE IMPORTAÇÃO DE PLANILHAS EXCEL/CSV + DOWNLOAD DE MODELOS PADRÃO
-// ----------------------------------------------------------------------------
+// 1. IMPORTADOR DE PLANILHAS EXCEL/CSV + DOWNLOAD DE MODELOS COM EXEMPLOS
 function renderizarSecaoImportadorPlanilhasExcel() {
   return `
-    <div class="space-y-4">
-      <div class="bg-amber-50 border border-amber-300 p-4 rounded-2xl text-xs text-amber-950">
-        <strong class="font-black uppercase block mb-1">💡 Como importar dados do Excel com zero erro:</strong>
-        1. Clique em <strong>"📄 Baixar Planilha Padrão (Com Exemplos)"</strong> no módulo desejado.<br/>
-        2. Abra o arquivo no Excel, preencha seus dados seguindo as linhas de exemplo e salve como <strong>CSV (separado por ponto-e-vírgula ou vírgula)</strong>.<br/>
-        3. Clique em <strong>"📤 Importar Planilha"</strong> para gravar tudo no banco de uma só vez!
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+        <div>
+          <span class="px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 font-black text-[10px] uppercase">Módulo 1 • Ativos</span>
+          <h3 class="text-base font-black text-slate-900 mt-1">🚜 Importar Frota</h3>
+          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DESCRICAO;MARCA;MODELO;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE</code></p>
+        </div>
+        <div class="space-y-2">
+          <button onclick="baixarPlanilhaModeloExemplo('frota')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300">
+            📄 Baixar Planilha Padrão Frota (Exemplos)
+          </button>
+          <label class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
+            <span>📤 Importar Planilha de Frota</span>
+            <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'frota')" />
+          </label>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        <!-- CARD 1: IMPORTAR FROTA -->
-        <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
-          <div>
-            <span class="px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 font-black text-[10px] uppercase">Módulo 1 • Ativos</span>
-            <h3 class="text-base font-black text-slate-900 mt-1">🚜 Importar Frota de Equipamentos</h3>
-            <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DESCRICAO;MARCA;MODELO;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE</code></p>
-          </div>
-          <div class="space-y-2">
-            <button onclick="baixarPlanilhaModeloExemplo('frota')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs flex items-center justify-center gap-2 border border-slate-300">
-              <i class="fa-solid fa-download text-amber-600"></i>
-              <span>📄 Baixar Planilha Padrão Frota (Exemplos)</span>
-            </button>
-            <label class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
-              <i class="fa-solid fa-file-import"></i>
-              <span>📤 Importar Planilha de Frota</span>
-              <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'frota')" />
-            </label>
-          </div>
+      <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+        <div>
+          <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-900 font-black text-[10px] uppercase">Módulo 2 • Estoque</span>
+          <h3 class="text-base font-black text-slate-900 mt-1">📦 Importar Almoxarifado</h3>
+          <p class="text-xs text-slate-500 mt-1">Colunas: <code>NOSSO_CODIGO;DESCRICAO;CODIGOS_PARALELOS;SALDO_ATUAL;UNIDADE;CUSTO_UNITARIO;ESTOQUE_MINIMO</code></p>
         </div>
-
-        <!-- CARD 2: IMPORTAR ALMOXARIFADO -->
-        <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
-          <div>
-            <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-900 font-black text-[10px] uppercase">Módulo 2 • Estoque</span>
-            <h3 class="text-base font-black text-slate-900 mt-1">📦 Importar Catálogo & Saldos do Almoxarifado</h3>
-            <p class="text-xs text-slate-500 mt-1">Colunas: <code>NOSSO_CODIGO;DESCRICAO;CODIGOS_PARALELOS;SALDO_ATUAL;UNIDADE;CUSTO_UNITARIO;ESTOQUE_MINIMO</code></p>
-          </div>
-          <div class="space-y-2">
-            <button onclick="baixarPlanilhaModeloExemplo('almoxarifado')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs flex items-center justify-center gap-2 border border-slate-300">
-              <i class="fa-solid fa-download text-emerald-600"></i>
-              <span>📄 Baixar Planilha Padrão Almox. (Exemplos)</span>
-            </button>
-            <label class="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
-              <i class="fa-solid fa-file-import"></i>
-              <span>📤 Importar Planilha de Almoxarifado</span>
-              <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'almoxarifado')" />
-            </label>
-          </div>
+        <div class="space-y-2">
+          <button onclick="baixarPlanilhaModeloExemplo('almoxarifado')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300">
+            📄 Baixar Planilha Padrão Almox. (Exemplos)
+          </button>
+          <label class="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
+            <span>📤 Importar Planilha de Almoxarifado</span>
+            <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'almoxarifado')" />
+          </label>
         </div>
+      </div>
 
-        <!-- CARD 3: IMPORTAR ORDENS DE SERVIÇO (OS COMPLETA + REP) -->
-        <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
-          <div>
-            <span class="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 font-black text-[10px] uppercase">Módulo 3 • Histórico Completo REP & PCM</span>
-            <h3 class="text-base font-black text-slate-900 mt-1">🔧 Importar Ordens de Serviço (Todos os 19 Campos)</h3>
-            <p class="text-[11px] text-slate-500 mt-1">Inclui Datas, Previsão, Parada, Motivo REP, Tipo, Prioridade, Problema, Causa, Serviço Executado, Componente, Local, Oficina Externa, Horímetro, Executantes e Status.</p>
-          </div>
-          <div class="space-y-2">
-            <button onclick="baixarPlanilhaModeloExemplo('os')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs flex items-center justify-center gap-2 border border-slate-300">
-              <i class="fa-solid fa-download text-blue-600"></i>
-              <span>📄 Baixar Planilha Padrão de OS (Exemplos)</span>
-            </button>
-            <label class="w-full py-2.5 px-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
-              <i class="fa-solid fa-file-import"></i>
-              <span>📤 Importar Planilha de OS</span>
-              <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'os')" />
-            </label>
-          </div>
+      <div class="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+        <div>
+          <span class="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 font-black text-[10px] uppercase">Módulo 3 • OS & REP</span>
+          <h3 class="text-base font-black text-slate-900 mt-1">🔧 Importar Ordens de Serviço</h3>
+          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_REP;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS</code></p>
         </div>
-
+        <div class="space-y-2">
+          <button onclick="baixarPlanilhaModeloExemplo('os')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300">
+            📄 Baixar Planilha Padrão de OS (Exemplos)
+          </button>
+          <label class="w-full py-2.5 px-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow">
+            <span>📤 Importar Planilha de OS</span>
+            <input type="file" accept=".csv,.txt" class="hidden" onchange="processarUploadPlanilhaCSV(event, 'os')" />
+          </label>
+        </div>
       </div>
     </div>
   `;
 }
 
-// Converte datas em formato BR (DD/MM/YYYY HH:mm) ou ISO (YYYY-MM-DD HH:mm) para ISO do Supabase
 function converterDataPlanilhaParaISO(str) {
   const limpo = String(str || '').trim();
   if (!limpo) return null;
@@ -176,11 +151,11 @@ function baixarPlanilhaModeloExemplo(tipo) {
       'VIL-0002;OLEO HIDRAULICO 68 BALDE 20L;SHELL TELLUS 68, IPIRANGA 68;25;BD;340.00;5'
     ].join('\n');
   } else if (tipo === 'os') {
-    nomeArq = 'MODELO_PADRAO_COMPLETO_OS_REP_VILASA.csv';
+    nomeArq = 'MODELO_PADRAO_OS_REP_VILASA.csv';
     conteudo = [
-      'PREFIXO;DATA_ABERTURA;DATA_INICIO;DATA_CONCLUSAO;PREVISAO_LIBERACAO;PARADA_SIM_NAO;MOTIVO_REP;TIPO;PRIORIDADE;DESCRICAO_PROBLEMA;CAUSA_FALHA;SERVICO_EXECUTADO;CODIGO_COMPONENTE;NOME_COMPONENTE;LOCAL_MANUTENCAO;OFICINA_EXTERNA;HORIMETRO_OS;EXECUTANTES_NOMES;STATUS',
-      'EH-40;24/10/2026 08:00;24/10/2026 08:30;24/10/2026 16:30;;SIM;CORRETIVA;corretiva;alta;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;FADIGA DE MATERIAL;SUBSTITUICAO DE MANGUEIRA 1 POL E COMPLETAGEM DE OLEO 68;SIS-HID;COMANDO HIDRAULICO;CAMPO;;4520.5;JOAO SILVA, CARLOS SOUZA;auditada_pcm',
-      'CB-12;25/10/2026 10:00;25/10/2026 10:15;;2026-10-28;SIM;MOTOR;corretiva;emergencia;FALHA DE INJECAO E PERDA DE POTENCIA;BICO INJETOR TRAVADO;RETIRADA DOS BICOS PARA TESTE EM BOMBA INJETORA;MOT-01;SISTEMA DE INJECAO;OFICINA;BOSCH DIESEL SERVICE;89410;PEDRO SANTOS;pausada_peca'
+      'PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_REP;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS',
+      'EH-40;24/10/2026 08:00;24/10/2026 16:30;SIM;CORRETIVA;CAMPO;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;SUBSTITUICAO DE MANGUEIRA 1 POL;JOAO SILVA, CARLOS SOUZA;4520.5;concluida',
+      'CB-12;25/10/2026 10:00;;SIM;MOTOR;OFICINA;FALHA DE INJECAO E PERDA DE POTENCIA;EM ANALISE NA BOMBA INJETORA;PEDRO SANTOS;89410;em_execucao'
     ].join('\n');
   }
 
@@ -197,7 +172,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 
   const texto = await file.text();
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (linhas.length < 2) return alert('A planilha está vazia ou contém apenas o cabeçalho!');
+  if (linhas.length < 2) return alert('Planilha vazia!');
 
   const separador = linhas[0].includes(';') ? ';' : ',';
   const dadosLinhas = linhas.slice(1);
@@ -221,11 +196,8 @@ async function processarUploadPlanilhaCSV(event, tipo) {
       };
 
       const existente = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === payload.tag);
-      if (existente) {
-        await db.from('equipamentos').update(payload).eq('id', existente.id);
-      } else {
-        await db.from('equipamentos').insert([payload]);
-      }
+      if (existente) await db.from('equipamentos').update(payload).eq('id', existente.id);
+      else await db.from('equipamentos').insert([payload]);
       importados++;
     }
   } else if (tipo === 'almoxarifado') {
@@ -238,31 +210,19 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 
       await db.from('pecas_estoque').insert([{
         id_interno,
-        codigo: codigos_paralelos[0] || id_interno,
         descricao: desc.toUpperCase(),
         codigos_paralelos,
         quantidade: parseFloat((saldo || '0').replace(',', '.')) || 0,
         unidade: (un || 'UN').toUpperCase(),
         custo_unitario: parseFloat((custo || '0').replace(',', '.')) || 0,
         estoque_minimo: parseFloat((estMin || '0').replace(',', '.')) || 0,
-        estocavel: true,
         obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
       }]);
       importados++;
     }
   } else if (tipo === 'os') {
-    const statusPermitidos = ['aberta', 'em_execucao', 'pausada_peca', 'pausada_outros', 'aguardando_pcm', 'concluida_oficina', 'auditada_pcm'];
-    const tiposPermitidos = ['corretiva', 'preventiva', 'falha_operacional'];
-    const prioridadesPermitidas = ['baixa', 'media', 'alta', 'emergencia'];
-
     for (const linha of dadosLinhas) {
-      const cols = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
-      const [
-        tag, dtAb, dtIni, dtConc, prevLib, paradaStr, motivoRep, tipoOS, prioOS,
-        problema, causa, servico, codComp, nomeComp, localManut, oficExt,
-        horimetroStr, executantesStr, statusStr
-      ] = cols;
-
+      const [tag, dtAb, dtConc, paradaStr, motivoRep, localManut, problema, servico, mecNome, horStr, statusStr] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
       if (!tag || !problema) continue;
 
       const eq = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === tag.toUpperCase());
@@ -270,69 +230,40 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 
       const parada = !['NAO', 'NÃO', 'FALSE', '0'].includes(String(paradaStr || 'SIM').toUpperCase());
       const abertaISO = converterDataPlanilhaParaISO(dtAb) || new Date().toISOString();
-      const iniciadaISO = converterDataPlanilhaParaISO(dtIni) || abertaISO;
       const concluidaISO = converterDataPlanilhaParaISO(dtConc);
-
-      const tipoLimpo = tiposPermitidos.includes(String(tipoOS || '').toLowerCase()) ? String(tipoOS).toLowerCase() : 'corretiva';
-      const prioLimpa = prioridadesPermitidas.includes(String(prioOS || '').toLowerCase()) ? String(prioOS).toLowerCase() : 'alta';
-
-      let statusFinal = String(statusStr || '').toLowerCase();
-      if (!statusPermitidos.includes(statusFinal)) {
-        statusFinal = concluidaISO ? 'auditada_pcm' : 'aberta';
-      }
-
-      const listaExec = (executantesStr || '').split(/[,|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
-      const horNum = parseFloat(String(horimetroStr || '').replace(',', '.'));
+      const horNum = parseFloat(String(horStr || '').replace(',', '.'));
 
       await db.from('ordens_servico').insert([{
         equipamento_id: eq.id,
         obra_id: eq.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
         aberta_em: abertaISO,
-        iniciada_em: iniciadaISO,
         concluida_em: concluidaISO,
-        previsao_liberacao: prevLib || null,
-        maquina_parada: parada,
         parada_obrigatoria: parada,
         motivo_rep: (motivoRep || 'CORRETIVA').toUpperCase(),
-        tipo: tipoLimpo,
-        prioridade: prioLimpa,
-        descricao_problema: problema.toUpperCase(),
-        causa_falha: causa ? causa.toUpperCase() : null,
-        servico_executado: servico ? servico.toUpperCase() : null,
-        codigo_componente: (codComp || '').toUpperCase(),
-        nome_componente: (nomeComp || '').toUpperCase(),
         local_manutencao_pcm: (localManut || 'OFICINA').toUpperCase(),
-        manutencao_externa: Boolean(oficExt),
-        oficina_externa: (oficExt || '').toUpperCase(),
+        descricao_problema: problema.toUpperCase(),
+        servico_executado: (servico || '').toUpperCase(),
+        mecanico_nome: (mecNome || '').toUpperCase(),
         horimetro_os: isNaN(horNum) ? null : horNum,
-        executantes_nomes: listaExec,
-        quantidade_executantes: Math.max(1, listaExec.length),
-        status: statusFinal,
-        origem_atendimento: 'importacao_planilha_pcm',
-        classificada_pcm: true,
-        classificada_por_nome: usuarioLogado?.nome || 'PCM',
-        aberto_por: usuarioLogado?.id || null,
-        aberto_por_nome: usuarioLogado?.nome || 'PCM'
+        status: (statusStr || (concluidaISO ? 'concluida' : 'aberta')).toLowerCase()
       }]);
       importados++;
     }
   }
 
   event.target.value = '';
-  alert(`✅ Importação concluída! ${importados} registro(s) de ${tipo.toUpperCase()} foram gravados com todos os campos.`);
+  alert(`✅ ${importados} registro(s) de ${tipo.toUpperCase()} importados com sucesso!`);
   await carregarUsuariosAdmin('importador');
 }
 
-// ----------------------------------------------------------------------------
-// 2. GESTÃO DE USUÁRIOS MULTI-CARGO & MULTI-OBRA
-// ----------------------------------------------------------------------------
+// 2. GESTÃO DE USUÁRIOS (SEM COLUNAS DUPLICADAS)
 function renderizarSecaoUsuariosMultiCargo() {
   const listaCargosDisponiveis = [
     { id: 'mecanico', label: '🔧 Mecânico / Comboio (Aparece na Lista de Executantes)' },
     { id: 'encarregado', label: '👷 Encarregado (Apenas abre OS e vê abertas)' },
     { id: 'almoxarife', label: '📦 Almoxarife' },
     { id: 'pcm', label: '📋 Analista PCM' },
-    { id: 'engenheiro', label: '⚙️ Engenheiro (Total exceto Admin)' },
+    { id: 'engenheiro', label: '⚙️ Engenheiro' },
     { id: 'gestor', label: '👁️ Gestor (Somente Visualização e Relatórios)' },
     { id: 'admin', label: '👑 Administrador Master' }
   ];
@@ -342,30 +273,18 @@ function renderizarSecaoUsuariosMultiCargo() {
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
         <h3 class="text-sm font-black uppercase text-slate-900 border-b pb-2">➕ Cadastrar / Atualizar Usuário</h3>
         <input type="hidden" id="admUserIdEdit" value="" />
-
         <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block font-black uppercase text-slate-600 mb-1">Matrícula / Login</label>
-            <input id="admUserMatricula" type="text" placeholder="Ex: 2040" class="w-full border rounded-lg p-2 font-black uppercase" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-600 mb-1">Senha de Acesso</label>
-            <input id="admUserSenha" type="text" placeholder="Senha" class="w-full border rounded-lg p-2 font-bold" />
-          </div>
+          <input id="admUserMatricula" type="text" placeholder="Login / Matrícula" class="border rounded-lg p-2 font-black uppercase" />
+          <input id="admUserSenha" type="text" placeholder="Senha" class="border rounded-lg p-2 font-bold" />
         </div>
+        <input id="admUserNome" type="text" placeholder="Nome Completo" class="w-full border rounded-lg p-2 font-bold uppercase" />
 
         <div>
-          <label class="block font-black uppercase text-slate-600 mb-1">Nome Completo</label>
-          <input id="admUserNome" type="text" placeholder="Ex: JOÃO SILVA" class="w-full border rounded-lg p-2 font-bold uppercase" />
-        </div>
-
-        <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">1. Cargos (Marque quantos quiser):</label>
-          <div id="admCheckboxesCargos" class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <label class="block font-black uppercase text-slate-700 mb-1">1. Cargos:</label>
+          <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border">
             ${listaCargosDisponiveis.map(c => `
               <label class="flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
-                <input type="checkbox" value="${c.id}" class="chk-cargo-adm rounded text-amber-500" />
-                <span>${c.label}</span>
+                <input type="checkbox" value="${c.id}" class="chk-cargo-adm rounded" /><span>${c.label}</span>
               </label>
             `).join('')}
           </div>
@@ -373,57 +292,37 @@ function renderizarSecaoUsuariosMultiCargo() {
 
         <div>
           <label class="block font-black uppercase text-slate-700 mb-1">2. Obras Liberadas:</label>
-          <div id="admCheckboxesObras" class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-36 overflow-y-auto">
+          <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border max-h-36 overflow-y-auto">
             <label class="flex items-center gap-2 font-black text-amber-800 cursor-pointer">
-              <input type="checkbox" value="TODAS" checked class="chk-obra-adm rounded" />
-              <span>🌐 TODAS AS OBRAS</span>
+              <input type="checkbox" value="TODAS" checked class="chk-obra-adm rounded" /><span>🌐 TODAS AS OBRAS</span>
             </label>
             ${cacheObras.map(o => `
               <label class="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
-                <input type="checkbox" value="${o.id}" class="chk-obra-adm rounded" />
-                <span>📍 ${o.codigo} - ${o.nome}</span>
+                <input type="checkbox" value="${o.id}" class="chk-obra-adm rounded" /><span>📍 ${o.codigo} - ${o.nome}</span>
               </label>
             `).join('')}
           </div>
         </div>
 
         <button onclick="salvarUsuarioMultiCargoAdmin()" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase shadow">
-          💾 Salvar Perfil de Usuário
+          💾 Salvar Usuário
         </button>
       </div>
 
       <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
         <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
-              <th class="p-3">Login / Nome</th>
-              <th class="p-3">Cargos Atribuídos</th>
-              <th class="p-3">Status</th>
-              <th class="p-3 text-right">Ações</th>
-            </tr>
-          </thead>
+          <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Login / Nome</th><th class="p-3">Cargos</th><th class="p-3">Status</th><th class="p-3 text-right">Ações</th></tr></thead>
           <tbody class="divide-y divide-slate-200">
             ${cacheUsuarios.map(u => {
               const cargos = obterCargosUsuario(u);
               return `
                 <tr class="hover:bg-slate-50">
-                  <td class="p-3">
-                    <span class="bg-slate-900 text-amber-400 font-black px-2 py-0.5 rounded text-[11px]">${u.matricula}</span>
-                    <div class="font-extrabold text-slate-900 mt-1">${u.nome}</div>
-                  </td>
-                  <td class="p-3">
-                    <div class="flex flex-wrap gap-1">
-                      ${cargos.map(c => `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-black uppercase text-[10px]">${c}</span>`).join('')}
-                    </div>
-                  </td>
-                  <td class="p-3 font-black ${u.ativo !== false ? 'text-emerald-700' : 'text-rose-600'}">
-                    ${u.ativo !== false ? 'ATIVO' : 'INATIVO'}
-                  </td>
+                  <td class="p-3"><span class="bg-slate-900 text-amber-400 font-black px-2 py-0.5 rounded text-[11px]">${u.matricula}</span><div class="font-extrabold mt-1">${u.nome}</div></td>
+                  <td class="p-3"><div class="flex flex-wrap gap-1">${cargos.map(c => `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-black uppercase text-[10px]">${c}</span>`).join('')}</div></td>
+                  <td class="p-3 font-black ${u.ativo !== false ? 'text-emerald-700' : 'text-rose-600'}">${u.ativo !== false ? 'ATIVO' : 'INATIVO'}</td>
                   <td class="p-3 text-right space-x-1 whitespace-nowrap">
                     <button onclick="preencherUsuarioParaEdicaoAdmin('${u.id}')" class="px-2.5 py-1 rounded bg-blue-100 text-blue-900 font-bold">✏️ Editar</button>
-                    <button onclick="alternarAtivoUsuarioAdmin('${u.id}', ${u.ativo !== false})" class="px-2.5 py-1 rounded bg-slate-200 text-slate-700 font-bold">
-                      ${u.ativo !== false ? '🚫 Inativar' : '✅ Ativar'}
-                    </button>
+                    <button onclick="alternarAtivoUsuarioAdmin('${u.id}', ${u.ativo !== false})" class="px-2.5 py-1 rounded bg-slate-200 text-slate-700 font-bold">${u.ativo !== false ? '🚫 Inativar' : '✅ Ativar'}</button>
                   </td>
                 </tr>
               `;
@@ -438,10 +337,9 @@ function renderizarSecaoUsuariosMultiCargo() {
 function preencherUsuarioParaEdicaoAdmin(userId) {
   const u = cacheUsuarios.find(x => String(x.id) === String(userId));
   if (!u) return;
-
   document.getElementById('admUserIdEdit').value = u.id;
   document.getElementById('admUserMatricula').value = u.matricula || '';
-  document.getElementById('admUserSenha').value = u.senha_acesso || u.senha || '';
+  document.getElementById('admUserSenha').value = u.senha_acesso || '';
   document.getElementById('admUserNome').value = u.nome || '';
 
   const cargos = obterCargosUsuario(u);
@@ -456,31 +354,24 @@ async function salvarUsuarioMultiCargoAdmin() {
   const matricula = document.getElementById('admUserMatricula').value.trim().toUpperCase();
   const senha_acesso = document.getElementById('admUserSenha').value.trim();
   const nome = document.getElementById('admUserNome').value.trim().toUpperCase();
+  const cargos_lista = Array.from(document.querySelectorAll('.chk-cargo-adm:checked')).map(c => c.value);
+  const obras_permitidas = Array.from(document.querySelectorAll('.chk-obra-adm:checked')).map(o => o.value);
 
-  const cargosSelecionados = Array.from(document.querySelectorAll('.chk-cargo-adm:checked')).map(c => c.value);
-  const obrasSelecionadas = Array.from(document.querySelectorAll('.chk-obra-adm:checked')).map(o => o.value);
-
-  if (!matricula || !senha_acesso || !nome || cargosSelecionados.length === 0) {
-    return alert('Preencha Matrícula, Senha, Nome e marque pelo menos 1 Cargo!');
+  if (!matricula || !senha_acesso || !nome || cargos_lista.length === 0) {
+    return alert('Preencha Login, Senha, Nome e marque pelo menos 1 Cargo!');
   }
 
   const payload = {
     matricula,
     senha_acesso,
     nome,
-    cargo_base: cargosSelecionados[0],
-    cargos_lista: cargosSelecionados,
-    obras_permitidas: obrasSelecionadas.length > 0 ? obrasSelecionadas : ['TODAS'],
+    cargos_lista,
+    obras_permitidas: obras_permitidas.length > 0 ? obras_permitidas : ['TODAS'],
     ativo: true
   };
 
-  if (idEdit) {
-    const { error } = await db.from('perfis_usuarios').update(payload).eq('id', idEdit);
-    if (error) return alert('Erro ao atualizar usuário: ' + error.message);
-  } else {
-    const { error } = await db.from('perfis_usuarios').insert([payload]);
-    if (error) return alert('Erro ao criar usuário: ' + error.message);
-  }
+  if (idEdit) await db.from('perfis_usuarios').update(payload).eq('id', idEdit);
+  else await db.from('perfis_usuarios').insert([payload]);
 
   alert('✅ Usuário salvo com sucesso!');
   await carregarUsuariosAdmin('usuarios');
@@ -491,40 +382,21 @@ async function alternarAtivoUsuarioAdmin(userId, estadoAtual) {
   await carregarUsuariosAdmin('usuarios');
 }
 
-// ----------------------------------------------------------------------------
-// 3. GESTÃO DE OBRAS
-// ----------------------------------------------------------------------------
+// 3. GESTÃO DE OBRAS (3 COLUNAS LIMPAS: codigo, nome, ativa)
 function renderizarSecaoGerenciarObras() {
   return `
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 text-xs">
+      <div class="bg-white p-5 rounded-2xl border space-y-3 text-xs">
         <h3 class="text-sm font-black uppercase text-slate-900 border-b pb-2">🏗️ Nova Frente de Obra</h3>
         <input id="admObraCodigo" type="text" placeholder="Código (Ex: OBRA-02)" class="w-full border rounded-lg p-2 font-black uppercase" />
         <input id="admObraNome" type="text" placeholder="Nome da Obra" class="w-full border rounded-lg p-2 font-bold uppercase" />
-        <input id="admObraLocal" type="text" placeholder="Cidade / UF" class="w-full border rounded-lg p-2 font-semibold uppercase" />
-        <button onclick="criarNovaObraAdmin()" class="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black uppercase shadow">
-          + Cadastrar Obra
-        </button>
+        <button onclick="criarNovaObraAdmin()" class="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black uppercase shadow">+ Cadastrar Obra</button>
       </div>
-      <div class="md:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+      <div class="md:col-span-2 bg-white rounded-2xl border overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
-              <th class="p-3">Código</th>
-              <th class="p-3">Nome da Obra</th>
-              <th class="p-3">Localização</th>
-              <th class="p-3">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200">
-            ${cacheObras.map(o => `
-              <tr>
-                <td class="p-3 font-black text-amber-700">${o.codigo}</td>
-                <td class="p-3 font-extrabold text-slate-900">${o.nome}</td>
-                <td class="p-3 text-slate-600">${o.localizacao || '-'}</td>
-                <td class="p-3 font-black text-emerald-700">${o.ativa !== false ? 'ATIVA' : 'ENCERRADA'}</td>
-              </tr>
-            `).join('')}
+          <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Código</th><th class="p-3">Nome da Obra</th><th class="p-3">Status</th></tr></thead>
+          <tbody class="divide-y">
+            ${cacheObras.map(o => `<tr><td class="p-3 font-black text-amber-700">${o.codigo}</td><td class="p-3 font-extrabold">${o.nome}</td><td class="p-3 font-black text-emerald-700">${o.ativa !== false ? 'ATIVA' : 'ENCERRADA'}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
@@ -535,88 +407,46 @@ function renderizarSecaoGerenciarObras() {
 async function criarNovaObraAdmin() {
   const codigo = document.getElementById('admObraCodigo').value.trim().toUpperCase();
   const nome = document.getElementById('admObraNome').value.trim().toUpperCase();
-  const localizacao = document.getElementById('admObraLocal').value.trim().toUpperCase();
-  if (!codigo || !nome) return alert('Informe o Código e o Nome da Obra!');
-
-  await db.from('obras').insert([{ codigo, nome, localizacao, ativa: true }]);
+  if (!codigo || !nome) return alert('Informe Código e Nome da Obra!');
+  await db.from('obras').insert([{ codigo, nome, ativa: true }]);
   await carregarObrasEMontarSeletorTopo();
   await carregarUsuariosAdmin('obras');
 }
 
-// ----------------------------------------------------------------------------
-// 4. CONTROLE MESTRE (MODO DEUS) 100% FUNCIONAL E EDITÁVEL AO VIVO
-// ----------------------------------------------------------------------------
+// 4. CONTROLE MESTRE (MODO DEUS) EDITÁVEL
 function renderizarSecaoModoDeusTabelas() {
   return `
-    <div class="space-y-5">
-      <!-- Fusão de Equipamentos Duplicados -->
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 text-xs">
-        <h3 class="text-sm font-black uppercase text-slate-900">🔗 Fusão de Equipamentos Duplicados (Unificar Histórico)</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <select id="fusaoOrigemSelect" class="border rounded-lg p-2 font-bold">
-            <option value="">-- 1. Equipamento Duplicado (Será Removido) --</option>
-            ${cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('')}
+    <div class="bg-white p-5 rounded-2xl border-2 border-amber-500 space-y-3 text-xs">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 class="text-sm font-black uppercase text-slate-900">⚡ Controle Mestre: Editor Direto das 9 Tabelas</h3>
+          <p class="text-[11px] text-slate-500">Altere qualquer célula e clique em <strong>💾 Salvar</strong> na linha correspondente.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <input id="filtroBuscaModoDeus" type="text" oninput="filtrarLinhasModoDeusNaTela()" placeholder="🔍 Filtrar..." class="border rounded-lg px-3 py-1.5 font-bold uppercase" />
+          <select id="editorTabelaSelect" onchange="carregarTabelaEditorAdmin()" class="border-2 border-slate-900 rounded-lg p-2 font-black bg-amber-50">
+            <option value="equipamentos">1. equipamentos</option>
+            <option value="pecas_estoque">2. pecas_estoque</option>
+            <option value="ordens_servico">3. ordens_servico</option>
+            <option value="planos_preventiva">4. planos_preventiva</option>
+            <option value="execucoes_preventiva">5. execucoes_preventiva</option>
+            <option value="movimentacoes_almoxarifado">6. movimentacoes_almoxarifado</option>
+            <option value="perfis_usuarios">7. perfis_usuarios</option>
+            <option value="obras">8. obras</option>
+            <option value="diario_horimetro">9. diario_horimetro</option>
           </select>
-          <select id="fusaoDestinoSelect" class="border rounded-lg p-2 font-bold">
-            <option value="">-- 2. Equipamento Oficial (Receberá Tudo) --</option>
-            ${cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('')}
-          </select>
-          <button onclick="executarFusaoEquipamentosAdmin()" class="bg-rose-600 hover:bg-rose-500 text-white font-black rounded-lg px-4 py-2">
-            ⚡ Unificar e Excluir Duplicata
-          </button>
         </div>
       </div>
-
-      <!-- Editor Universal de Tabelas (Modo Deus Editável) -->
-      <div class="bg-white p-5 rounded-2xl border-2 border-amber-500 space-y-3 text-xs">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 class="text-sm font-black uppercase text-slate-900">⚡ Controle Mestre: Editor Direto de Tabelas do Banco</h3>
-            <p class="text-[11px] text-slate-500">Altere qualquer célula abaixo e clique em <strong>💾 Salvar</strong> na linha correspondente para gravar direto no Supabase.</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <input id="filtroBuscaModoDeus" type="text" oninput="filtrarLinhasModoDeusNaTela()" placeholder="🔍 Filtrar texto na tabela..."
-              class="border border-slate-300 rounded-lg px-3 py-1.5 font-bold uppercase" />
-            <select id="editorTabelaSelect" onchange="carregarTabelaEditorAdmin()" class="border-2 border-slate-900 rounded-lg p-2 font-black bg-amber-50">
-              <option value="equipamentos">Tabela: equipamentos (Frota)</option>
-              <option value="pecas_estoque">Tabela: pecas_estoque (Almoxarifado)</option>
-              <option value="ordens_servico">Tabela: ordens_servico (OS Corretivas)</option>
-              <option value="execucoes_preventiva">Tabela: execucoes_preventiva (Preventivas)</option>
-              <option value="perfis_usuarios">Tabela: perfis_usuarios (Usuários)</option>
-              <option value="obras">Tabela: obras</option>
-            </select>
-          </div>
-        </div>
-        <div id="containerTabelaModoDeus" class="overflow-x-auto max-h-[520px] border rounded-xl"></div>
-      </div>
+      <div id="containerTabelaModoDeus" class="overflow-x-auto max-h-[520px] border rounded-xl"></div>
     </div>
   `;
-}
-
-async function executarFusaoEquipamentosAdmin() {
-  const idOrigem = document.getElementById('fusaoOrigemSelect').value;
-  const idDestino = document.getElementById('fusaoDestinoSelect').value;
-  if (!idOrigem || !idDestino || idOrigem === idDestino) return alert('Selecione dois equipamentos distintos!');
-  if (!confirm('Confirma transferir todo o histórico para o equipamento oficial e apagar a duplicata?')) return;
-
-  await Promise.all([
-    db.from('ordens_servico').update({ equipamento_id: idDestino }).eq('equipamento_id', idOrigem),
-    db.from('execucoes_preventiva').update({ equipamento_id: idDestino }).eq('equipamento_id', idOrigem),
-    db.from('diario_horimetro').update({ equipamento_id: idDestino }).eq('equipamento_id', idOrigem),
-    db.from('movimentacoes_almoxarifado').update({ equipamento_id: idDestino }).eq('equipamento_id', idOrigem)
-  ]);
-  await db.from('equipamentos').delete().eq('id', idOrigem);
-
-  alert('✅ Equipamentos unificados com sucesso!');
-  await carregarUsuariosAdmin('modo_deus');
 }
 
 async function carregarTabelaEditorAdmin() {
   const tabela = document.getElementById('editorTabelaSelect')?.value || 'equipamentos';
   const cont = document.getElementById('containerTabelaModoDeus');
   if (!cont) return;
-
-  cont.innerHTML = `<p class="p-4 text-slate-500 font-bold">Carregando registros editáveis de ${tabela}...</p>`;
+  cont.innerHTML = `<p class="p-4 text-slate-500 font-bold">Carregando ${tabela}...</p>`;
   cacheLinhasModoDeus = await buscarTudoSemLimite(tabela, null, false);
   filtrarLinhasModoDeusNaTela();
 }
@@ -633,11 +463,8 @@ function filtrarLinhasModoDeusNaTela() {
   }
 
   let lista = cacheLinhasModoDeus;
-  if (termo) {
-    lista = lista.filter(row => JSON.stringify(row).toUpperCase().includes(termo));
-  }
-
-  const colunasEditaveis = Object.keys(cacheLinhasModoDeus[0]).filter(c => c !== 'id' && c !== 'criado_em').slice(0, 7);
+  if (termo) lista = lista.filter(row => JSON.stringify(row).toUpperCase().includes(termo));
+  const colunasEditaveis = Object.keys(cacheLinhasModoDeus[0]).filter(c => c !== 'id');
 
   cont.innerHTML = `
     <table class="w-full text-left border-collapse text-[11px]">
@@ -649,26 +476,16 @@ function filtrarLinhasModoDeusNaTela() {
       </thead>
       <tbody class="divide-y divide-slate-200">
         ${lista.slice(0, 150).map(row => `
-          <tr class="hover:bg-amber-50/40" data-row-id="${row.id}">
-            <td class="p-1.5 border border-slate-200 whitespace-nowrap space-x-1">
-              <button onclick="salvarLinhaEditadaModoDeus('${tabela}', '${row.id}', this)" class="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black">
-                💾 Salvar
-              </button>
-              <button onclick="excluirLinhaModoDeus('${tabela}', '${row.id}', this)" class="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-black">
-                🗑️
-              </button>
+          <tr class="hover:bg-amber-50/40">
+            <td class="p-1.5 border whitespace-nowrap space-x-1">
+              <button onclick="salvarLinhaEditadaModoDeus('${tabela}', '${row.id}', this)" class="px-2 py-1 rounded bg-emerald-500 text-slate-950 font-black">💾 Salvar</button>
+              <button onclick="excluirLinhaModoDeus('${tabela}', '${row.id}', this)" class="px-2 py-1 rounded bg-rose-600 text-white font-black">🗑️</button>
             </td>
             ${colunasEditaveis.map(col => {
-              const valOriginal = row[col];
-              const ehObjeto = typeof valOriginal === 'object' && valOriginal !== null;
-              const textoVal = ehObjeto ? JSON.stringify(valOriginal) : String(valOriginal ?? '');
-              return `
-                <td class="p-1 border border-slate-200">
-                  <input type="text" data-col="${col}" data-is-json="${ehObjeto ? '1' : '0'}"
-                    value="${textoVal.replace(/"/g, '&quot;')}"
-                    class="inp-celula-modo-deus w-full min-w-[120px] px-1.5 py-1 rounded border border-slate-300 font-semibold text-slate-900 focus:border-amber-500 focus:bg-white" />
-                </td>
-              `;
+              const val = row[col];
+              const ehObj = typeof val === 'object' && val !== null;
+              const txt = ehObj ? JSON.stringify(val) : String(val ?? '');
+              return `<td class="p-1 border"><input type="text" data-col="${col}" data-is-json="${ehObj ? '1' : '0'}" value="${txt.replace(/"/g, '&quot;')}" class="inp-celula-modo-deus w-full min-w-[110px] px-1.5 py-1 rounded border font-semibold" /></td>`;
             }).join('')}
           </tr>
         `).join('')}
@@ -679,39 +496,27 @@ function filtrarLinhasModoDeusNaTela() {
 
 async function salvarLinhaEditadaModoDeus(tabela, idRegistro, btnEl) {
   const tr = btnEl.closest('tr');
-  if (!tr) return;
-
-  const inputs = Array.from(tr.querySelectorAll('.inp-celula-modo-deus'));
   const payload = {};
-
-  for (const inp of inputs) {
+  tr.querySelectorAll('.inp-celula-modo-deus').forEach(inp => {
     const col = inp.dataset.col;
-    const isJson = inp.dataset.isJson === '1';
-    const rawVal = inp.value.trim();
-
-    if (rawVal === '') {
-      payload[col] = null;
-    } else if (isJson) {
-      try { payload[col] = JSON.parse(rawVal); } catch (e) { payload[col] = rawVal.split(',').map(s => s.trim()); }
-    } else if (rawVal === 'true') {
-      payload[col] = true;
-    } else if (rawVal === 'false') {
-      payload[col] = false;
-    } else {
-      payload[col] = rawVal;
-    }
-  }
+    const raw = inp.value.trim();
+    if (raw === '') payload[col] = null;
+    else if (inp.dataset.isJson === '1') {
+      try { payload[col] = JSON.parse(raw); } catch (e) { payload[col] = raw.split(',').map(s => s.trim()); }
+    } else if (raw === 'true') payload[col] = true;
+    else if (raw === 'false') payload[col] = false;
+    else payload[col] = raw;
+  });
 
   const { error } = await db.from(tabela).update(payload).eq('id', idRegistro);
-  if (error) return alert('Erro ao salvar alteração: ' + error.message);
-
+  if (error) return alert('Erro ao salvar: ' + error.message);
   btnEl.innerText = '✅ Salvo!';
   setTimeout(() => { btnEl.innerText = '💾 Salvar'; }, 1500);
 }
 
 async function excluirLinhaModoDeus(tabela, idRegistro, btnEl) {
-  if (!confirm(`Tem certeza que deseja excluir permanentemente este registro da tabela ${tabela}?`)) return;
+  if (!confirm(`Excluir registro de ${tabela}?`)) return;
   const { error } = await db.from(tabela).delete().eq('id', idRegistro);
-  if (error) return alert('Erro ao excluir (verifique se há vínculos em outras tabelas): ' + error.message);
+  if (error) return alert('Erro ao excluir: ' + error.message);
   btnEl.closest('tr')?.remove();
 }
