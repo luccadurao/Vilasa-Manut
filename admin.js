@@ -139,9 +139,9 @@ function baixarPlanilhaModeloExemplo(tipo) {
   if (tipo === 'frota') {
     nomeArq = 'MODELO_PADRAO_FROTA_VILASA.csv';
     conteudo = [
-      'PREFIXO;DESCRICAO;MARCA;MODELO;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE',
-      'EH-40;ESCAVADEIRA HIDRAULICA;CATERPILLAR;320D2L;H;4520.5;proprio',
-      'CB-12;CAMINHAO BASCULANTE;MERCEDES-BENZ;AXOR 3131;KM;89400;alugado'
+      'PREFIXO;DESCRICAO;MARCA;MODELO;NUMERO_SERIE;PLACA;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE',
+      'EH-40;ESCAVADEIRA HIDRAULICA;CATERPILLAR;320D2L;CAT320DX9988;;H;4520.5;proprio',
+      'CB-12;CAMINHAO BASCULANTE;MERCEDES-BENZ;AXOR 3131;MB3131ZZ4411;ABC-1234;KM;89400;alugado'
     ].join('\n');
   } else if (tipo === 'almoxarifado') {
     nomeArq = 'MODELO_PADRAO_ALMOXARIFADO_VILASA.csv';
@@ -180,7 +180,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 
   if (tipo === 'frota') {
     for (const linha of dadosLinhas) {
-      const [tag, nome, marca, modelo, unidade, horimetro, propriedade] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
+      const [tag, nome, marca, modelo, numSerie, placa, unidade, horimetro, propriedade] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
       if (!tag || !nome) continue;
 
       const payload = {
@@ -188,6 +188,8 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         nome: nome.toUpperCase(),
         marca: (marca || '').toUpperCase(),
         modelo: (modelo || '').toUpperCase(),
+        numero_serie: (numSerie || '').toUpperCase(),
+        placa: (placa || '').toUpperCase(),
         unidade_medida: (unidade || 'H').toUpperCase(),
         horimetro_atual: parseFloat((horimetro || '0').replace(',', '.')) || 0,
         propriedade: (propriedade || 'proprio').toLowerCase() === 'alugado' ? 'alugado' : 'proprio',
