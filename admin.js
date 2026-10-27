@@ -153,9 +153,9 @@ function baixarPlanilhaModeloExemplo(tipo) {
   } else if (tipo === 'os') {
     nomeArq = 'MODELO_PADRAO_OS_REP_VILASA.csv';
     conteudo = [
-      'PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_REP;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS',
-      'EH-40;24/10/2026 08:00;24/10/2026 16:30;SIM;CORRETIVA;CAMPO;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;SUBSTITUICAO DE MANGUEIRA 1 POL;JOAO SILVA, CARLOS SOUZA;4520.5;concluida',
-      'CB-12;25/10/2026 10:00;;SIM;MOTOR;OFICINA;FALHA DE INJECAO E PERDA DE POTENCIA;EM ANALISE NA BOMBA INJETORA;PEDRO SANTOS;89410;em_execucao'
+      'PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;MOTIVO_REP;CLASSIFICACAO_FALHA;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS',
+      'EH-40;24/10/2026 08:00;24/10/2026 16:30;CORRETIVA;SISTEMA HIDRAULICO;CAMPO;ROMPIMENTO DE MANGUEIRA DO COMANDO HIDRAULICO;SUBSTITUICAO DE MANGUEIRA 1 POL;JOAO SILVA, CARLOS SOUZA;4520.5;concluida',
+      'CB-12;25/10/2026 10:00;;CORRETIVA;MOTOR;OFICINA;FALHA DE INJECAO E PERDA DE POTENCIA;EM ANALISE NA BOMBA INJETORA;PEDRO SANTOS;89410;em_execucao'
     ].join('\n');
   }
 
@@ -222,13 +222,12 @@ async function processarUploadPlanilhaCSV(event, tipo) {
     }
   } else if (tipo === 'os') {
     for (const linha of dadosLinhas) {
-      const [tag, dtAb, dtConc, paradaStr, motivoRep, localManut, problema, servico, mecNome, horStr, statusStr] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
+      const [tag, dtAb, dtConc, motivoRep, classifFalha, localManut, problema, servico, mecNome, horStr, statusStr] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
       if (!tag || !problema) continue;
 
       const eq = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === tag.toUpperCase());
       if (!eq) continue;
 
-      const parada = !['NAO', 'NÃO', 'FALSE', '0'].includes(String(paradaStr || 'SIM').toUpperCase());
       const abertaISO = converterDataPlanilhaParaISO(dtAb) || new Date().toISOString();
       const concluidaISO = converterDataPlanilhaParaISO(dtConc);
       const horNum = parseFloat(String(horStr || '').replace(',', '.'));
@@ -238,8 +237,8 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         obra_id: eq.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
         aberta_em: abertaISO,
         concluida_em: concluidaISO,
-        parada_obrigatoria: parada,
         motivo_rep: (motivoRep || 'CORRETIVA').toUpperCase(),
+        classificacao_falha: (classifFalha || '').toUpperCase(),
         local_manutencao_pcm: (localManut || 'OFICINA').toUpperCase(),
         descricao_problema: problema.toUpperCase(),
         servico_executado: (servico || '').toUpperCase(),
