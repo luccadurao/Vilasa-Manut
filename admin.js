@@ -154,21 +154,98 @@ function baixarPlanilhaModeloExemplo(tipo) {
   a.click();
 }
 
+// Converte datas BR (DD/MM/YYYY ou DD/MM/YY HH:mm) ou ISO para ISO do Supabase
+function converterDataPlanilhaParaISO(str) {
+  const limpo = String(str || '').trim();
+  if (!limpo) return null;
+  const mBR = limpo.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+  if (mBR) {
+    let [_, dia, mes, ano, hora = '08', min = '00'] = mBR;
+    if (ano.length === 2) ano = '20' + ano;
+    dia = dia.padStart(2, '0');
+    mes = mes.padStart(2, '0');
+    hora = String(Math.min(23, parseInt(hora, 10) || 0)).padStart(2, '0');
+    min = String(Math.min(59, parseInt(min, 10) || 0)).padStart(2, '0');
+    const dt = new Date(`${ano}-${mes}-${dia}T${hora}:${min}:00`);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  }
+  const dt = new Date(limpo);
+  return isNaN(dt.getTime()) ? null : dt.toISOString();
+}
+
+// Leitor CSV profissional que respeita quebras de linha (Enter) dentro de células com aspas
+function parsearTextoCSVCompleto(texto, separador = ';') {
+  const linhas = [];
+  let linhaAtual = [];
+  let campoAtual = '';
+  let dentroDeAspas = false;
+
+  for (let i = 0; i < texto.length; i++) {
+    const char = texto[i];
+    const prox = texto[i + 1];
+
+    if (char === '"') {
+      if (dentroDeAspas && prox === '"') {
+        campoAtual += '"';
+        i++;
+      } else {
+        dentroDeAspas = !dentroDeAspas;
+      }
+    } else if (char === separador && !dentroDeAspas) {
+      linhaAtual.push(campoAtual.trim());
+      campoAtual = '';
+    } else if ((char === '\n' || (char === '\r' && prox === '\n')) && !dentroDeAspas) {
+      if (char === '\r') i++;
+      linhaAtual.push(campoAtual.trim());
+      if (linhaAtual.some(cel => cel !== '')) {
+        linhas.push(linhaAtual);
+      }
+      linhaAtual = [];
+      campoAtual = '';
+    } else if (char !== '\r') {
+      campoAtual += char;
+    }
+  }
+
+  if (campoAtual.trim() !== '' || linhaAtual.some(cel => cel !== '')) {
+    linhaAtual.push(campoAtual.trim());
+    linhas.push(linhaAtual);
+  }
+  return linhas;
+}
+
+// Converte horímetro tratando ponto de milhar (ex: "2.017" -> 2017 e "429.836" -> 429836)
+function converterHorimetroPlanilha(valorStr) {
+  let s = String(valorStr || '').trim();
+  if (!s) return null;
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    s = s.replace(/\./g, '');
+  } else if (s.includes(',') && s.includes('.')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    s = s.replace(',', '.');
+  }
+  const num = parseFloat(s);
+  return isNaN(num) ? null : num;
+}
+
 async function processarUploadPlanilhaCSV(event, tipo) {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  const texto = await file.text();
-  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (linhas.length < 2) return alert('Planilha vazia!');
+  const texto = (await file.text()).replace(/^\uFEFF/, '');
+  const primeiraLinha = texto.split(/\r?\n/)[0] || '';
+  const separador = primeiraLinha.includes(';') ? ';' : ',';
 
-  const separador = linhas[0].includes(';') ? ';' : ',';
-  const dadosLinhas = linhas.slice(1);
+  const todasLinhas = parsearTextoCSVCompleto(texto, separador);
+  if (todasLinhas.length < 2) return alert('Planilha vazia!');
+
+  const dadosLinhas = todasLinhas.slice(1);
   let importados = 0;
 
   if (tipo === 'frota') {
-    for (const linha of dadosLinhas) {
-      const [tag, nome, marca, modelo, anoFab, numSerie, placa, unidade, horimetro, propriedade] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
+    for (const cols of dadosLinhas) {
+      const [tag, nome, marca, modelo, anoFab, numSerie, placa, unidade, horimetro, propriedade] = cols;
       if (!tag || !nome) continue;
 
       const payload = {
@@ -180,8 +257,8 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         numero_serie: (numSerie || '').toUpperCase(),
         placa: (placa || '').toUpperCase(),
         unidade_medida: (unidade || 'H').toUpperCase(),
-        horimetro_atual: parseFloat((horimetro || '0').replace(',', '.')) || 0,
-        propriedade: (propriedade || 'proprio').toLowerCase() === 'alugado' ? 'alugado' : 'proprio',
+        horimetro_atual: converterHorimetroPlanilha(horimetro) || 0,
+        propriedade: (propriedade || 'proprio').toLowerCase().includes('alug') ? 'alugado' : 'proprio',
         situacao_ciclo: 'ativo',
         obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
       };
@@ -192,57 +269,119 @@ async function processarUploadPlanilhaCSV(event, tipo) {
       importados++;
     }
   } else if (tipo === 'almoxarifado') {
-    for (const linha of dadosLinhas) {
-      const [idInterno, desc, paralelosStr, saldo, un, custo, estMin] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
-      if (!desc) continue;
-
+    const lotePecas = [];
+    dadosLinhas.forEach((cols, idx) => {
+      const [idInterno, desc, paralelosStr, saldo, un, custo, estMin] = cols;
+      if (!desc) return;
       const codigos_paralelos = (paralelosStr || '').split(/[,|]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
-      const id_interno = (idInterno || `VIL-${String(importados + 1).padStart(4, '0')}`).toUpperCase();
+      const id_interno = (idInterno || `VIL-${String(idx + 1).padStart(4, '0')}`).toUpperCase();
 
-      await db.from('pecas_estoque').insert([{
+      lotePecas.push({
         id_interno,
         descricao: desc.toUpperCase(),
         codigos_paralelos,
-        quantidade: parseFloat((saldo || '0').replace(',', '.')) || 0,
+        quantidade: parseFloat(String(saldo || '0').replace(',', '.')) || 0,
         unidade: (un || 'UN').toUpperCase(),
-        custo_unitario: parseFloat((custo || '0').replace(',', '.')) || 0,
-        estoque_minimo: parseFloat((estMin || '0').replace(',', '.')) || 0,
+        custo_unitario: parseFloat(String(custo || '0').replace(',', '.')) || 0,
+        estoque_minimo: parseFloat(String(estMin || '0').replace(',', '.')) || 0,
         obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
-      }]);
-      importados++;
+      });
+    });
+
+    for (let i = 0; i < lotePecas.length; i += 200) {
+      const fatia = lotePecas.slice(i, i + 200);
+      const { error } = await db.from('pecas_estoque').insert(fatia);
+      if (error) return alert('Erro ao importar lote do almoxarifado: ' + error.message);
+      importados += fatia.length;
     }
   } else if (tipo === 'os') {
-    for (const linha of dadosLinhas) {
-      const [tag, dtAb, dtConc, motivoRep, classifFalha, localManut, problema, servico, mecNome, horStr, statusStr] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
-      if (!tag || !problema) continue;
+    // 1. Garante que a lista de equipamentos está atualizada na memória
+    const { data: eqBanco } = await db.from('equipamentos').select('*');
+    cacheEquipamentos = eqBanco || [];
+    const mapaEquipPorTag = {};
+    cacheEquipamentos.forEach(e => {
+      mapaEquipPorTag[String(e.tag || '').trim().toUpperCase()] = e;
+    });
 
-      const eq = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === tag.toUpperCase());
+    // 2. Descobre se a planilha tem algum prefixo que ainda não existe na Frota e cadastra automaticamente
+    const tagsNovasParaCriar = new Set();
+    dadosLinhas.forEach(cols => {
+      const tag = String(cols[0] || '').trim().toUpperCase();
+      if (tag && !mapaEquipPorTag[tag]) tagsNovasParaCriar.add(tag);
+    });
+
+    if (tagsNovasParaCriar.size > 0) {
+      const novosEquipamentos = Array.from(tagsNovasParaCriar).map(tag => ({
+        tag,
+        nome: `EQUIPAMENTO ${tag}`,
+        propriedade: tag.includes('-AL-') ? 'alugado' : 'proprio',
+        situacao_ciclo: 'ativo',
+        unidade_medida: 'H',
+        horimetro_atual: 0,
+        obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+      }));
+
+      for (let i = 0; i < novosEquipamentos.length; i += 200) {
+        const fatiaEq = novosEquipamentos.slice(i, i + 200);
+        const { data: criados, error: errEq } = await db.from('equipamentos').insert(fatiaEq).select();
+        if (errEq) return alert('Erro ao criar prefixos novos da planilha: ' + errEq.message);
+        (criados || []).forEach(e => {
+          mapaEquipPorTag[String(e.tag).trim().toUpperCase()] = e;
+          cacheEquipamentos.push(e);
+        });
+      }
+    }
+
+    // 3. Monta todas as Ordens de Serviço da planilha (tratando barras nos mecânicos e horímetros)
+    const loteOS = [];
+    for (const cols of dadosLinhas) {
+      const [tagRaw, dtAb, dtConc, motivoRep, classifFalha, localManut, problemaRaw, servicoRaw, mecNome, horStr, statusStr] = cols;
+      const tag = String(tagRaw || '').trim().toUpperCase();
+      if (!tag) continue;
+
+      const eq = mapaEquipPorTag[tag];
       if (!eq) continue;
+
+      const problemaFinal = (problemaRaw || servicoRaw || classifFalha || 'MANUTENÇÃO REGISTRADA').trim().toUpperCase();
+      const servicoFinal = (servicoRaw || '').trim().toUpperCase();
+
+      const mecanicosPadronizados = (mecNome || '')
+        .split(/[,/|]+/)
+        .map(s => s.trim().toUpperCase())
+        .filter(Boolean)
+        .join(', ');
 
       const abertaISO = converterDataPlanilhaParaISO(dtAb) || new Date().toISOString();
       const concluidaISO = converterDataPlanilhaParaISO(dtConc);
-      const horNum = parseFloat(String(horStr || '').replace(',', '.'));
+      const horNum = converterHorimetroPlanilha(horStr);
 
-      await db.from('ordens_servico').insert([{
+      loteOS.push({
         equipamento_id: eq.id,
         obra_id: eq.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
         aberta_em: abertaISO,
         concluida_em: concluidaISO,
-        motivo_rep: (motivoRep || 'CORRETIVA').toUpperCase(),
-        classificacao_falha: (classifFalha || '').toUpperCase(),
-        local_manutencao_pcm: (localManut || 'OFICINA').toUpperCase(),
-        descricao_problema: problema.toUpperCase(),
-        servico_executado: (servico || '').toUpperCase(),
-        mecanico_nome: (mecNome || '').split(/[,/|]+/).map(s => s.trim().toUpperCase()).filter(Boolean).join(', '),
-        horimetro_os: isNaN(horNum) ? null : horNum,
-        status: (statusStr || (concluidaISO ? 'concluida' : 'aberta')).toLowerCase()
-      }]);
-      importados++;
+        motivo_rep: (motivoRep || 'CORRETIVA').trim().toUpperCase(),
+        classificacao_falha: (classifFalha || '').trim().toUpperCase(),
+        local_manutencao_pcm: (localManut || 'OFICINA').trim().toUpperCase(),
+        descricao_problema: problemaFinal,
+        servico_executado: servicoFinal,
+        mecanico_nome: mecanicosPadronizados,
+        horimetro_os: horNum,
+        status: (statusStr || (concluidaISO ? 'concluida' : 'aberta')).trim().toLowerCase()
+      });
+    }
+
+    // 4. Envia em lotes de 200 registros por vez (super rápido e sem travar o navegador)
+    for (let i = 0; i < loteOS.length; i += 200) {
+      const fatiaOS = loteOS.slice(i, i + 200);
+      const { error: errOS } = await db.from('ordens_servico').insert(fatiaOS);
+      if (errOS) return alert(`Erro ao gravar lote de OS (linha ${i + 1}): ` + errOS.message);
+      importados += fatiaOS.length;
     }
   }
 
   event.target.value = '';
-  alert(`✅ ${importados} registro(s) de ${tipo.toUpperCase()} importados com sucesso!`);
+  alert(`✅ Importação concluída! ${importados} registro(s) de ${tipo.toUpperCase()} foram gravados no banco.`);
   await carregarUsuariosAdmin('importador');
 }
 
