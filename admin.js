@@ -233,7 +233,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         local_manutencao_pcm: (localManut || 'OFICINA').toUpperCase(),
         descricao_problema: problema.toUpperCase(),
         servico_executado: (servico || '').toUpperCase(),
-        mecanico_nome: (mecNome || '').toUpperCase(),
+        mecanico_nome: (mecNome || '').split(/[,/|]+/).map(s => s.trim().toUpperCase()).filter(Boolean).join(', '),
         horimetro_os: isNaN(horNum) ? null : horNum,
         status: (statusStr || (concluidaISO ? 'concluida' : 'aberta')).toLowerCase()
       }]);
