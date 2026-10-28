@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (SÉRIE, PLACA E SELEÇÃO PARA QR CODE)
+// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (ANO, SÉRIE, PLACA E SELEÇÃO QR CODE)
 // ============================================================================
 
 let filtroSituacaoFrota = 'ativo';
@@ -45,7 +45,7 @@ function renderizarPainelFrota() {
       <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3">
         <div>
           <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">GESTÃO DE ATIVOS E MOBILIZAÇÃO</span>
-          <h2 class="text-lg font-black">Controle de Frota, Série, Placa & QR Codes</h2>
+          <h2 class="text-lg font-black">Controle de Frota, Ano, Série, Placa & QR Codes</h2>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           ${podeGerenciar ? `
@@ -78,7 +78,7 @@ function renderizarPainelFrota() {
                 <input type="checkbox" id="chkSelecionarTodosQR" onclick="alternarSelecaoTodosQR(this)" class="rounded text-amber-500 cursor-pointer" title="Selecionar Todos" />
               </th>
               <th class="p-3">Prefixo</th>
-              <th class="p-3">Descrição / Marca / Modelo</th>
+              <th class="p-3">Descrição / Marca / Modelo / Ano</th>
               <th class="p-3">Nº Série / Placa</th>
               <th class="p-3">Vínculo</th>
               <th class="p-3">Obra Atual</th>
@@ -102,7 +102,9 @@ function renderizarPainelFrota() {
                   <td class="p-3 font-black"><span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${e.tag}</span></td>
                   <td class="p-3">
                     <div class="font-extrabold text-slate-900">${e.nome || '-'}</div>
-                    <div class="text-[11px] text-slate-500">${e.marca || ''} ${e.modelo || ''}</div>
+                    <div class="text-[11px] text-slate-500">
+                      ${e.marca || ''} ${e.modelo || ''} ${e.ano_fabricacao ? `• <strong class="text-slate-700">Ano: ${e.ano_fabricacao}</strong>` : ''}
+                    </div>
                   </td>
                   <td class="p-3">
                     <div class="font-bold text-slate-800">Série: ${e.numero_serie || 'N/I'}</div>
@@ -163,7 +165,7 @@ function abrirModalCadastroEquipamentoV2() {
           <label class="block font-black uppercase text-slate-700 mb-1">Descrição</label>
           <input id="eqV2Nome" type="text" placeholder="Ex: ESCAVADEIRA HIDRÁULICA" class="w-full border rounded-lg p-2 font-bold uppercase" />
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-3 gap-2">
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Marca</label>
             <input id="eqV2Marca" type="text" placeholder="Marca" class="w-full border rounded-lg p-2 font-bold uppercase" />
@@ -171,6 +173,10 @@ function abrirModalCadastroEquipamentoV2() {
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Modelo</label>
             <input id="eqV2Modelo" type="text" placeholder="Modelo" class="w-full border rounded-lg p-2 font-bold uppercase" />
+          </div>
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">Ano Fab.</label>
+            <input id="eqV2Ano" type="text" placeholder="Ex: 2023" class="w-full border rounded-lg p-2 font-bold uppercase" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2">
@@ -222,6 +228,7 @@ async function salvarNovoEquipamentoV2() {
     nome,
     marca: document.getElementById('eqV2Marca').value.trim().toUpperCase(),
     modelo: document.getElementById('eqV2Modelo').value.trim().toUpperCase(),
+    ano_fabricacao: document.getElementById('eqV2Ano').value.trim(),
     numero_serie: document.getElementById('eqV2Serie').value.trim().toUpperCase(),
     placa: document.getElementById('eqV2Placa').value.trim().toUpperCase(),
     propriedade: document.getElementById('eqV2Prop').value,
@@ -319,7 +326,7 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
       <div style="border:3px solid #0f172a; border-radius:14px; padding:14px; width:240px; text-align:center; font-family:sans-serif; page-break-inside:avoid;">
         <div style="background:#f59e0b; color:#0f172a; font-weight:900; font-size:20px; padding:4px 8px; border-radius:8px;">${eq.tag}</div>
         <div style="font-size:11px; font-weight:700; margin:6px 0;">${eq.nome || ''}</div>
-        <div style="font-size:9px; font-weight:600; color:#475569;">Série: ${eq.numero_serie || 'N/I'} ${eq.placa ? `| Placa: ${eq.placa}` : ''}</div>
+        <div style="font-size:9px; font-weight:600; color:#475569;">${eq.ano_fabricacao ? `Ano: ${eq.ano_fabricacao} | ` : ''}Série: ${eq.numero_serie || 'N/I'} ${eq.placa ? `| Placa: ${eq.placa}` : ''}</div>
         <img src="${imgApi}" style="width:160px; height:160px; margin:4px auto;" />
         <div style="font-size:10px; font-weight:800;">LEITURA DE HORÍMETRO / OS</div>
       </div>
@@ -330,10 +337,10 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
 }
 
 function exportarRelatorioFrotaCSV() {
-  const cab = ['PREFIXO', 'DESCRICAO', 'MARCA', 'MODELO', 'NUMERO_SERIE', 'PLACA', 'PROPRIEDADE', 'SITUACAO', 'HORIMETRO_ATUAL', 'UNIDADE'];
+  const cab = ['PREFIXO', 'DESCRICAO', 'MARCA', 'MODELO', 'ANO_FABRICACAO', 'NUMERO_SERIE', 'PLACA', 'PROPRIEDADE', 'SITUACAO', 'HORIMETRO_ATUAL', 'UNIDADE'];
   const linhas = cacheEquipamentos.map(e => [
     e.tag || '', (e.nome || '').replace(/;/g, ','), (e.marca || '').replace(/;/g, ','),
-    (e.modelo || '').replace(/;/g, ','), e.numero_serie || '', e.placa || '',
+    (e.modelo || '').replace(/;/g, ','), e.ano_fabricacao || '', e.numero_serie || '', e.placa || '',
     e.propriedade || 'proprio', e.situacao_ciclo || 'ativo',
     String(e.horimetro_atual || 0).replace('.', ','), e.unidade_medida || 'H'
   ].join(';'));
