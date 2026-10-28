@@ -70,7 +70,7 @@ function renderizarSecaoImportadorPlanilhasExcel() {
         <div>
           <span class="px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 font-black text-[10px] uppercase">Módulo 1 • Ativos</span>
           <h3 class="text-base font-black text-slate-900 mt-1">🚜 Importar Frota</h3>
-          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DESCRICAO;MARCA;MODELO;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE</code></p>
+          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DESCRICAO;MARCA;MODELO;ANO_FABRICACAO;NUMERO_SERIE;PLACA;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE</code></p>
         </div>
         <div class="space-y-2">
           <button onclick="baixarPlanilhaModeloExemplo('frota')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300">
@@ -104,7 +104,7 @@ function renderizarSecaoImportadorPlanilhasExcel() {
         <div>
           <span class="px-2.5 py-0.5 rounded bg-blue-100 text-blue-900 font-black text-[10px] uppercase">Módulo 3 • OS & REP</span>
           <h3 class="text-base font-black text-slate-900 mt-1">🔧 Importar Ordens de Serviço</h3>
-          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;PARADA_SIM_NAO;MOTIVO_REP;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS</code></p>
+          <p class="text-xs text-slate-500 mt-1">Colunas: <code>PREFIXO;DATA_ABERTURA;DATA_CONCLUSAO;MOTIVO_REP;CLASSIFICACAO_FALHA;LOCAL_MANUTENCAO;DESCRICAO_PROBLEMA;SERVICO_EXECUTADO;MECANICO_NOME;HORIMETRO_OS;STATUS</code></p>
         </div>
         <div class="space-y-2">
           <button onclick="baixarPlanilhaModeloExemplo('os')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs border border-slate-300">
@@ -120,18 +120,6 @@ function renderizarSecaoImportadorPlanilhasExcel() {
   `;
 }
 
-function converterDataPlanilhaParaISO(str) {
-  const limpo = String(str || '').trim();
-  if (!limpo) return null;
-  const mBR = limpo.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
-  if (mBR) {
-    const [_, dia, mes, ano, hora = '08', min = '00'] = mBR;
-    return new Date(`${ano}-${mes}-${dia}T${hora}:${min}:00`).toISOString();
-  }
-  const dt = new Date(limpo);
-  return isNaN(dt.getTime()) ? null : dt.toISOString();
-}
-
 function baixarPlanilhaModeloExemplo(tipo) {
   let conteudo = '';
   let nomeArq = '';
@@ -139,9 +127,9 @@ function baixarPlanilhaModeloExemplo(tipo) {
   if (tipo === 'frota') {
     nomeArq = 'MODELO_PADRAO_FROTA_VILASA.csv';
     conteudo = [
-      'PREFIXO;DESCRICAO;MARCA;MODELO;NUMERO_SERIE;PLACA;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE',
-      'EH-40;ESCAVADEIRA HIDRAULICA;CATERPILLAR;320D2L;CAT320DX9988;;H;4520.5;proprio',
-      'CB-12;CAMINHAO BASCULANTE;MERCEDES-BENZ;AXOR 3131;MB3131ZZ4411;ABC-1234;KM;89400;alugado'
+      'PREFIXO;DESCRICAO;MARCA;MODELO;ANO_FABRICACAO;NUMERO_SERIE;PLACA;UNIDADE;HORIMETRO_ATUAL;PROPRIEDADE',
+      'EH-40;ESCAVADEIRA HIDRAULICA;CATERPILLAR;320D2L;2022;CAT320DX9988;;H;4520.5;proprio',
+      'CB-12;CAMINHAO BASCULANTE;MERCEDES-BENZ;AXOR 3131;2024;MB3131ZZ4411;ABC-1234;KM;89400;alugado'
     ].join('\n');
   } else if (tipo === 'almoxarifado') {
     nomeArq = 'MODELO_PADRAO_ALMOXARIFADO_VILASA.csv';
@@ -180,7 +168,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
 
   if (tipo === 'frota') {
     for (const linha of dadosLinhas) {
-      const [tag, nome, marca, modelo, numSerie, placa, unidade, horimetro, propriedade] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
+      const [tag, nome, marca, modelo, anoFab, numSerie, placa, unidade, horimetro, propriedade] = linha.split(separador).map(s => (s || '').replace(/^"|"$/g, '').trim());
       if (!tag || !nome) continue;
 
       const payload = {
@@ -188,6 +176,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         nome: nome.toUpperCase(),
         marca: (marca || '').toUpperCase(),
         modelo: (modelo || '').toUpperCase(),
+        ano_fabricacao: (anoFab || '').trim(),
         numero_serie: (numSerie || '').toUpperCase(),
         placa: (placa || '').toUpperCase(),
         unidade_medida: (unidade || 'H').toUpperCase(),
