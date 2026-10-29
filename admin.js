@@ -233,104 +233,191 @@ async function processarUploadPlanilhaCSV(event, tipo) {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  const texto = (await file.text()).replace(/^\uFEFF/, '');
-  const primeiraLinha = texto.split(/\r?\n/)[0] || '';
-  const separador = primeiraLinha.includes(';') ? ';' : ',';
+  // Cria um aviso visual de progresso no topo da tela para você acompanhar ao vivo
+  let boxStatus = document.getElementById('statusProgressoImportacaoCSV');
+  if (!boxStatus) {
+    boxStatus = document.createElement('div');
+    boxStatus.id = 'statusProgressoImportacaoCSV';
+    boxStatus.className = 'fixed top-4 right-4 z-50 bg-slate-950 text-amber-400 border-2 border-amber-500 px-5 py-3 rounded-2xl shadow-2xl font-black text-xs';
+    document.body.appendChild(boxStatus);
+  }
+  const atualizarProgresso = (msg) => { boxStatus.innerText = msg; };
 
-  const todasLinhas = parsearTextoCSVCompleto(texto, separador);
-  if (todasLinhas.length < 2) return alert('Planilha vazia!');
+  try {
+    atualizarProgresso('⏳ Lendo arquivo CSV...');
+    const buffer = await file.arrayBuffer();
+    const texto = new TextDecoder('utf-8').decode(buffer).replace(/^\uFEFF/, '');
 
-  const dadosLinhas = todasLinhas.slice(1);
-  let importados = 0;
+    const primeiraLinha = texto.split(/\r?\n/)[0] || '';
+    const separador = primeiraLinha.includes(';') ? ';' : ',';
 
-  if (tipo === 'frota') {
-    for (const cols of dadosLinhas) {
-      const [tag, nome, marca, modelo, anoFab, numSerie, placa, unidade, horimetro, propriedade] = cols;
-      if (!tag || !nome) continue;
-
-      const payload = {
-        tag: tag.toUpperCase(),
-        nome: nome.toUpperCase(),
-        marca: (marca || '').toUpperCase(),
-        modelo: (modelo || '').toUpperCase(),
-        ano_fabricacao: (anoFab || '').trim(),
-        numero_serie: (numSerie || '').toUpperCase(),
-        placa: (placa || '').toUpperCase(),
-        unidade_medida: (unidade || 'H').toUpperCase(),
-        horimetro_atual: converterHorimetroPlanilha(horimetro) || 0,
-        propriedade: (propriedade || 'proprio').toLowerCase().includes('alug') ? 'alugado' : 'proprio',
-        situacao_ciclo: 'ativo',
-        obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
-      };
-
-      const existente = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === payload.tag);
-      if (existente) await db.from('equipamentos').update(payload).eq('id', existente.id);
-      else await db.from('equipamentos').insert([payload]);
-      importados++;
+    const todasLinhas = parsearTextoCSVCompleto(texto, separador);
+    if (todasLinhas.length < 2) {
+      boxStatus.remove();
+      return alert('Planilha vazia!');
     }
-  } else if (tipo === 'almoxarifado') {
-    const lotePecas = [];
-    dadosLinhas.forEach((cols, idx) => {
-      const [idInterno, desc, paralelosStr, saldo, un, custo, estMin] = cols;
-      if (!desc) return;
-      const codigos_paralelos = (paralelosStr || '').split(/[,|]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
-      const id_interno = (idInterno || `VIL-${String(idx + 1).padStart(4, '0')}`).toUpperCase();
 
-      lotePecas.push({
-        id_interno,
-        descricao: desc.toUpperCase(),
-        codigos_paralelos,
-        quantidade: parseFloat(String(saldo || '0').replace(',', '.')) || 0,
-        unidade: (un || 'UN').toUpperCase(),
-        custo_unitario: parseFloat(String(custo || '0').replace(',', '.')) || 0,
-        estoque_minimo: parseFloat(String(estMin || '0').replace(',', '.')) || 0,
-        obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+    const dadosLinhas = todasLinhas.slice(1);
+    let importados = 0;
+
+    if (tipo === 'frota') {
+      for (let idx = 0; idx < dadosLinhas.length; idx++) {
+        const cols = dadosLinhas[idx];
+        const [tag, nome, marca, modelo, anoFab, numSerie, placa, unidade, horimetro, propriedade] = cols;
+        if (!tag || !nome) continue;
+
+        atualizarProgresso(`🚜 Importando Frota: ${idx + 1} / ${dadosLinhas.length}...`);
+
+        const payload = {
+          tag: tag.toUpperCase(),
+          nome: nome.toUpperCase(),
+          marca: (marca || '').toUpperCase(),
+          modelo: (modelo || '').toUpperCase(),
+          ano_fabricacao: (anoFab || '').trim(),
+          numero_serie: (numSerie || '').toUpperCase(),
+          placa: (placa || '').toUpperCase(),
+          unidade_medida: (unidade || 'H').toUpperCase(),
+          horimetro_atual: converterHorimetroPlanilha(horimetro) || 0,
+          propriedade: (propriedade || 'proprio').toLowerCase().includes('alug') ? 'alugado' : 'proprio',
+          situacao_ciclo: 'ativo',
+          obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+        };
+
+        const existente = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === payload.tag);
+        if (existente) await db.from('equipamentos').update(payload).eq('id', existente.id);
+        else await db.from('equipamentos').insert([payload]);
+        importados++;
+      }
+    } else if (tipo === 'almoxarifado') {
+      const lotePecas = [];
+      dadosLinhas.forEach((cols, idx) => {
+        const [idInterno, desc, paralelosStr, saldo, un, custo, estMin] = cols;
+        if (!desc) return;
+        const codigos_paralelos = (paralelosStr || '').split(/[,|]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
+        const id_interno = (idInterno || `VIL-${String(idx + 1).padStart(4, '0')}`).toUpperCase();
+
+        lotePecas.push({
+          id_interno,
+          descricao: desc.toUpperCase(),
+          codigos_paralelos,
+          quantidade: parseFloat(String(saldo || '0').replace(',', '.')) || 0,
+          unidade: (un || 'UN').toUpperCase(),
+          custo_unitario: parseFloat(String(custo || '0').replace(',', '.')) || 0,
+          estoque_minimo: parseFloat(String(estMin || '0').replace(',', '.')) || 0,
+          obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+        });
       });
-    });
 
-    for (let i = 0; i < lotePecas.length; i += 200) {
-      const fatia = lotePecas.slice(i, i + 200);
-      const { error } = await db.from('pecas_estoque').insert(fatia);
-      if (error) return alert('Erro ao importar lote do almoxarifado: ' + error.message);
-      importados += fatia.length;
-    }
-  } else if (tipo === 'os') {
-    // 1. Garante que a lista de equipamentos está atualizada na memória
-    const { data: eqBanco } = await db.from('equipamentos').select('*');
-    cacheEquipamentos = eqBanco || [];
-    const mapaEquipPorTag = {};
-    cacheEquipamentos.forEach(e => {
-      mapaEquipPorTag[String(e.tag || '').trim().toUpperCase()] = e;
-    });
+      for (let i = 0; i < lotePecas.length; i += 100) {
+        atualizarProgresso(`📦 Gravando Almoxarifado: ${i} / ${lotePecas.length}...`);
+        const fatia = lotePecas.slice(i, i + 100);
+        const { error } = await db.from('pecas_estoque').insert(fatia);
+        if (error) throw new Error('Almoxarifado: ' + error.message);
+        importados += fatia.length;
+      }
+    } else if (tipo === 'os') {
+      atualizarProgresso(`🔍 Verificando equipamentos de ${dadosLinhas.length} OS...`);
 
-    // 2. Descobre se a planilha tem algum prefixo que ainda não existe na Frota e cadastra automaticamente
-    const tagsNovasParaCriar = new Set();
-    dadosLinhas.forEach(cols => {
-      const tag = String(cols[0] || '').trim().toUpperCase();
-      if (tag && !mapaEquipPorTag[tag]) tagsNovasParaCriar.add(tag);
-    });
+      // 1. Busca todos os equipamentos sem limite de 1000
+      const eqBanco = typeof buscarTudoSemLimite === 'function'
+        ? await buscarTudoSemLimite('equipamentos', 'tag', true)
+        : (await db.from('equipamentos').select('*')).data || [];
 
-    if (tagsNovasParaCriar.size > 0) {
-      const novosEquipamentos = Array.from(tagsNovasParaCriar).map(tag => ({
-        tag,
-        nome: `EQUIPAMENTO ${tag}`,
-        propriedade: tag.includes('-AL-') ? 'alugado' : 'proprio',
-        situacao_ciclo: 'ativo',
-        unidade_medida: 'H',
-        horimetro_atual: 0,
-        obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
-      }));
+      cacheEquipamentos = eqBanco;
+      const mapaEquipPorTag = {};
+      cacheEquipamentos.forEach(e => {
+        mapaEquipPorTag[String(e.tag || '').trim().toUpperCase()] = e;
+      });
 
-      for (let i = 0; i < novosEquipamentos.length; i += 200) {
-        const fatiaEq = novosEquipamentos.slice(i, i + 200);
-        const { data: criados, error: errEq } = await db.from('equipamentos').insert(fatiaEq).select();
-        if (errEq) return alert('Erro ao criar prefixos novos da planilha: ' + errEq.message);
-        (criados || []).forEach(e => {
-          mapaEquipPorTag[String(e.tag).trim().toUpperCase()] = e;
-          cacheEquipamentos.push(e);
+      // 2. Cria automaticamente qualquer prefixo da planilha que ainda não esteja na Frota
+      const tagsNovasParaCriar = new Set();
+      dadosLinhas.forEach(cols => {
+        const tag = String(cols[0] || '').trim().toUpperCase();
+        if (tag && !mapaEquipPorTag[tag]) tagsNovasParaCriar.add(tag);
+      });
+
+      if (tagsNovasParaCriar.size > 0) {
+        const novosEquipamentos = Array.from(tagsNovasParaCriar).map(tag => ({
+          tag,
+          nome: `EQUIPAMENTO ${tag}`,
+          propriedade: tag.includes('-AL-') ? 'alugado' : 'proprio',
+          situacao_ciclo: 'ativo',
+          unidade_medida: 'H',
+          horimetro_atual: 0,
+          obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+        }));
+
+        for (let i = 0; i < novosEquipamentos.length; i += 100) {
+          atualizarProgresso(`🚜 Criando prefixos novos na Frota (${i + 1}/${novosEquipamentos.length})...`);
+          const fatiaEq = novosEquipamentos.slice(i, i + 100);
+          const { data: criados, error: errEq } = await db.from('equipamentos').insert(fatiaEq).select();
+          if (errEq) throw new Error('Ao cadastrar prefixos novos: ' + errEq.message);
+          (criados || []).forEach(e => {
+            mapaEquipPorTag[String(e.tag).trim().toUpperCase()] = e;
+            cacheEquipamentos.push(e);
+          });
+        }
+      }
+
+      // 3. Prepara todas as 3.992 OS da planilha
+      const loteOS = [];
+      for (const cols of dadosLinhas) {
+        const [tagRaw, dtAb, dtConc, motivoRep, classifFalha, localManut, problemaRaw, servicoRaw, mecNome, horStr, statusStr] = cols;
+        const tag = String(tagRaw || '').trim().toUpperCase();
+        if (!tag) continue;
+
+        const eq = mapaEquipPorTag[tag];
+        if (!eq) continue;
+
+        const problemaFinal = (problemaRaw || servicoRaw || classifFalha || 'MANUTENÇÃO REGISTRADA').trim().toUpperCase();
+        const servicoFinal = (servicoRaw || '').trim().toUpperCase();
+
+        const mecanicosPadronizados = (mecNome || '')
+          .split(/[,/|]+/)
+          .map(s => s.trim().toUpperCase())
+          .filter(Boolean)
+          .join(', ');
+
+        const abertaISO = converterDataPlanilhaParaISO(dtAb) || new Date().toISOString();
+        const concluidaISO = converterDataPlanilhaParaISO(dtConc);
+        const horNum = converterHorimetroPlanilha(horStr);
+
+        loteOS.push({
+          equipamento_id: eq.id,
+          obra_id: eq.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
+          aberta_em: abertaISO,
+          concluida_em: concluidaISO,
+          motivo_rep: (motivoRep || 'CORRETIVA').trim().toUpperCase(),
+          classificacao_falha: (classifFalha || '').trim().toUpperCase(),
+          local_manutencao_pcm: (localManut || 'OFICINA').trim().toUpperCase(),
+          descricao_problema: problemaFinal,
+          servico_executado: servicoFinal,
+          mecanico_nome: mecanicosPadronizados,
+          horimetro_os: horNum,
+          status: (statusStr || (concluidaISO ? 'concluida' : 'aberta')).trim().toLowerCase()
         });
       }
+
+      // 4. Grava em lotes de 100 por vez mostrando o contador ao vivo na tela!
+      for (let i = 0; i < loteOS.length; i += 100) {
+        atualizarProgresso(`🔧 Gravando OS no banco: ${i} de ${loteOS.length}...`);
+        const fatiaOS = loteOS.slice(i, i + 100);
+        const { error: errOS } = await db.from('ordens_servico').insert(fatiaOS);
+        if (errOS) throw new Error(`Erro no lote da linha ${i + 1}: ` + errOS.message);
+        importados += fatiaOS.length;
+      }
     }
+
+    boxStatus.remove();
+    event.target.value = '';
+    alert(`✅ SUCESSO TOTAL! ${importados} registro(s) de ${tipo.toUpperCase()} foram gravados no banco de uma só vez!`);
+    await carregarUsuariosAdmin('importador');
+  } catch (erro) {
+    boxStatus.remove();
+    event.target.value = '';
+    alert('❌ Erro durante a importação: ' + (erro.message || erro));
+  }
+}
 
     // 3. Monta todas as Ordens de Serviço da planilha (tratando barras nos mecânicos e horímetros)
     const loteOS = [];
