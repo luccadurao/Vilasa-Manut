@@ -1,8 +1,24 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (ANO, SÉRIE, PLACA E SELEÇÃO QR CODE)
+// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (FILTRO POR COLUNA ESTILO EXCEL + QR CODE)
 // ============================================================================
 
 let filtroSituacaoFrota = 'ativo';
+
+// Guarda o texto digitado em cada coluna e quais colunas estão com a caixinha aberta
+let filtrosColunaFrota = {
+  tag: '',
+  nome: '',
+  marca: '',
+  modelo: '',
+  ano_fabricacao: '',
+  numero_serie: '',
+  placa: '',
+  propriedade: '',
+  obra: '',
+  horimetro: ''
+};
+
+let colunasFiltroAbertasFrota = {};
 
 async function carregarFrota(situacao = filtroSituacaoFrota) {
   filtroSituacaoFrota = situacao;
@@ -23,17 +39,186 @@ async function carregarFrota(situacao = filtroSituacaoFrota) {
   renderizarPainelFrota();
 }
 
+function obterNomeObraEquipamento(e) {
+  const obraObj = (cacheObras || []).find(o => String(o.id) === String(e.obra_id));
+  return obraObj ? `${obraObj.codigo} - ${obraObj.nome}` : 'MATRIZ GERAL';
+}
+
+// Retorna a lista de equipamentos aplicando Obra Ativa + Situação + Busca Geral + Filtros de Cada Coluna
+function obterListaFrotaFiltradaAtual() {
+  const termoPrefixo = (document.getElementById('filtroPrefixoFrotaInput')?.value || '').trim().toUpperCase();
+
+  let lista = [...(cacheEquipamentos || [])];
+  if (typeof filtrarListaPorObraAtiva === 'function') lista = filtrarListaPorObraAtiva(lista);
+  if (filtroSituacaoFrota !== 'todos') {
+    lista = lista.filter(e => (e.situacao_ciclo || 'ativo') === filtroSituacaoFrota);
+  }
+  if (termoPrefixo) {
+    lista = lista.filter(e => bateComPrefixoEquipamento(e.tag || '', termoPrefixo));
+  }
+
+  // Aplica os filtros individuais de cada coluna (Estilo Excel)
+  lista = lista.filter(e => {
+    const f = filtrosColunaFrota;
+    if (f.tag && !String(e.tag || '').toUpperCase().includes(f.tag)) return false;
+    if (f.nome && !String(e.nome || '').toUpperCase().includes(f.nome)) return false;
+    if (f.marca && !String(e.marca || '').toUpperCase().includes(f.marca)) return false;
+    if (f.modelo && !String(e.modelo || '').toUpperCase().includes(f.modelo)) return false;
+    if (f.ano_fabricacao && !String(e.ano_fabricacao || '').toUpperCase().includes(f.ano_fabricacao)) return false;
+    if (f.numero_serie && !String(e.numero_serie || '').toUpperCase().includes(f.numero_serie)) return false;
+    if (f.placa && !String(e.placa || '').toUpperCase().includes(f.placa)) return false;
+
+    if (f.propriedade) {
+      const txtProp = (e.propriedade === 'alugado' ? 'LOCADO ALUGADO' : 'PROPRIO PRÓPRIO');
+      if (!txtProp.includes(f.propriedade)) return false;
+    }
+
+    if (f.obra) {
+      const txtObra = obterNomeObraEquipamento(e).toUpperCase();
+      if (!txtObra.includes(f.obra)) return false;
+    }
+
+    if (f.horimetro) {
+      const txtHor = `${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}`.toUpperCase();
+      if (!txtHor.includes(f.horimetro)) return false;
+    }
+
+    return true;
+  });
+
+  return lista;
+}
+
+function temFiltroColunaAtivoFrota() {
+  return Object.values(filtrosColunaFrota).some(v => String(v || '').trim() !== '');
+}
+
+function alternarInputFiltroColunaFrota(colKey, event) {
+  if (event) event.stopPropagation();
+  colunasFiltroAbertasFrota[colKey] = !colunasFiltroAbertasFrota[colKey];
+  renderizarPainelFrota();
+
+  if (colunasFiltroAbertasFrota[colKey]) {
+    setTimeout(() => {
+      const inp = document.getElementById(`inp-col-frota-${colKey}`);
+      if (inp) {
+        inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+      }
+    }, 30);
+  }
+}
+
+function atualizarFiltroColunaFrota(colKey, valor) {
+  filtrosColunaFrota[colKey] = String(valor || '').trim().toUpperCase();
+  atualizarApenasCorpoTabelaFrota();
+}
+
+function limparTodosFiltrosColunaFrota() {
+  Object.keys(filtrosColunaFrota).forEach(k => { filtrosColunaFrota[k] = ''; });
+  colunasFiltroAbertasFrota = {};
+  const inpGeral = document.getElementById('filtroPrefixoFrotaInput');
+  if (inpGeral) inpGeral.value = '';
+  renderizarPainelFrota();
+}
+
+function renderizarThColunaFiltravelFrota(colKey, titulo) {
+  const valorAtual = filtrosColunaFrota[colKey] || '';
+  const aberto = Boolean(colunasFiltroAbertasFrota[colKey]) || valorAtual !== '';
+  const ativo = valorAtual !== '';
+
+  return `
+    <th class="p-2.5 align-top select-none border-r border-slate-800 last:border-r-0">
+      <div onclick="alternarInputFiltroColunaFrota('${colKey}', event)"
+        class="flex items-center justify-between gap-1.5 cursor-pointer group ${ativo ? 'text-white bg-amber-600/30 px-1.5 py-0.5 rounded' : 'hover:text-white'}">
+        <span>${titulo}</span>
+        <i class="fa-solid ${ativo ? 'fa-filter text-amber-300' : 'fa-caret-down text-slate-400 group-hover:text-amber-300'} text-[10px]"></i>
+      </div>
+      ${aberto ? `
+        <div class="mt-1.5 flex items-center gap-1" onclick="event.stopPropagation()">
+          <input id="inp-col-frota-${colKey}" type="text" value="${valorAtual}"
+            oninput="atualizarFiltroColunaFrota('${colKey}', this.value)"
+            placeholder="Filtrar..."
+            class="w-full min-w-[75px] px-2 py-1 rounded bg-slate-800 border ${ativo ? 'border-amber-400 text-amber-300' : 'border-slate-600 text-white'} text-[11px] font-bold uppercase placeholder-slate-400 focus:outline-none focus:border-amber-400" />
+          ${ativo ? `
+            <button type="button" onclick="atualizarFiltroColunaFrota('${colKey}', ''); renderizarPainelFrota();"
+              class="text-rose-400 hover:text-rose-300 font-black text-xs px-1" title="Limpar esta coluna">&times;</button>
+          ` : ''}
+        </div>
+      ` : ''}
+    </th>
+  `;
+}
+
+function gerarLinhasHtmlTabelaFrota(lista, podeGerenciar) {
+  if (lista.length === 0) {
+    return `
+      <tr>
+        <td colspan="12" class="p-6 text-center text-slate-500 font-bold">
+          Nenhum equipamento encontrado com os filtros aplicados.
+        </td>
+      </tr>
+    `;
+  }
+
+  return lista.map(e => {
+    const nomeObra = obterNomeObraEquipamento(e);
+    const propBadge = e.propriedade === 'alugado'
+      ? `<span class="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-black text-[10px]">LOCADO</span>`
+      : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-bold text-[10px]">PRÓPRIO</span>`;
+
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2.5 text-center">
+          <input type="checkbox" value="${e.id}" class="chk-qr-equipamento rounded text-amber-500 cursor-pointer" />
+        </td>
+        <td class="p-2.5 font-black whitespace-nowrap">
+          <span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${e.tag}</span>
+        </td>
+        <td class="p-2.5 font-extrabold text-slate-900">${e.nome || '-'}</td>
+        <td class="p-2.5 font-bold text-slate-700">${e.marca || '-'}</td>
+        <td class="p-2.5 font-bold text-slate-700">${e.modelo || '-'}</td>
+        <td class="p-2.5 font-bold text-slate-700 text-center">${e.ano_fabricacao || '-'}</td>
+        <td class="p-2.5 font-semibold text-slate-700">${e.numero_serie || '-'}</td>
+        <td class="p-2.5 font-black text-amber-800">${e.placa || '-'}</td>
+        <td class="p-2.5">${propBadge}</td>
+        <td class="p-2.5 font-bold text-slate-700 whitespace-nowrap">📍 ${nomeObra}</td>
+        <td class="p-2.5 font-black text-slate-900 whitespace-nowrap">${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}</td>
+        <td class="p-2.5 text-right space-x-1 whitespace-nowrap">
+          <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
+          ${podeGerenciar ? `
+            <button onclick="abrirModalTransferirObraEquipamento('${e.id}')" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold">🔄 Obra</button>
+            <button onclick="abrirModalCicloVidaDesmobilizacao('${e.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold">⚙️ Status</button>
+          ` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Atualiza apenas o tbody e os contadores enquanto o usuário digita no filtro da coluna (para não perder o foco do cursor!)
+function atualizarApenasCorpoTabelaFrota() {
+  const tbody = document.getElementById('tbodyTabelaFrotaExcel');
+  if (!tbody) return renderizarPainelFrota();
+
+  const podeGerenciar = podeExecutarAcao('gerenciar_frota');
+  const lista = obterListaFrotaFiltradaAtual();
+  tbody.innerHTML = gerarLinhasHtmlTabelaFrota(lista, podeGerenciar);
+
+  const badgeCont = document.getElementById('contadorLinhasFiltradasFrota');
+  if (badgeCont) badgeCont.innerText = `${lista.length} equipamento(s) listado(s)`;
+
+  const btnLimpar = document.getElementById('btnLimparFiltrosColunaFrota');
+  if (btnLimpar) btnLimpar.classList.toggle('hidden', !temFiltroColunaAtivoFrota());
+}
+
 function renderizarPainelFrota() {
   const sec = document.getElementById('sec-frota');
   if (!sec) return;
 
   const podeGerenciar = podeExecutarAcao('gerenciar_frota');
   const termoPrefixo = (document.getElementById('filtroPrefixoFrotaInput')?.value || '').trim().toUpperCase();
-
-  let lista = [...cacheEquipamentos];
-  if (typeof filtrarListaPorObraAtiva === 'function') lista = filtrarListaPorObraAtiva(lista);
-  if (filtroSituacaoFrota !== 'todos') lista = lista.filter(e => (e.situacao_ciclo || 'ativo') === filtroSituacaoFrota);
-  if (termoPrefixo) lista = lista.filter(e => bateComPrefixoEquipamento(e.tag || '', termoPrefixo));
+  const lista = obterListaFrotaFiltradaAtual();
 
   const contAtivos = cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length;
   const contDesmob = cacheEquipamentos.filter(e => e.situacao_ciclo === 'desmobilizado_aluguel').length;
@@ -60,69 +245,51 @@ function renderizarPainelFrota() {
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button onclick="carregarFrota('ativo')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'ativo' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}">🟢 Ativos (${contAtivos})</button>
           <button onclick="carregarFrota('inativo_patio')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'inativo_patio' ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-700'}">⏸️ Pátio (${contInativos})</button>
           <button onclick="carregarFrota('desmobilizado_aluguel')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'desmobilizado_aluguel' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}">🚛 Desmobilizados (${contDesmob})</button>
           <button onclick="carregarFrota('vendido_baixado')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'vendido_baixado' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700'}">🏷️ Vendidos (${contVendidos})</button>
           <button onclick="carregarFrota('todos')" class="px-3 py-1.5 rounded-lg text-xs font-black ${filtroSituacaoFrota === 'todos' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">🌐 Todos</button>
+          <span id="contadorLinhasFiltradasFrota" class="ml-2 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-black text-[11px]">
+            ${lista.length} equipamento(s) listado(s)
+          </span>
         </div>
-        <input id="filtroPrefixoFrotaInput" type="text" value="${termoPrefixo}" oninput="renderizarPainelFrota()" placeholder="🔍 Buscar Prefixo..." class="px-3 py-1.5 rounded-lg border text-xs font-bold uppercase" />
+
+        <div class="flex items-center gap-2">
+          <button id="btnLimparFiltrosColunaFrota" onclick="limparTodosFiltrosColunaFrota()"
+            class="${temFiltroColunaAtivoFrota() ? '' : 'hidden'} px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-black text-xs">
+            ✖ Limpar Filtros de Coluna
+          </button>
+          <input id="filtroPrefixoFrotaInput" type="text" value="${termoPrefixo}" oninput="atualizarApenasCorpoTabelaFrota()" placeholder="🔍 Busca Rápida Prefixo..." class="px-3 py-1.5 rounded-lg border text-xs font-bold uppercase" />
+        </div>
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
+        <div class="px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-[11px] font-bold text-amber-900 flex items-center justify-between">
+          <span>💡 <strong>Dica:</strong> Clique em cima do nome de qualquer coluna abaixo (ex: <em>Descrição</em>, <em>Marca</em>, <em>Modelo</em>, <em>Ano</em>) para abrir o filtro individual estilo Excel!</span>
+        </div>
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
-              <th class="p-3 text-center w-10">
-                <input type="checkbox" id="chkSelecionarTodosQR" onclick="alternarSelecaoTodosQR(this)" class="rounded text-amber-500 cursor-pointer" title="Selecionar Todos" />
+              <th class="p-2.5 text-center w-10 align-top border-r border-slate-800">
+                <input type="checkbox" id="chkSelecionarTodosQR" onclick="alternarSelecaoTodosQR(this)" class="rounded text-amber-500 cursor-pointer" title="Selecionar Todos Filtrados" />
               </th>
-              <th class="p-3">Prefixo</th>
-              <th class="p-3">Descrição / Marca / Modelo / Ano</th>
-              <th class="p-3">Nº Série / Placa</th>
-              <th class="p-3">Vínculo</th>
-              <th class="p-3">Obra Atual</th>
-              <th class="p-3">Horímetro / KM</th>
-              <th class="p-3 text-right">Ações</th>
+              ${renderizarThColunaFiltravelFrota('tag', 'Prefixo')}
+              ${renderizarThColunaFiltravelFrota('nome', 'Descrição')}
+              ${renderizarThColunaFiltravelFrota('marca', 'Marca')}
+              ${renderizarThColunaFiltravelFrota('modelo', 'Modelo')}
+              ${renderizarThColunaFiltravelFrota('ano_fabricacao', 'Ano')}
+              ${renderizarThColunaFiltravelFrota('numero_serie', 'Nº Série')}
+              ${renderizarThColunaFiltravelFrota('placa', 'Placa')}
+              ${renderizarThColunaFiltravelFrota('propriedade', 'Vínculo')}
+              ${renderizarThColunaFiltravelFrota('obra', 'Obra Atual')}
+              ${renderizarThColunaFiltravelFrota('horimetro', 'Horímetro/KM')}
+              <th class="p-2.5 text-right align-top">Ações</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-200">
-            ${lista.map(e => {
-              const obraObj = cacheObras.find(o => String(o.id) === String(e.obra_id));
-              const nomeObra = obraObj ? `${obraObj.codigo} - ${obraObj.nome}` : 'Matriz Geral';
-              const propBadge = e.propriedade === 'alugado'
-                ? `<span class="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-black text-[10px]">LOCADO</span>`
-                : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-bold text-[10px]">PRÓPRIO</span>`;
-
-              return `
-                <tr class="hover:bg-slate-50">
-                  <td class="p-3 text-center">
-                    <input type="checkbox" value="${e.id}" class="chk-qr-equipamento rounded text-amber-500 cursor-pointer" />
-                  </td>
-                  <td class="p-3 font-black"><span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${e.tag}</span></td>
-                  <td class="p-3">
-                    <div class="font-extrabold text-slate-900">${e.nome || '-'}</div>
-                    <div class="text-[11px] text-slate-500">
-                      ${e.marca || ''} ${e.modelo || ''} ${e.ano_fabricacao ? `• <strong class="text-slate-700">Ano: ${e.ano_fabricacao}</strong>` : ''}
-                    </div>
-                  </td>
-                  <td class="p-3">
-                    <div class="font-bold text-slate-800">Série: ${e.numero_serie || 'N/I'}</div>
-                    ${e.placa ? `<div class="text-[11px] font-black text-amber-700">Placa: ${e.placa}</div>` : ''}
-                  </td>
-                  <td class="p-3">${propBadge}</td>
-                  <td class="p-3 font-bold text-slate-700">📍 ${nomeObra}</td>
-                  <td class="p-3 font-black text-slate-900">${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}</td>
-                  <td class="p-3 text-right space-x-1 whitespace-nowrap">
-                    <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
-                    ${podeGerenciar ? `
-                      <button onclick="abrirModalTransferirObraEquipamento('${e.id}')" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold">🔄 Obra</button>
-                      <button onclick="abrirModalCicloVidaDesmobilizacao('${e.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold">⚙️ Status</button>
-                    ` : ''}
-                  </td>
-                </tr>
-              `;
-            }).join('')}
+          <tbody id="tbodyTabelaFrotaExcel" class="divide-y divide-slate-200">
+            ${gerarLinhasHtmlTabelaFrota(lista, podeGerenciar)}
           </tbody>
         </table>
       </div>
@@ -337,8 +504,12 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
 }
 
 function exportarRelatorioFrotaCSV() {
+  const listaParaExportar = typeof obterListaFrotaFiltradaAtual === 'function'
+    ? obterListaFrotaFiltradaAtual()
+    : cacheEquipamentos;
+
   const cab = ['PREFIXO', 'DESCRICAO', 'MARCA', 'MODELO', 'ANO_FABRICACAO', 'NUMERO_SERIE', 'PLACA', 'PROPRIEDADE', 'SITUACAO', 'HORIMETRO_ATUAL', 'UNIDADE'];
-  const linhas = cacheEquipamentos.map(e => [
+  const linhas = listaParaExportar.map(e => [
     e.tag || '', (e.nome || '').replace(/;/g, ','), (e.marca || '').replace(/;/g, ','),
     (e.modelo || '').replace(/;/g, ','), e.ano_fabricacao || '', e.numero_serie || '', e.placa || '',
     e.propriedade || 'proprio', e.situacao_ciclo || 'ativo',
