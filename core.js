@@ -110,38 +110,81 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
   return resultado;
 }
 
-// 2. AUTENTICAÇÃO E SESSÃO
+// 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
+// Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
+// continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
+const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v2';
+const COLUNAS_PERFIL_SEGURAS = 'id, matricula, nome, cargos_lista, obras_permitidas, ativo';
+
+function erroDeRedeAuth(err) {
+  if (!err) return false;
+  const t = String((err.name || '') + ' ' + (err.message || '')).toLowerCase();
+  return /fetch|network|retryable|failed to|timeout|offline/.test(t);
+}
+
 async function realizarLogin(event) {
   if (event) event.preventDefault();
   const clienteDB = obterClienteSupabase();
   if (!clienteDB) return alert('Erro de conexão com o banco (verifique config.js).');
 
-  const loginDigitado = (document.getElementById('loginMatricula')?.value || '').trim().toLowerCase();
-  const senDigitada = (document.getElementById('loginSenha')?.value || '').trim().toLowerCase();
+  const loginDigitado = (document.getElementById('loginMatricula')?.value || '').trim();
+  const senhaDigitada = (document.getElementById('loginSenha')?.value || '').trim();
+  if (!loginDigitado || !senhaDigitada) return alert('Informe usuário e senha!');
+  if (!navigator.onLine) {
+    return alert('📵 Sem sinal. O primeiro acesso neste aparelho precisa de internet. Depois dele o sistema funciona sem sinal.');
+  }
 
-  if (!loginDigitado || !senDigitada) return alert('Informe usuário e senha!');
+  try {
+    const rEmail = await clienteDB.rpc('resolver_login', { p_texto: loginDigitado });
+    if (rEmail.error) {
+      return alert(erroDeRedeAuth(rEmail.error)
+        ? 'Sem conexão com o servidor. Tente de novo com sinal.'
+        : 'Erro ao validar usuário: ' + rEmail.error.message);
+    }
+    if (!rEmail.data) return alert('Usuário ou senha incorretos! (Se houver dois colegas com o mesmo primeiro nome, entre pela matrícula.)');
 
-  const { data: listaPerfis, error } = await clienteDB.from('perfis_usuarios').select('*');
-  if (error) return alert('Erro ao consultar usuários: ' + error.message);
+    // Senhas migradas do sistema antigo foram guardadas em minúsculas; senhas novas respeitam o que foi digitado.
+    let r = await clienteDB.auth.signInWithPassword({ email: rEmail.data, password: senhaDigitada });
+    if (r.error && !erroDeRedeAuth(r.error) && senhaDigitada !== senhaDigitada.toLowerCase()) {
+      r = await clienteDB.auth.signInWithPassword({ email: rEmail.data, password: senhaDigitada.toLowerCase() });
+    }
+    if (r.error) {
+      return alert(erroDeRedeAuth(r.error)
+        ? 'Sem conexão com o servidor. Tente de novo com sinal.'
+        : 'Usuário ou senha incorretos!');
+    }
 
-  const usuarioEncontrado = (listaPerfis || []).find(u => {
-    if (u.ativo === false) return false;
-    const mat = String(u.matricula || '').trim().toLowerCase();
-    const nome = String(u.nome || '').trim().toLowerCase();
-    const senha = String(u.senha_acesso || '').trim().toLowerCase();
-    const bateUser = mat === loginDigitado || nome === loginDigitado || nome.split(' ')[0] === loginDigitado;
-    return bateUser && senha === senDigitada;
-  });
+    const rPerfil = await clienteDB.rpc('meu_perfil');
+    const perfil = rPerfil.data;
+    if (rPerfil.error || !perfil || perfil.ativo === false) {
+      await clienteDB.auth.signOut().catch(() => {});
+      return alert('Seu cadastro está inativo ou incompleto. Procure o administrador.');
+    }
 
-  if (!usuarioEncontrado) return alert('Usuário ou senha incorretos!');
-
-  usuarioLogado = usuarioEncontrado;
-  localStorage.setItem('vilasa_sessao_v2', JSON.stringify(usuarioEncontrado));
-  await inicializarSistemaPosLogin();
+    usuarioLogado = perfil;
+    localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
+    await inicializarSistemaPosLogin();
+  } catch (e) {
+    console.error(e);
+    alert('Não foi possível entrar agora. Verifique o sinal e tente novamente.');
+  }
 }
 
-function encerrarSessao() {
-  localStorage.removeItem('vilasa_sessao_v2');
+async function encerrarSessao() {
+  try {
+    const pendentes = (typeof lerFilaOffline === 'function') ? lerFilaOffline().length : 0;
+    if (pendentes > 0 && !confirm('Há ' + pendentes + ' registro(s) ainda NÃO enviados neste celular. Eles ficam guardados e são enviados quando alguém entrar com sinal. Sair mesmo assim?')) return;
+  } catch (e) { /* segue */ }
+  try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
+  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+  localStorage.removeItem('vilasa_obra_ativa_v2');
+  usuarioLogado = null;
+  window.location.reload();
+}
+
+function encerrarSessaoSemPerguntar() {
+  try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
+  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem('vilasa_obra_ativa_v2');
   usuarioLogado = null;
   window.location.reload();
@@ -149,36 +192,47 @@ function encerrarSessao() {
 
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
-  const raw = localStorage.getItem('vilasa_sessao_v2');
-  if (!raw) {
+  const mostrarLogin = () => {
     document.getElementById('telaLogin')?.classList.remove('hidden');
     document.getElementById('appPrincipal')?.classList.add('hidden');
-    return;
-  }
+  };
+  const raw = localStorage.getItem(CHAVE_SESSAO_LOCAL);
+  if (!raw) return mostrarLogin();
   try {
     const cache = JSON.parse(raw);
-    if (!cache?.id) return encerrarSessao();
-    usuarioLogado = cache; // por padrão confia na sessão guardada (campo sem sinal NÃO desloga)
+    if (!cache?.id) return mostrarLogin();
+    usuarioLogado = cache; // sem sinal: confia no perfil guardado (campo sem sinal NÃO desloga)
+
     if (navigator.onLine && obterClienteSupabase()) {
       try {
-        const { data, error } = await db.from('perfis_usuarios').select('*').eq('id', cache.id).maybeSingle();
-        if (!error) {
-          // Resposta válida do servidor: aí sim confere se o usuário ainda existe e está ativo.
-          if (data && data.ativo !== false) {
-            usuarioLogado = data;
-            localStorage.setItem('vilasa_sessao_v2', JSON.stringify(data));
-          } else {
-            return encerrarSessao();
-          }
+        const { data: dSess, error: eSess } = await db.auth.getSession();
+        const sessao = dSess?.session;
+        if (!sessao && !erroDeRedeAuth(eSess)) {
+          // Servidor respondeu e não há mais login válido (senha trocada, usuário removido...). Pede novo login.
+          // A fila de registros pendentes NÃO é apagada.
+          localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+          usuarioLogado = null;
+          return mostrarLogin();
         }
-        // Com erro (rede ruim, servidor instável): mantém a sessão local.
+        if (sessao) {
+          const r = await db.rpc('meu_perfil');
+          if (!r.error) {
+            if (r.data && r.data.ativo !== false) {
+              usuarioLogado = r.data;
+              localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(r.data));
+            } else {
+              return encerrarSessaoSemPerguntar();
+            }
+          }
+          // Com erro (rede ruim, servidor instável): mantém o perfil local.
+        }
       } catch (e) {
         console.warn('Sem confirmação do servidor; mantendo sessão local.', e);
       }
     }
     await inicializarSistemaPosLogin();
   } catch (e) {
-    document.getElementById('telaLogin')?.classList.remove('hidden');
+    mostrarLogin();
   }
 }
 
@@ -703,7 +757,8 @@ async function buscarTudoSemLimite(tabela, colunaOrdem = 'id', ascendente = true
     let query = db.from(tabela).select(selectQuery).range(de, de + passo - 1);
     if (colunaOrdem) query = query.order(colunaOrdem, { ascending: ascendente });
     const { data, error } = await query;
-    if (error || !data || data.length === 0) break;
+    if (error) { console.error('Falha ao ler ' + tabela + ':', error.message); break; }
+    if (!data || data.length === 0) break;
     todosRegistros = todosRegistros.concat(data);
     if (data.length < passo) break;
     de += passo;

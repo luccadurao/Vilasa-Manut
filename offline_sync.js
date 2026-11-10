@@ -73,6 +73,19 @@ function descreverErro(res) {
 async function executarOperacaoNoBanco(item, modoReenvio = false) {
   const { tabela, operacao, payload, idRegistro } = item;
   try {
+    // Funções do servidor (ex.: lancar_horimetro do QR) funcionam SEM login, com id próprio (idempotentes).
+    if (operacao === 'RPC') {
+      return await db.rpc(tabela, payload);
+    }
+    // Todo o resto exige login ativo. Sem login a gravação fica guardada na fila (não é rejeitada).
+    try {
+      const { data: dSess } = await db.auth.getSession();
+      if (!dSess || !dSess.session) {
+        return { data: null, error: { message: 'Sem login ativo: entre no sistema para enviar os registros pendentes.' }, status: 401 };
+      }
+    } catch (e) {
+      return { data: null, error: { message: 'Sessão indisponível' }, status: 401 };
+    }
     if (operacao === 'INSERT') {
       // No reenvio usamos "ignorar duplicado": se o servidor já recebeu, não cria outro.
       if (modoReenvio) {
@@ -169,7 +182,7 @@ async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = nu
       return { data: dado, error: null, offline: false };
     }
     if (!erroEhRecuperavel(res)) {
-      alert(`Erro ao gravar em ${tabela}: ` + descreverErro(res));
+      alert(operacao === 'RPC' ? 'Não foi possível registrar: ' + descreverErro(res) : `Erro ao gravar em ${tabela}: ` + descreverErro(res));
       return { data: null, error: res.error, offline: false };
     }
     // Erro temporário (sinal ruim): cai para a fila abaixo.

@@ -517,7 +517,7 @@ async function confirmarAberturaSolicitacaoOS() {
 async function obterListaMecanicosParaChips() {
   if (navigator.onLine) {
     try {
-      const { data } = await db.from('perfis_usuarios').select('*').order('nome');
+      const { data } = await db.from('perfis_usuarios').select('id, matricula, nome, cargos_lista, obras_permitidas, ativo').order('nome');
       if (data) cacheUsuarios = data;
     } catch (e) {}
   }

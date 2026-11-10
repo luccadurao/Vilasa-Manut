@@ -231,9 +231,7 @@
       const cliente = obterClienteSupabase();
       if (navigator.onLine && cliente) {
         try {
-          let query = cliente.from('equipamentos').select('id, tag, nome, unidade_medida, horimetro_atual, obra_id');
-          query = equipAtualQR.id ? query.eq('id', equipAtualQR.id) : query.eq('tag', equipAtualQR.tag);
-          const { data, error } = await query.maybeSingle();
+          const { data, error } = await cliente.rpc('qr_equipamento', { p_id: equipAtualQR.id || null, p_tag: equipAtualQR.id ? null : equipAtualQR.tag });
           if (!error && data) {
             equipAtualQR = { ...equipAtualQR, ...data };
             guardarCacheEquip();
@@ -260,19 +258,20 @@
 
     // Grava horímetro (diário + equipamento) pela fila segura. Devolve { ok, offline }.
     async function gravarLeituraHorimetro(horNovo, usuarioNome) {
-      const r1 = await gravarDadosOfflineSafe('diario_horimetro', 'INSERT', {
-        equipamento_id: equipAtualQR.id,
-        leitura: horNovo,
-        operador_nome: usuarioNome,
-        registrado_em: new Date().toISOString()
+      // Uma só chamada ao servidor: confere o salto, grava no diário e atualiza o equipamento.
+      // Funciona sem login e é segura para reenvio (mesmo id nunca duplica).
+      const r = await gravarDadosOfflineSafe('lancar_horimetro', 'RPC', {
+        p_equipamento: equipAtualQR.id,
+        p_leitura: horNovo,
+        p_operador: usuarioNome,
+        p_registrado_em: new Date().toISOString(),
+        p_id: novoUuid()
       });
-      if (r1.error) return { ok: false };
-      const r2 = await gravarDadosOfflineSafe('equipamentos', 'HORIMETRO_MAX', { horimetro_atual: horNovo }, equipAtualQR.id);
-      if (r2.error) return { ok: false };
+      if (r.error) return { ok: false };
       equipAtualQR.horimetro_atual = horNovo;
       guardarCacheEquip();
       atualizarTextoHorimetro();
-      return { ok: true, offline: r1.offline || r2.offline };
+      return { ok: true, offline: r.offline };
     }
 
     async function enviarOSViaQRCode() {

@@ -11,7 +11,7 @@ async function carregarUsuariosAdmin(subAba = subAbaAdminAtual) {
 
   try {
     const [resUsers, resObras, resEq] = await Promise.all([
-      db.from('perfis_usuarios').select('*').order('nome'),
+      db.from('perfis_usuarios').select('id, matricula, nome, cargos_lista, obras_permitidas, ativo').order('nome'),
       db.from('obras').select('*').order('codigo'),
       typeof buscarTudoSemLimite === 'function'
         ? buscarTudoSemLimite('equipamentos', 'tag', true).then(data => ({ data }))
@@ -438,7 +438,7 @@ function renderizarSecaoUsuariosMultiCargo() {
         <input type="hidden" id="admUserIdEdit" value="" />
         <div class="grid grid-cols-2 gap-2">
           <input id="admUserMatricula" type="text" placeholder="Login / Matrícula" class="border rounded-lg p-2 font-black uppercase" />
-          <input id="admUserSenha" type="text" placeholder="Senha" class="border rounded-lg p-2 font-bold" />
+          <input id="admUserSenha" type="text" placeholder="Senha (mín. 6; em branco = manter)" autocomplete="new-password" class="border rounded-lg p-2 font-bold" />
         </div>
         <input id="admUserNome" type="text" placeholder="Nome Completo" class="w-full border rounded-lg p-2 font-bold uppercase" />
 
@@ -502,7 +502,7 @@ function preencherUsuarioParaEdicaoAdmin(userId) {
   if (!u) return;
   document.getElementById('admUserIdEdit').value = u.id;
   document.getElementById('admUserMatricula').value = u.matricula || '';
-  document.getElementById('admUserSenha').value = u.senha_acesso || '';
+  document.getElementById('admUserSenha').value = ''; // a senha nunca é exibida; deixe em branco para manter
   document.getElementById('admUserNome').value = u.nome || '';
 
   const cargos = obterCargosUsuario(u);
@@ -513,35 +513,37 @@ function preencherUsuarioParaEdicaoAdmin(userId) {
 }
 
 async function salvarUsuarioMultiCargoAdmin() {
-  const idEdit = document.getElementById('admUserIdEdit').value;
+  const idEdit = document.getElementById('admUserIdEdit').value || null;
   const matricula = document.getElementById('admUserMatricula').value.trim().toUpperCase();
-  const senha_acesso = document.getElementById('admUserSenha').value.trim();
+  const senha = document.getElementById('admUserSenha').value.trim();
   const nome = document.getElementById('admUserNome').value.trim().toUpperCase();
   const cargos_lista = Array.from(document.querySelectorAll('.chk-cargo-adm:checked')).map(c => c.value);
   const obras_permitidas = Array.from(document.querySelectorAll('.chk-obra-adm:checked')).map(o => o.value);
 
-  if (!matricula || !senha_acesso || !nome || cargos_lista.length === 0) {
-    return alert('Preencha Login, Senha, Nome e marque pelo menos 1 Cargo!');
-  }
+  if (!matricula || !nome || cargos_lista.length === 0) return alert('Preencha Login, Nome e marque pelo menos 1 Cargo!');
+  if (!idEdit && !senha) return alert('Informe uma senha (mínimo 6 caracteres) para o novo usuário.');
+  if (senha && senha.length < 6) return alert('A senha precisa ter pelo menos 6 caracteres.');
+  if (!navigator.onLine) return alert('📵 Cadastro de usuários precisa de internet.');
 
-  const payload = {
-    matricula,
-    senha_acesso,
-    nome,
-    cargos_lista,
-    obras_permitidas: obras_permitidas.length > 0 ? obras_permitidas : ['TODAS'],
-    ativo: true
-  };
-
-  if (idEdit) await db.from('perfis_usuarios').update(payload).eq('id', idEdit);
-  else await db.from('perfis_usuarios').insert([payload]);
+  const { error } = await db.rpc('admin_salvar_usuario', {
+    p_id: idEdit,
+    p_matricula: matricula,
+    p_nome: nome,
+    p_senha: senha,
+    p_cargos: cargos_lista,
+    p_obras: obras_permitidas.length > 0 ? obras_permitidas : ['TODAS'],
+    p_ativo: true
+  });
+  if (error) return alert('❌ Não foi possível salvar: ' + error.message);
 
   alert('✅ Usuário salvo com sucesso!');
   await carregarUsuariosAdmin('usuarios');
 }
 
 async function alternarAtivoUsuarioAdmin(userId, estadoAtual) {
-  await db.from('perfis_usuarios').update({ ativo: !estadoAtual }).eq('id', userId);
+  if (!navigator.onLine) return alert('📵 Precisa de internet.');
+  const { error } = await db.rpc('admin_definir_ativo', { p_id: userId, p_ativo: !estadoAtual });
+  if (error) return alert('❌ Não foi possível alterar: ' + error.message);
   await carregarUsuariosAdmin('usuarios');
 }
 
@@ -614,7 +616,8 @@ async function carregarTabelaEditorAdmin() {
   const cont = document.getElementById('containerTabelaModoDeus');
   if (!cont) return;
   cont.innerHTML = `<p class="p-4 text-slate-500 font-bold">Carregando ${tabela}...</p>`;
-  cacheLinhasModoDeus = await buscarTudoSemLimite(tabela, null, false);
+  cacheLinhasModoDeus = await buscarTudoSemLimite(tabela, null, false,
+    tabela === 'perfis_usuarios' ? 'id, matricula, nome, cargos_lista, obras_permitidas, ativo' : '*');
   filtrarLinhasModoDeusNaTela();
 }
 
