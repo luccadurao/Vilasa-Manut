@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 1: CORE.JS (NÚCLEO PADRONIZADO SEM REDUNDÂNCIAS)
+// VILASA CMMS V2 - MÓDULO 1: CORE.JS (NÚCLEO PADRONIZADO + IMPRESSÃO DIRETA)
 // ============================================================================
 
 let usuarioLogado = null;
@@ -148,6 +148,7 @@ function encerrarSessao() {
 
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
+  atualizarBotaoPDFParaImpressao();
   const raw = localStorage.getItem('vilasa_sessao_v2');
   if (!raw) {
     document.getElementById('telaLogin')?.classList.remove('hidden');
@@ -174,9 +175,18 @@ async function restaurarSessaoSalva() {
   }
 }
 
+// Troca automaticamente o texto do botão vermelho de PDF para "Imprimir Relatório" sem precisar mexer no index.html
+function atualizarBotaoPDFParaImpressao() {
+  const botoes = document.querySelectorAll('button[onclick*="gerarRelatorioCompletoPDF"]');
+  botoes.forEach(btn => {
+    btn.innerHTML = `<i class="fa-solid fa-print mr-1"></i> <span>Imprimir Relatório</span>`;
+  });
+}
+
 async function inicializarSistemaPosLogin() {
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
+  atualizarBotaoPDFParaImpressao();
 
   const cargos = obterCargosUsuario(usuarioLogado);
   const nomesCargos = cargos.map(c => (MATRIZ_PERMISSOES_CARGOS[c]?.label.split(' ')[0] || c.toUpperCase())).join(' + ');
@@ -280,6 +290,7 @@ function filtrarListaPorObraAtiva(lista) {
 function navegarPara(modulo) {
   if (!podeVerAba(modulo)) return alert('Seu perfil não possui acesso a este módulo.');
   abaAtivaGlobal = modulo;
+  atualizarBotaoPDFParaImpressao();
 
   const nomesAbas = {
     os: 'Ordens de Serviço & Quadro REP',
@@ -316,7 +327,7 @@ function navegarPara(modulo) {
   if (modulo === 'admin' && typeof carregarUsuariosAdmin === 'function') carregarUsuariosAdmin();
 }
 
-// 5. MOTOR UNIVERSAL DE EXPORTAÇÃO (CSV + PDF FILTRADO + PNG EXECUTIVO 1 PÁGINA)
+// 5. MOTOR UNIVERSAL DE EXPORTAÇÃO (CSV + IMPRESSÃO DIRETA + PNG EXECUTIVO)
 function acionarExportacaoUniversalCSV() {
   if (abaAtivaGlobal === 'os' && typeof exportarPlanilhaOSFiltradaCSV === 'function') return exportarPlanilhaOSFiltradaCSV();
   if (abaAtivaGlobal === 'frota' && typeof exportarRelatorioFrotaCSV === 'function') return exportarRelatorioFrotaCSV();
@@ -345,25 +356,26 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
     const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
     let lista = filtrarListaPorObraAtiva(cacheOrdens || []);
     if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
-    const paradas = lista.filter(o => !o.concluida_em && o.parada_obrigatoria !== false);
+    const emAberto = lista.filter(o => !o.concluida_em && o.status !== 'concluida');
 
     return {
-      titulo: 'Relatório de Ordens de Serviço & Equipamentos Parados (REP)',
+      titulo: 'Relatório de Ordens de Serviço & Equipamentos em Manutenção (REP)',
       subtitulo: `Obra: ${obraNome} | Filtro Prefixo: ${termo || 'TODOS'}`,
       kpisResumo: [
         { label: 'Total Filtrado', valor: lista.length },
-        { label: 'Máquinas Paradas (REP)', valor: paradas.length },
-        { label: 'Operando c/ Anomalia', valor: lista.filter(o => o.parada_obrigatoria === false && !o.concluida_em).length },
+        { label: 'Em Manutenção Agora', valor: emAberto.length },
+        { label: 'Aguardando PCM', valor: lista.filter(o => o.status === 'aguardando_pcm').length },
         { label: 'Concluídas', valor: lista.filter(o => Boolean(o.concluida_em) || o.status === 'concluida').length }
       ],
-      colunas: ['Prefixo', 'Equipamento', 'Status / Local', 'Motivo / Problema', 'Serviço Executado', 'Entrada', 'Equipe'],
+      colunas: ['Prefixo', 'Equipamento', 'Status / Local', 'Motivo / Sistema', 'Problema', 'Serviço Executado', 'Início / Fim', 'Equipe'],
       linhas: lista.map(o => [
         o.equipamentos?.tag || '-',
         o.equipamentos?.nome || '-',
         `${(o.status || '').toUpperCase()} (${o.local_manutencao_pcm || 'OFICINA'})`,
-        `${o.motivo_rep || 'CORRETIVA'}: ${o.descricao_problema || '-'}`,
+        `${o.motivo_rep || 'CORRETIVA'}${o.classificacao_falha ? ` - ${o.classificacao_falha}` : ''}`,
+        o.descricao_problema || '-',
         o.servico_executado || '-',
-        o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-',
+        `${o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-'}${o.concluida_em ? ` até ${new Date(o.concluida_em).toLocaleString('pt-BR')}` : ''}`,
         o.mecanico_nome || 'Aguardando'
       ])
     };
@@ -385,11 +397,12 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
         { label: 'Locados', valor: lista.filter(e => e.propriedade === 'alugado').length },
         { label: 'Ativos na Obra', valor: lista.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length }
       ],
-      colunas: ['Prefixo', 'Descrição', 'Marca / Modelo', 'Vínculo', 'Horímetro / KM', 'Situação'],
+      colunas: ['Prefixo', 'Descrição', 'Marca / Modelo / Ano', 'Nº Série / Placa', 'Vínculo', 'Horímetro / KM', 'Situação'],
       linhas: lista.map(e => [
         e.tag || '-',
         e.nome || '-',
-        `${e.marca || ''} ${e.modelo || ''}`,
+        `${e.marca || ''} ${e.modelo || ''} ${e.ano_fabricacao ? `(${e.ano_fabricacao})` : ''}`,
+        `Série: ${e.numero_serie || 'N/I'}${e.placa ? ` | Placa: ${e.placa}` : ''}`,
         (e.propriedade || 'proprio').toUpperCase(),
         `${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}`,
         (e.situacao_ciclo || 'ativo').toUpperCase()
@@ -443,10 +456,11 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
   };
 }
 
+// IMPRESSÃO DIRETA EM TODAS AS ABAS (PAISAGEM + FECHAMENTO AUTOMÁTICO DA JANELA)
 function gerarRelatorioCompletoPDF() {
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio();
   const win = window.open('', '_blank');
-  if (!win) return alert('Permita pop-ups no navegador para gerar o PDF.');
+  if (!win) return alert('Permita pop-ups no navegador para imprimir o relatório.');
 
   const kpisHtml = rel.kpisResumo.map(k => `
     <div style="border:1px solid #cbd5e1; border-radius:10px; padding:10px; background:#f8fafc; flex:1;">
@@ -455,23 +469,34 @@ function gerarRelatorioCompletoPDF() {
     </div>
   `).join('');
 
-  const thHtml = rel.colunas.map(c => `<th style="padding:8px; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:10px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
-  const trHtml = rel.linhas.map(l => `<tr>${l.map(cel => `<td style="padding:7px; border:1px solid #cbd5e1; font-size:10px; color:#1e293b;">${cel}</td>`).join('')}</tr>`).join('');
+  const thHtml = rel.colunas.map(c => `<th style="padding:7px; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:10px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
+  const trHtml = rel.linhas.map(l => `<tr>${l.map(cel => `<td style="padding:6px; border:1px solid #cbd5e1; font-size:10px; color:#1e293b;">${cel}</td>`).join('')}</tr>`).join('');
 
   win.document.write(`
-    <html><head><title>${rel.titulo}</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#0f172a;}</style></head>
-    <body onload="setTimeout(() => window.print(), 500)">
-      <div style="border-bottom:3px solid #f59e0b; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-size:11px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
-          <h1 style="margin:4px 0; font-size:18px;">${rel.titulo}</h1>
-          <div style="font-size:11px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
+    <html>
+      <head>
+        <title>Impressão - ${rel.titulo}</title>
+        <style>
+          @page { size: landscape; margin: 10mm; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 10px; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          thead { display: table-header-group; }
+        </style>
+      </head>
+      <body onload="setTimeout(() => { window.print(); window.onafterprint = () => window.close(); }, 350)">
+        <div style="border-bottom:3px solid #f59e0b; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:11px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
+            <h1 style="margin:4px 0; font-size:18px;">${rel.titulo}</h1>
+            <div style="font-size:11px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
+          </div>
+          <div style="text-align:right; font-size:10px; color:#64748b;">Impresso em: ${new Date().toLocaleString('pt-BR')}</div>
         </div>
-        <div style="text-align:right; font-size:10px; color:#64748b;">Emitido em: ${new Date().toLocaleString('pt-BR')}</div>
-      </div>
-      <div style="display:flex; gap:10px; margin-bottom:16px;">${kpisHtml}</div>
-      <table style="width:100%; border-collapse:collapse;"><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table>
-    </body></html>
+        <div style="display:flex; gap:10px; margin-bottom:14px;">${kpisHtml}</div>
+        <table><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table>
+      </body>
+    </html>
   `);
   win.document.close();
 }
