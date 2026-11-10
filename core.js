@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 1: CORE.JS (NÚCLEO PADRONIZADO + IMPRESSÃO DIRETA)
+// VILASA CMMS V2 - MÓDULO 1: CORE.JS (EXPORTAÇÃO DUPLA: COMPLETA vs REP 1 PÁG.)
 // ============================================================================
 
 let usuarioLogado = null;
@@ -109,7 +109,7 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
   return resultado;
 }
 
-// 2. AUTENTICAÇÃO E SESSÃO (COLUNA ÚNICA: senha_acesso)
+// 2. AUTENTICAÇÃO E SESSÃO
 async function realizarLogin(event) {
   if (event) event.preventDefault();
   const clienteDB = obterClienteSupabase();
@@ -148,7 +148,7 @@ function encerrarSessao() {
 
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
-  atualizarBotaoPDFParaImpressao();
+  montarBotoesBarraExportacaoUniversal();
   const raw = localStorage.getItem('vilasa_sessao_v2');
   if (!raw) {
     document.getElementById('telaLogin')?.classList.remove('hidden');
@@ -175,18 +175,57 @@ async function restaurarSessaoSalva() {
   }
 }
 
-// Troca automaticamente o texto do botão vermelho de PDF para "Imprimir Relatório" sem precisar mexer no index.html
-function atualizarBotaoPDFParaImpressao() {
-  const botoes = document.querySelectorAll('button[onclick*="gerarRelatorioCompletoPDF"]');
-  botoes.forEach(btn => {
-    btn.innerHTML = `<i class="fa-solid fa-print mr-1"></i> <span>Imprimir Relatório</span>`;
-  });
+// Reconstrói os botões do topo separando: CSV Completo, Imprimir Tudo, Imprimir REP (1 Pág.) e Exportar PNG (1 Pág.)
+function montarBotoesBarraExportacaoUniversal() {
+  const elTit = document.getElementById('tituloAbaExportacaoUniversal');
+  const barraPai = elTit?.parentElement?.parentElement || elTit?.parentElement;
+  if (!barraPai) return;
+
+  let containerBotoes = document.getElementById('containerBotoesExportacaoTopoV2');
+  if (!containerBotoes) {
+    // Esconde os botões antigos para não duplicar nem sobrescrever errado
+    Array.from(barraPai.querySelectorAll('button')).forEach(b => b.classList.add('hidden'));
+    containerBotoes = document.createElement('div');
+    containerBotoes.id = 'containerBotoesExportacaoTopoV2';
+    containerBotoes.className = 'flex flex-wrap items-center gap-2';
+    barraPai.appendChild(containerBotoes);
+  }
+
+  containerBotoes.innerHTML = `
+    <button type="button" onclick="acionarExportacaoUniversalCSV()"
+      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Exportar planilha completa com todas as informações">
+      <i class="fa-solid fa-file-csv"></i>
+      <span>Planilha Completa (CSV)</span>
+    </button>
+
+    <button type="button" onclick="imprimirRelatorioGeralCompleto()"
+      class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Imprimir relatório completo com todos os itens e colunas">
+      <i class="fa-solid fa-print"></i>
+      <span>Imprimir Tudo (Completo)</span>
+    </button>
+
+    <button type="button" onclick="gerarRelatorioCompletoPDF()"
+      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Imprimir resumo enxuto de 1 página (Na aba OS: apenas máquinas abertas/paradas)">
+      <i class="fa-solid fa-bolt"></i>
+      <span>Imprimir 1 Pág. (Parados/REP)</span>
+    </button>
+
+    <button type="button" onclick="gerarResumoExecutivoPNG()"
+      class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 font-black text-xs shadow flex items-center gap-1.5"
+      title="Baixar imagem PNG de 1 página (até 25 máquinas paradas)">
+      <i class="fa-solid fa-image"></i>
+      <span>Exportar 1 Pág. (PNG)</span>
+    </button>
+  `;
 }
 
 async function inicializarSistemaPosLogin() {
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
-  atualizarBotaoPDFParaImpressao();
+  montarBotoesBarraExportacaoUniversal();
 
   const cargos = obterCargosUsuario(usuarioLogado);
   const nomesCargos = cargos.map(c => (MATRIZ_PERMISSOES_CARGOS[c]?.label.split(' ')[0] || c.toUpperCase())).join(' + ');
@@ -290,7 +329,7 @@ function filtrarListaPorObraAtiva(lista) {
 function navegarPara(modulo) {
   if (!podeVerAba(modulo)) return alert('Seu perfil não possui acesso a este módulo.');
   abaAtivaGlobal = modulo;
-  atualizarBotaoPDFParaImpressao();
+  montarBotoesBarraExportacaoUniversal();
 
   const nomesAbas = {
     os: 'Ordens de Serviço & Quadro REP',
@@ -327,9 +366,58 @@ function navegarPara(modulo) {
   if (modulo === 'admin' && typeof carregarUsuariosAdmin === 'function') carregarUsuariosAdmin();
 }
 
-// 5. MOTOR UNIVERSAL DE EXPORTAÇÃO (CSV + IMPRESSÃO DIRETA + PNG EXECUTIVO)
-function acionarExportacaoUniversalCSV() {
-  if (abaAtivaGlobal === 'os' && typeof exportarPlanilhaOSFiltradaCSV === 'function') return exportarPlanilhaOSFiltradaCSV();
+// ============================================================================
+// 5. MOTOR DUPLO DE EXPORTAÇÃO:
+//    A) MODO COMPLETO (TODAS AS ORDENS E TODAS AS COLUNAS)
+//    B) MODO ENXUTO 1 PÁGINA - REP (SOMENTE ABERTAS, SEM LOCAL/EQUIPE/MOTIVO/DATAS, CABE 18+ ITENS)
+// ============================================================================
+
+// BOTÃO 1: Exporta CSV Completo (Na aba OS: exporta TODAS as OS com todas as colunas detalhadas)
+async function acionarExportacaoUniversalCSV() {
+  if (abaAtivaGlobal === 'os') {
+    const todasOS = typeof buscarTudoSemLimite === 'function'
+      ? await buscarTudoSemLimite('ordens_servico', 'aberta_em', false, '*, equipamentos(tag, nome, marca)')
+      : cacheOrdens || [];
+
+    let lista = filtrarListaPorObraAtiva(todasOS);
+    const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
+    if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
+
+    const cab = [
+      'NUMERO_OS', 'PREFIXO', 'EQUIPAMENTO', 'MARCA', 'STATUS', 'MOTIVO_REP',
+      'CLASSIFICACAO_FALHA', 'LOCAL_MANUTENCAO', 'DESCRICAO_PROBLEMA',
+      'SERVICO_EXECUTADO', 'MECANICO_NOME', 'HORIMETRO_OS', 'DATA_INICIO', 'DATA_FIM', 'DIAS_PARADOS'
+    ];
+
+    const linhas = lista.map(o => {
+      const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
+      const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
+      return [
+        o.numero_os || '',
+        o.equipamentos?.tag || '',
+        (o.equipamentos?.nome || '').replace(/;/g, ','),
+        (o.equipamentos?.marca || '').replace(/;/g, ','),
+        o.status || '',
+        o.motivo_rep || 'CORRETIVA',
+        (o.classificacao_falha || '').replace(/;/g, ','),
+        o.local_manutencao_pcm || 'OFICINA',
+        (o.descricao_problema || '').replace(/[\r\n;]+/g, ' '),
+        (o.servico_executado || '').replace(/[\r\n;]+/g, ' '),
+        (o.mecanico_nome || '').replace(/;/g, ','),
+        String(o.horimetro_os || '').replace('.', ','),
+        o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '',
+        o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'EM ABERTO',
+        dias
+      ].join(';');
+    });
+
+    const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `VILASA_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
+    return a.click();
+  }
+
   if (abaAtivaGlobal === 'frota' && typeof exportarRelatorioFrotaCSV === 'function') return exportarRelatorioFrotaCSV();
   if (abaAtivaGlobal === 'preventivas' && typeof exportarHistoricoProprioPreventivasCSV === 'function') return exportarHistoricoProprioPreventivasCSV();
   if (abaAtivaGlobal === 'estoque' && typeof exportarInventarioAlmoxCSV === 'function') return exportarInventarioAlmoxCSV();
@@ -349,48 +437,83 @@ function acionarExportacaoUniversalCSV() {
   a.click();
 }
 
-function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
+// Coleta dados em 2 modos: 'enxuto_rep' (só abertas e colunas enxutas p/ caber 18+ em 1 pág.) ou 'completo' (tudo e todas as colunas)
+function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
   const obraNome = obterNomeObraAtiva();
 
   if (abaAtivaGlobal === 'os') {
     const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
     let lista = filtrarListaPorObraAtiva(cacheOrdens || []);
     if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
-    const emAberto = lista.filter(o => !o.concluida_em && o.status !== 'concluida');
 
+    const abertas = lista.filter(o => !o.concluida_em && !['concluida', 'aguardando_pcm'].includes(o.status));
+
+    // MODO 1: ENXUTO DE 1 PÁGINA PARA OS EQUIPAMENTOS PARADOS (REP) -> Só abertas, sem datas início/fim, sem local, sem motivo e sem equipe!
+    if (modo === 'enxuto_rep') {
+      return {
+        titulo: 'QUADRO DE EQUIPAMENTOS PARADOS EM MANUTENÇÃO (REP)',
+        subtitulo: `Obra: ${obraNome} | Posição Atualizada: ${new Date().toLocaleString('pt-BR')}`,
+        kpisResumo: [
+          { label: 'Máquinas Paradas Agora', valor: abertas.length },
+          { label: 'Aguardando Peça', valor: abertas.filter(o => o.status === 'pausada_peca').length },
+          { label: 'Em Execução / Fila', valor: abertas.filter(o => o.status !== 'pausada_peca').length },
+          { label: 'Média Dias Parados', valor: abertas.length > 0 ? (abertas.reduce((acc, o) => acc + Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000)), 0) / abertas.length).toFixed(1) + ' d' : '0 d' }
+        ],
+        colunas: ['PREFIXO', 'EQUIPAMENTO / MARCA', 'SISTEMA (FALHA)', 'DESCRIÇÃO DO PROBLEMA', 'ANDAMENTO / STATUS', 'DIAS PARADOS'],
+        linhas: abertas.map(o => {
+          const dias = Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000));
+          const statusCurto = o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : (o.servico_executado || 'EM MANUTENÇÃO');
+          return [
+            o.equipamentos?.tag || '-',
+            `${o.equipamentos?.nome || '-'}${o.equipamentos?.marca ? ` (${o.equipamentos.marca})` : ''}`,
+            o.classificacao_falha || 'EM ANÁLISE',
+            o.descricao_problema || '-',
+            statusCurto,
+            `${dias} dia(s)`
+          ];
+        })
+      };
+    }
+
+    // MODO 2: RELATÓRIO COMPLETO DE OS (Todas as ordens + todas as informações)
     return {
-      titulo: 'Relatório de Ordens de Serviço & Equipamentos em Manutenção (REP)',
+      titulo: 'Relatório Geral Completo de Ordens de Serviço (Abertas & Concluídas)',
       subtitulo: `Obra: ${obraNome} | Filtro Prefixo: ${termo || 'TODOS'}`,
       kpisResumo: [
-        { label: 'Total Filtrado', valor: lista.length },
-        { label: 'Em Manutenção Agora', valor: emAberto.length },
-        { label: 'Aguardando PCM', valor: lista.filter(o => o.status === 'aguardando_pcm').length },
+        { label: 'Total Listado', valor: lista.length },
+        { label: 'Em Manutenção Agora', valor: abertas.length },
+        { label: 'Triagem PCM', valor: lista.filter(o => o.status === 'aguardando_pcm').length },
         { label: 'Concluídas', valor: lista.filter(o => Boolean(o.concluida_em) || o.status === 'concluida').length }
       ],
-      colunas: ['Prefixo', 'Equipamento', 'Status / Local', 'Motivo / Sistema', 'Problema', 'Serviço Executado', 'Início / Fim', 'Equipe'],
-      linhas: lista.map(o => [
-        o.equipamentos?.tag || '-',
-        o.equipamentos?.nome || '-',
-        `${(o.status || '').toUpperCase()} (${o.local_manutencao_pcm || 'OFICINA'})`,
-        `${o.motivo_rep || 'CORRETIVA'}${o.classificacao_falha ? ` - ${o.classificacao_falha}` : ''}`,
-        o.descricao_problema || '-',
-        o.servico_executado || '-',
-        `${o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-'}${o.concluida_em ? ` até ${new Date(o.concluida_em).toLocaleString('pt-BR')}` : ''}`,
-        o.mecanico_nome || 'Aguardando'
-      ])
+      colunas: ['Nº OS', 'Prefixo / Máquina', 'Motivo / Sistema', 'Local', 'Problema', 'Serviço Executado', 'Início / Fim', 'Dias', 'Equipe'],
+      linhas: lista.map(o => {
+        const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
+        const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
+        return [
+          `#${o.numero_os || '-'}`,
+          `${o.equipamentos?.tag || '-'} - ${o.equipamentos?.nome || ''}`,
+          `${o.motivo_rep || 'CORRETIVA'} / ${o.classificacao_falha || '-'}`,
+          o.local_manutencao_pcm || 'OFICINA',
+          o.descricao_problema || '-',
+          o.servico_executado || '-',
+          `${o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-'} → ${o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'ABERTA'}`,
+          `${dias}d`,
+          o.mecanico_nome || '-'
+        ];
+      })
     };
   }
 
   if (abaAtivaGlobal === 'frota') {
-    const termo = (document.getElementById('filtroPrefixoFrotaInput')?.value || '').trim().toUpperCase();
     const sit = typeof filtroSituacaoFrota !== 'undefined' ? filtroSituacaoFrota : 'ativo';
-    let lista = filtrarListaPorObraAtiva(cacheEquipamentos || []);
-    if (sit !== 'todos') lista = lista.filter(e => (e.situacao_ciclo || 'ativo') === sit);
-    if (termo) lista = lista.filter(e => bateComPrefixoEquipamento(e.tag || '', termo));
+    // Respeita todos os filtros de coluna estilo Excel aplicados na tela da Frota!
+    let lista = typeof obterListaFrotaFiltradaAtual === 'function'
+      ? obterListaFrotaFiltradaAtual()
+      : filtrarListaPorObraAtiva(cacheEquipamentos || []);
 
     return {
       titulo: 'Relatório Oficial de Frota e Mobilização de Ativos',
-      subtitulo: `Obra: ${obraNome} | Situação: ${sit.toUpperCase()} | Prefixo: ${termo || 'TODOS'}`,
+      subtitulo: `Obra: ${obraNome} | Situação: ${sit.toUpperCase()}`,
       kpisResumo: [
         { label: 'Total Filtrado', valor: lista.length },
         { label: 'Próprios', valor: lista.filter(e => e.propriedade !== 'alugado').length },
@@ -456,44 +579,58 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio() {
   };
 }
 
-// IMPRESSÃO DIRETA EM TODAS AS ABAS (PAISAGEM + FECHAMENTO AUTOMÁTICO DA JANELA)
+// BOTÃO 2: IMPRIMIR TUDO (COMPLETO, COM TODAS AS ORDENS E TODAS AS COLUNAS)
+function imprimirRelatorioGeralCompleto() {
+  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('completo');
+  abrirJanelaImpressaoFormatada(rel, false);
+}
+
+// BOTÃO 3: IMPRIMIR 1 PÁGINA ENXUTA (PARADOS / REP - CABE 18 A 25 ORDENS EM 1 PÁGINA)
 function gerarRelatorioCompletoPDF() {
-  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio();
+  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
+  abrirJanelaImpressaoFormatada(rel, true);
+}
+
+function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
   const win = window.open('', '_blank');
   if (!win) return alert('Permita pop-ups no navegador para imprimir o relatório.');
 
+  const linhasParaImprimir = modoCompactoUmaPagina ? rel.linhas.slice(0, 25) : rel.linhas;
+  const padCel = modoCompactoUmaPagina ? '4px 6px' : '6px 8px';
+  const fontCel = modoCompactoUmaPagina ? '9.5px' : '10px';
+
   const kpisHtml = rel.kpisResumo.map(k => `
-    <div style="border:1px solid #cbd5e1; border-radius:10px; padding:10px; background:#f8fafc; flex:1;">
-      <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
-      <div style="font-size:18px; font-weight:900; color:#0f172a; margin-top:4px;">${k.valor}</div>
+    <div style="border:1px solid #cbd5e1; border-radius:8px; padding:7px 10px; background:#f8fafc; flex:1;">
+      <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
+      <div style="font-size:15px; font-weight:900; color:#0f172a; margin-top:2px;">${k.valor}</div>
     </div>
   `).join('');
 
-  const thHtml = rel.colunas.map(c => `<th style="padding:7px; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:10px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
-  const trHtml = rel.linhas.map(l => `<tr>${l.map(cel => `<td style="padding:6px; border:1px solid #cbd5e1; font-size:10px; color:#1e293b;">${cel}</td>`).join('')}</tr>`).join('');
+  const thHtml = rel.colunas.map(c => `<th style="padding:${padCel}; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:9.5px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
+  const trHtml = linhasParaImprimir.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:${padCel}; border:1px solid #cbd5e1; font-size:${fontCel}; color:#1e293b; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${cel}</td>`).join('')}</tr>`).join('');
 
   win.document.write(`
     <html>
       <head>
         <title>Impressão - ${rel.titulo}</title>
         <style>
-          @page { size: landscape; margin: 10mm; }
-          body { font-family: Arial, sans-serif; margin: 0; padding: 10px; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
-          tr { page-break-inside: avoid; page-break-after: auto; }
+          @page { size: landscape; margin: 7mm; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 4px; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          table { width: 100%; border-collapse: collapse; }
+          tr { page-break-inside: avoid; }
           thead { display: table-header-group; }
         </style>
       </head>
       <body onload="setTimeout(() => { window.print(); window.onafterprint = () => window.close(); }, 350)">
-        <div style="border-bottom:3px solid #f59e0b; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="border-bottom:2px solid #f59e0b; padding-bottom:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:11px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
-            <h1 style="margin:4px 0; font-size:18px;">${rel.titulo}</h1>
-            <div style="font-size:11px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
+            <div style="font-size:10px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
+            <h1 style="margin:2px 0; font-size:15px;">${rel.titulo}</h1>
+            <div style="font-size:10px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
           </div>
-          <div style="text-align:right; font-size:10px; color:#64748b;">Impresso em: ${new Date().toLocaleString('pt-BR')}</div>
+          <div style="text-align:right; font-size:9px; color:#64748b;">Impresso em: ${new Date().toLocaleString('pt-BR')}</div>
         </div>
-        <div style="display:flex; gap:10px; margin-bottom:14px;">${kpisHtml}</div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">${kpisHtml}</div>
         <table><thead><tr>${thHtml}</tr></thead><tbody>${trHtml}</tbody></table>
       </body>
     </html>
@@ -501,40 +638,41 @@ function gerarRelatorioCompletoPDF() {
   win.document.close();
 }
 
+// BOTÃO 4: EXPORTAR IMAGEM PNG DE 1 PÁGINA (CABEM ATÉ 24 ORDENS COMPACTAS)
 async function gerarResumoExecutivoPNG() {
   if (typeof html2canvas === 'undefined') return alert('Aguarde 2 segundos, biblioteca de imagem carregando...');
-  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio();
-  const topLinhas = rel.linhas.slice(0, 15);
+  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
+  const topLinhas = rel.linhas.slice(0, 24);
 
   const cardExecutivo = document.createElement('div');
-  cardExecutivo.style.cssText = 'position:fixed; left:-9999px; top:0; width:960px; background:#ffffff; padding:28px; font-family:sans-serif; color:#0f172a; border:4px solid #0f172a;';
+  cardExecutivo.style.cssText = 'position:fixed; left:-9999px; top:0; width:1080px; background:#ffffff; padding:20px; font-family:sans-serif; color:#0f172a; border:4px solid #0f172a;';
   cardExecutivo.innerHTML = `
-    <div style="background:#0f172a; color:#ffffff; padding:18px 22px; border-radius:14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+    <div style="background:#0f172a; color:#ffffff; padding:12px 18px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div>
-        <div style="color:#fbbf24; font-size:11px; font-weight:900;">VILASA CMMS • RESUMO EXECUTIVO DE 1 PÁGINA</div>
-        <div style="font-size:20px; font-weight:900; margin-top:4px;">${rel.titulo}</div>
-        <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">${rel.subtitulo}</div>
+        <div style="color:#fbbf24; font-size:10px; font-weight:900;">VILASA CMMS • QUADRO EXECUTIVO (1 PÁGINA)</div>
+        <div style="font-size:17px; font-weight:900; margin-top:2px;">${rel.titulo}</div>
+        <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">${rel.subtitulo}</div>
       </div>
       <div style="text-align:right; font-size:11px; color:#fbbf24; font-weight:800;">${new Date().toLocaleString('pt-BR')}</div>
     </div>
-    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:18px;">
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:12px;">
       ${rel.kpisResumo.map(k => `
-        <div style="background:#f8fafc; border:2px solid #e2e8f0; border-left:5px solid #f59e0b; border-radius:10px; padding:12px;">
-          <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
-          <div style="font-size:22px; font-weight:900; color:#0f172a; margin-top:4px;">${k.valor}</div>
+        <div style="background:#f8fafc; border:1px solid #cbd5e1; border-left:4px solid #f59e0b; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
+          <div style="font-size:18px; font-weight:900; color:#0f172a; margin-top:2px;">${k.valor}</div>
         </div>
       `).join('')}
     </div>
-    <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <thead><tr style="background:#1e293b; color:#fbbf24;">${rel.colunas.map(c => `<th style="padding:8px; text-align:left; border:1px solid #334155;">${c}</th>`).join('')}</tr></thead>
-      <tbody>${topLinhas.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map(cel => `<td style="padding:7px 8px; border:1px solid #cbd5e1; font-weight:600;">${cel}</td>`).join('')}</tr>`).join('')}</tbody>
+    <table style="width:100%; border-collapse:collapse; font-size:10px;">
+      <thead><tr style="background:#1e293b; color:#fbbf24;">${rel.colunas.map(c => `<th style="padding:5px 7px; text-align:left; border:1px solid #334155;">${c}</th>`).join('')}</tr></thead>
+      <tbody>${topLinhas.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:4.5px 7px; border:1px solid #cbd5e1; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${cel}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>
   `;
   document.body.appendChild(cardExecutivo);
   try {
     const canvas = await html2canvas(cardExecutivo, { scale: 2, backgroundColor: '#ffffff' });
     const link = document.createElement('a');
-    link.download = `RESUMO_EXECUTIVO_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
+    link.download = `REP_VILASA_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   } finally {
