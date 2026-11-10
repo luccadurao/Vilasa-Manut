@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 1: CORE.JS (EXPORTAÇÃO DUPLA: COMPLETA vs REP 1 PÁG.)
+// VILASA CMMS V2 - MÓDULO 1: CORE.JS (COMPLETO, VALIDADO E PRONTO PARA USO)
 // ============================================================================
 
 let usuarioLogado = null;
@@ -147,7 +147,6 @@ function encerrarSessao() {
 
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
-  montarBotoesBarraExportacaoUniversal();
   const raw = localStorage.getItem('vilasa_sessao_v2');
   if (!raw) {
     document.getElementById('telaLogin')?.classList.remove('hidden');
@@ -173,54 +172,60 @@ async function restaurarSessaoSalva() {
     document.getElementById('telaLogin')?.classList.remove('hidden');
   }
 }
-// Esconde toda a barra de relatórios se for Operador, Mecânico ou Encarregado
+
+// Monta a barra de relatórios e oculta automaticamente para Operador, Mecânico e Encarregado
 function montarBotoesBarraExportacaoUniversal() {
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
-  const barraPai = elTit?.parentElement?.parentElement || elTit?.parentElement;
-  if (!barraPai) return;
+  if (!elTit) return;
+
+  const barraCard = elTit.closest('.bg-white') || elTit.parentElement?.parentElement || elTit.parentElement;
+  if (!barraCard) return;
 
   if (!podeExecutarAcao('exportar_relatorios')) {
-    barraPai.classList.add('hidden');
+    barraCard.classList.add('hidden');
     return;
   }
-  barraPai.classList.remove('hidden');
+  barraCard.classList.remove('hidden');
 
   let containerBotoes = document.getElementById('containerBotoesExportacaoTopoV2');
   if (!containerBotoes) {
-    Array.from(barraPai.querySelectorAll('button')).forEach(b => b.classList.add('hidden'));
+    Array.from(barraCard.querySelectorAll('button')).forEach(b => b.classList.add('hidden'));
     containerBotoes = document.createElement('div');
     containerBotoes.id = 'containerBotoesExportacaoTopoV2';
     containerBotoes.className = 'flex flex-wrap items-center gap-2';
-    barraPai.appendChild(containerBotoes);
+    barraCard.appendChild(containerBotoes);
   }
 
-  containerBotoes.innerHTML = 
+  containerBotoes.innerHTML = `
     <button type="button" onclick="acionarExportacaoUniversalCSV()"
-      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5">
+      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Exportar planilha completa com todas as informações">
       <i class="fa-solid fa-file-csv"></i>
       <span>Planilha Completa (CSV)</span>
     </button>
 
     <button type="button" onclick="imprimirRelatorioGeralCompleto()"
-      class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow flex items-center gap-1.5">
+      class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Imprimir relatório completo com todos os itens e colunas">
       <i class="fa-solid fa-print"></i>
       <span>Imprimir Tudo (Completo)</span>
     </button>
 
     <button type="button" onclick="gerarRelatorioCompletoPDF()"
-      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow flex items-center gap-1.5">
+      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow flex items-center gap-1.5"
+      title="Imprimir resumo enxuto de 1 página (Na aba OS: apenas máquinas abertas/paradas)">
       <i class="fa-solid fa-bolt"></i>
       <span>Imprimir 1 Pág. (Parados/REP)</span>
     </button>
 
     <button type="button" onclick="gerarResumoExecutivoPNG()"
-      class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 font-black text-xs shadow flex items-center gap-1.5">
+      class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 font-black text-xs shadow flex items-center gap-1.5"
+      title="Baixar imagem PNG de 1 página (até 25 máquinas paradas)">
       <i class="fa-solid fa-image"></i>
       <span>Exportar 1 Pág. (PNG)</span>
     </button>
-  ;
+  `;
 }
-
 
 async function inicializarSistemaPosLogin() {
   document.getElementById('telaLogin')?.classList.add('hidden');
@@ -369,11 +374,12 @@ function navegarPara(modulo) {
 // ============================================================================
 // 5. MOTOR DUPLO DE EXPORTAÇÃO:
 //    A) MODO COMPLETO (TODAS AS ORDENS E TODAS AS COLUNAS)
-//    B) MODO ENXUTO 1 PÁGINA - REP (SOMENTE ABERTAS, SEM LOCAL/EQUIPE/MOTIVO/DATAS, CABE 18+ ITENS)
+//    B) MODO ENXUTO 1 PÁGINA - REP (SOMENTE ABERTAS, CABE 18+ ITENS)
 // ============================================================================
 
-// BOTÃO 1: Exporta CSV Completo (Na aba OS: exporta TODAS as OS com todas as colunas detalhadas)
 async function acionarExportacaoUniversalCSV() {
+  if (!podeExecutarAcao('exportar_relatorios', true)) return;
+
   if (abaAtivaGlobal === 'os') {
     const todasOS = typeof buscarTudoSemLimite === 'function'
       ? await buscarTudoSemLimite('ordens_servico', 'aberta_em', false, '*, equipamentos(tag, nome, marca)')
@@ -437,7 +443,6 @@ async function acionarExportacaoUniversalCSV() {
   a.click();
 }
 
-// Coleta dados em 2 modos: 'enxuto_rep' (só abertas e colunas enxutas p/ caber 18+ em 1 pág.) ou 'completo' (tudo e todas as colunas)
 function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
   const obraNome = obterNomeObraAtiva();
 
@@ -448,7 +453,7 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
 
     const abertas = lista.filter(o => !o.concluida_em && !['concluida', 'aguardando_pcm'].includes(o.status));
 
-    // MODO 1: ENXUTO DE 1 PÁGINA PARA OS EQUIPAMENTOS PARADOS (REP) -> Só abertas, sem datas início/fim, sem local, sem motivo e sem equipe!
+    // MODO 1: ENXUTO DE 1 PÁGINA PARA OS EQUIPAMENTOS PARADOS (REP)
     if (modo === 'enxuto_rep') {
       return {
         titulo: 'QUADRO DE EQUIPAMENTOS PARADOS EM MANUTENÇÃO (REP)',
@@ -506,7 +511,6 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
 
   if (abaAtivaGlobal === 'frota') {
     const sit = typeof filtroSituacaoFrota !== 'undefined' ? filtroSituacaoFrota : 'ativo';
-    // Respeita todos os filtros de coluna estilo Excel aplicados na tela da Frota!
     let lista = typeof obterListaFrotaFiltradaAtual === 'function'
       ? obterListaFrotaFiltradaAtual()
       : filtrarListaPorObraAtiva(cacheEquipamentos || []);
@@ -579,14 +583,14 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
   };
 }
 
-// BOTÃO 2: IMPRIMIR TUDO (COMPLETO, COM TODAS AS ORDENS E TODAS AS COLUNAS)
 function imprimirRelatorioGeralCompleto() {
+  if (!podeExecutarAcao('exportar_relatorios', true)) return;
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('completo');
   abrirJanelaImpressaoFormatada(rel, false);
 }
 
-// BOTÃO 3: IMPRIMIR 1 PÁGINA ENXUTA (PARADOS / REP - CABE 18 A 25 ORDENS EM 1 PÁGINA)
 function gerarRelatorioCompletoPDF() {
+  if (!podeExecutarAcao('exportar_relatorios', true)) return;
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
   abrirJanelaImpressaoFormatada(rel, true);
 }
@@ -638,9 +642,10 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
   win.document.close();
 }
 
-// BOTÃO 4: EXPORTAR IMAGEM PNG DE 1 PÁGINA (CABEM ATÉ 24 ORDENS COMPACTAS)
 async function gerarResumoExecutivoPNG() {
+  if (!podeExecutarAcao('exportar_relatorios', true)) return;
   if (typeof html2canvas === 'undefined') return alert('Aguarde 2 segundos, biblioteca de imagem carregando...');
+
   const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
   const topLinhas = rel.linhas.slice(0, 24);
 
