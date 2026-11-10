@@ -341,8 +341,66 @@ async function assumirAtendimentoOS(osId) {
 }
 
 // ----------------------------------------------------------------------------
-// 4. ABERTURA DE OS PELO ENCARREGADO (SEM CONDIÇÃO OPERACIONAL + NOTIFICAÇÃO)
+// 4. ABERTURA DE OS (COM LOCALIZAÇÃO, TRAVA DE HORÍMETRO E AUTO-ATENDIMENTO DE MECÂNICO)
 // ----------------------------------------------------------------------------
+function validarHorimetroAberturaOS(equipamento, valorDigitado) {
+  const horNovo = parseFloat(valorDigitado);
+  const un = (equipamento?.unidade_medida || 'H').toUpperCase();
+  const horAtual = parseFloat(equipamento?.horimetro_atual || 0);
+
+  if (isNaN(horNovo) || horNovo <= 0) {
+    alert(`❌ HORÍMETRO INVÁLIDO:\nInforme o Horímetro / ${un} atual do equipamento (${equipamento?.tag || ''}) para abrir a OS!`);
+    return false;
+  }
+
+  // 1. Bloqueia se o valor digitado for MENOR que o horímetro já registrado no banco
+  if (horAtual > 0 && horNovo < horAtual) {
+    alert(
+      `❌ ABERTURA BLOQUEADA (HORÍMETRO MENOR QUE O ATUAL)!\n\n` +
+      `• Equipamento: ${equipamento.tag}\n` +
+      `• Registrado no Sistema: ${horAtual} ${un}\n` +
+      `• Valor Digitado: ${horNovo} ${un}\n\n` +
+      `O horímetro não pode retroceder. Verifique a leitura no painel da máquina!`
+    );
+    return false;
+  }
+
+  // 2. Bloqueia se houver um salto absurdo (ex: digitou um zero a mais)
+  const limiteSalto = un === 'KM' ? 5000 : 300;
+  if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
+    const podeForcar = usuarioPodeClassificarPCM();
+    const msgSalto =
+      `❌ ABERTURA BLOQUEADA (SALTO DE HORÍMETRO INCONSISTENTE)!\n\n` +
+      `• Equipamento: ${equipamento.tag}\n` +
+      `• Último Registrado: ${horAtual} ${un}\n` +
+      `• Valor Digitado: ${horNovo} ${un} (+${(horNovo - horAtual).toFixed(1)} ${un})\n\n` +
+      `O valor digitado subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não foi digitado um número a mais!`;
+
+    if (!podeForcar) {
+      alert(msgSalto);
+      return false;
+    } else {
+      return confirm(msgSalto + `\n\nComo você é do PCM/Admin, deseja forçar esse valor mesmo assim?`);
+    }
+  }
+
+  return true;
+}
+
+function atualizarDicaHorimetroNovaOS(equipId) {
+  const eq = (cacheEquipamentos || []).find(e => String(e.id) === String(equipId));
+  const lbl = document.getElementById('labelDicaHorimetroNovaOS');
+  const inp = document.getElementById('novaOSHorimetro');
+  if (!eq) {
+    if (lbl) lbl.innerText = 'Horímetro / KM Atual';
+    return;
+  }
+  const un = eq.unidade_medida || 'H';
+  const atual = parseFloat(eq.horimetro_atual || 0);
+  if (lbl) lbl.innerText = `Horímetro / ${un} Atual (Mínimo: ${atual} ${un})`;
+  if (inp) inp.placeholder = `Maior ou igual a ${atual}`;
+}
+
 async function abrirModalSolicitacaoAberturaOS() {
   if (!usuarioPodeAbrirOS()) return alert('Sem permissão para abrir OS.');
   if ('Notification' in window && Notification.permission === 'default') {
@@ -353,6 +411,8 @@ async function abrirModalSolicitacaoAberturaOS() {
     const { data } = await db.from('equipamentos').select('*').order('tag');
     cacheEquipamentos = data || [];
   }
+
+  const ehMecanico = obterCargosUsuario(usuarioLogado).includes('mecanico');
 
   let modal = document.getElementById('modalSolicitacaoNovaOSV2');
   if (!modal) {
@@ -365,22 +425,41 @@ async function abrirModalSolicitacaoAberturaOS() {
   modal.innerHTML = `
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
       <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">🚨 Abrir Nova Ordem de Serviço (OS)</h3>
+      ${ehMecanico ? `
+        <div class="mb-3 p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold">
+          🔧 Como você é <strong>Mecânico</strong>, esta OS já será aberta direto <strong>Em Atendimento</strong> no seu nome!
+        </div>
+      ` : ''}
       <div class="space-y-3 text-xs">
         <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Equipamento (Prefixo)</label>
-          <select id="novaOSEquipId" class="w-full border rounded-lg p-2.5 font-bold">
+          <label class="block font-black uppercase text-slate-700 mb-1">1. Equipamento (Prefixo)</label>
+          <select id="novaOSEquipId" onchange="atualizarDicaHorimetroNovaOS(this.value)" class="w-full border rounded-lg p-2.5 font-bold">
             <option value="">-- Selecione o Equipamento --</option>
-            ${cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('')}
+            ${cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').map(e => `<option value="${e.id}">${e.tag} - ${e.nome} (Atual: ${e.horimetro_atual || 0} ${e.unidade_medida || 'H'})</option>`).join('')}
           </select>
         </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-black uppercase text-slate-700 mb-1">2. Localização / Frente</label>
+            <input id="novaOSLocalizacao" type="text" placeholder="Ex: TRECHO KM 12, OFICINA, BRITADOR..." class="w-full border rounded-lg p-2.5 font-bold uppercase" />
+          </div>
+          <div>
+            <label id="labelDicaHorimetroNovaOS" class="block font-black uppercase text-amber-800 mb-1">3. Horímetro / KM Atual</label>
+            <input id="novaOSHorimetro" type="number" step="0.1" placeholder="Digite a leitura atual..." class="w-full border-2 border-amber-400 bg-amber-50/40 rounded-lg p-2.5 font-black" />
+          </div>
+        </div>
+
         <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Descrição do Problema / Defeito</label>
-          <textarea id="novaOSProblema" rows="3" placeholder="Descreva o defeito apresentado para notificar os mecânicos..." class="w-full border rounded-lg p-2.5 font-bold uppercase"></textarea>
+          <label class="block font-black uppercase text-slate-700 mb-1">4. Descrição do Problema / Defeito</label>
+          <textarea id="novaOSProblema" rows="3" placeholder="Descreva o defeito apresentado..." class="w-full border rounded-lg p-2.5 font-bold uppercase"></textarea>
         </div>
       </div>
       <div class="mt-5 flex justify-end gap-2">
         <button onclick="document.getElementById('modalSolicitacaoNovaOSV2').classList.add('hidden')" class="px-4 py-2 rounded-lg font-bold text-xs bg-slate-200">Cancelar</button>
-        <button onclick="confirmarAberturaSolicitacaoOS()" class="px-5 py-2 rounded-lg font-black text-xs bg-amber-500 text-slate-950 shadow">🚨 Abrir OS e Notificar Mecânicos</button>
+        <button onclick="confirmarAberturaSolicitacaoOS()" class="px-5 py-2 rounded-lg font-black text-xs bg-amber-500 text-slate-950 shadow">
+          ${ehMecanico ? '🔧 Abrir e Iniciar Atendimento' : '🚨 Abrir OS e Notificar Mecânicos'}
+        </button>
       </div>
     </div>
   `;
@@ -391,19 +470,42 @@ async function abrirModalSolicitacaoAberturaOS() {
 
 async function confirmarAberturaSolicitacaoOS() {
   const eqId = document.getElementById('novaOSEquipId')?.value;
-  const problema = document.getElementById('novaOSProblema')?.value.trim().toUpperCase();
-  if (!eqId || !problema) return alert('Selecione o Equipamento e descreva o problema!');
+  const localizacao = (document.getElementById('novaOSLocalizacao')?.value || '').trim().toUpperCase();
+  const horimetroDigitado = document.getElementById('novaOSHorimetro')?.value;
+  const problema = (document.getElementById('novaOSProblema')?.value || '').trim().toUpperCase();
+
+  if (!eqId) return alert('Selecione o Equipamento!');
+  if (!localizacao) return alert('Informe a Localização onde o equipamento está!');
+  if (!problema) return alert('Descreva o problema apresentado!');
 
   const eqObj = (cacheEquipamentos || []).find(e => String(e.id) === String(eqId));
+  if (!eqObj) return alert('Equipamento não encontrado!');
+
+  // TRAVA DE HORÍMETRO: Bloqueia se for menor que o atual ou se tiver salto absurdo
+  if (!validarHorimetroAberturaOS(eqObj, horimetroDigitado)) return;
+
+  const horNovo = parseFloat(horimetroDigitado);
+
+  // Se quem está abrindo for Mecânico, já entra direto 'em_execucao' com o nome dele
+  const cargos = obterCargosUsuario(usuarioLogado);
+  const ehMecanico = cargos.includes('mecanico');
+  const nomeMec = ehMecanico ? String(usuarioLogado?.nome || usuarioLogado?.matricula || '').trim().toUpperCase() : '';
+
   await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
     equipamento_id: eqId,
     obra_id: eqObj?.obra_id || (obraAtivaId !== 'TODAS' ? obraAtivaId : null),
-    status: 'aberta',
+    status: ehMecanico ? 'em_execucao' : 'aberta',
     motivo_rep: 'CORRETIVA',
-    local_manutencao_pcm: 'OFICINA',
+    local_manutencao_pcm: localizacao,
     descricao_problema: problema,
+    mecanico_nome: nomeMec,
+    horimetro_os: horNovo,
     aberta_em: new Date().toISOString()
   });
+
+  // Atualiza também o horímetro atual da máquina na tabela equipamentos
+  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo }, eqId);
+  eqObj.horimetro_atual = horNovo;
 
   document.getElementById('modalSolicitacaoNovaOSV2')?.classList.add('hidden');
   await carregarOrdensServico('ativas');
