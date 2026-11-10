@@ -13,11 +13,13 @@ let cacheOrdens = [];
 
 function obterClienteSupabase() {
   if (typeof db !== 'undefined' && db) return db;
-  if (typeof supabaseClient !== 'undefined' && supabaseClient) return (window.db = supabaseClient);
-  if (typeof sb !== 'undefined' && sb) return (window.db = sb);
-  if (typeof window.supabase !== 'undefined' && typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_KEY !== 'undefined') {
-    window.db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    return window.db;
+  if (window.supabase && typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
+    try {
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      return db;
+    } catch (e) {
+      console.warn('Não foi possível criar o cliente Supabase:', e);
+    }
   }
   return null;
 }
@@ -156,16 +158,23 @@ async function restaurarSessaoSalva() {
   try {
     const cache = JSON.parse(raw);
     if (!cache?.id) return encerrarSessao();
-    if (navigator.onLine && typeof db !== 'undefined') {
-      const { data } = await db.from('perfis_usuarios').select('*').eq('id', cache.id).maybeSingle();
-      if (data && data.ativo !== false) {
-        usuarioLogado = data;
-        localStorage.setItem('vilasa_sessao_v2', JSON.stringify(data));
-      } else {
-        return encerrarSessao();
+    usuarioLogado = cache; // por padrão confia na sessão guardada (campo sem sinal NÃO desloga)
+    if (navigator.onLine && obterClienteSupabase()) {
+      try {
+        const { data, error } = await db.from('perfis_usuarios').select('*').eq('id', cache.id).maybeSingle();
+        if (!error) {
+          // Resposta válida do servidor: aí sim confere se o usuário ainda existe e está ativo.
+          if (data && data.ativo !== false) {
+            usuarioLogado = data;
+            localStorage.setItem('vilasa_sessao_v2', JSON.stringify(data));
+          } else {
+            return encerrarSessao();
+          }
+        }
+        // Com erro (rede ruim, servidor instável): mantém a sessão local.
+      } catch (e) {
+        console.warn('Sem confirmação do servidor; mantendo sessão local.', e);
       }
-    } else {
-      usuarioLogado = cache;
     }
     await inicializarSistemaPosLogin();
   } catch (e) {
@@ -252,8 +261,8 @@ async function inicializarSistemaPosLogin() {
 // 3. SELETOR GLOBAL DE OBRAS
 async function carregarObrasEMontarSeletorTopo() {
   try {
-    const { data } = await db.from('obras').select('*').eq('ativa', true).order('codigo');
-    cacheObras = data || [];
+    const res = await lerDadosComFallbackOffline('obras_ativas', () => db.from('obras').select('*').eq('ativa', true).order('codigo'));
+    cacheObras = Array.isArray(res.data) ? res.data : [];
   } catch (e) {
     cacheObras = [];
   }

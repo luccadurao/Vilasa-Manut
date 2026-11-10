@@ -9,6 +9,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Biblioteca para gerar o PNG Executivo de 1 Página -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Vilasa CMMS" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
@@ -158,11 +164,16 @@
   <script src="core.js"></script>
   <script src="offline_sync.js"></script>
   <script src="os_rep.js"></script>
-  <script src="uber_mecanicos.js"></script>
   <script src="pcm_sap.js"></script>
   <script src="frota.js"></script>
   <script src="estoque.js"></script>
   <script src="kpis.js"></script>
   <script src="admin.js"></script>
+  <script>
+    // Instala o "modo offline": guarda o site no celular para abrir sem internet.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
+    }
+  </script>
 </body>
 </html>

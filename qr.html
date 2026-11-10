@@ -7,6 +7,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Vilasa CMMS" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
 
@@ -27,7 +33,7 @@
     </div>
 
     <!-- Abas: 1. Abrir OS | 2. Só Atualizar Horímetro -->
-    <div class="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 text-xs font-black">
+    <div id="qrAbasContainer" class="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 text-xs font-black">
       <button id="btnAbaQROS" onclick="trocarAbaQR('os')" class="py-2 rounded-lg bg-amber-500 text-slate-950">
         🚨 Abrir OS / Reparo
       </button>
@@ -44,7 +50,7 @@
           <input id="qrUsuarioInput" type="text" placeholder="Ex: JOAO / 2040"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 font-bold uppercase text-white focus:border-amber-400 focus:outline-none" />
         </div>
-        <div>
+        <div id="qrFuncaoWrapper">
           <label class="block font-black uppercase text-slate-400 mb-1">Sua Função</label>
           <select id="qrFuncaoSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 font-bold text-amber-300 focus:border-amber-400 focus:outline-none">
             <option value="encarregado">👷 Encarregado / Oper.</option>
@@ -86,31 +92,61 @@
       </div>
     </div>
 
+    <div id="qrAvisoPerfil" class="hidden p-3 rounded-xl text-[11px] font-bold text-center bg-slate-800 text-slate-300"></div>
     <div id="qrMensagemStatus" class="hidden p-3 rounded-xl text-xs font-bold text-center"></div>
+    <div id="qrBadgeRede" class="text-center"></div>
   </div>
 
   <script src="config.js"></script>
   <script src="offline_sync.js"></script>
   <script>
-    let dbQR = null;
-    let equipAtualQR = {
-      id: '',
-      tag: '',
-      nome: '',
-      unidade_medida: 'H',
-      horimetro_atual: 0,
-      obra_id: null
-    };
+    // ========================================================================
+    // PORTAL QR - REGRAS DE ACESSO
+    //  • SEM login (operadores): só LANÇA HORÍMETRO / KM.
+    //  • COM login de equipe (mecânico, almoxarife, encarregado, PCM, engenheiro, admin): também ABRE OS.
+    //  • Operador e gestor NÃO abrem OS por aqui.
+    // Obs.: nesta etapa a regra vale na tela; o bloqueio definitivo no banco (RLS) vem na etapa de segurança.
+    // ========================================================================
+    const CARGOS_QUE_ABREM_OS = ['mecanico', 'almoxarife', 'encarregado', 'pcm', 'engenheiro', 'admin'];
+    const LIMITE_SALTO_HORIMETRO = 300; // mesmo valor usado antes (H)
+    const LIMITE_SALTO_KM = 5000;       // mesmo valor usado antes (KM)
 
-    function inicializarClienteQR() {
-      if (typeof db !== 'undefined' && db) return (dbQR = db);
-      if (typeof window.supabase !== 'undefined' && typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_KEY !== 'undefined') {
-        dbQR = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null };
+    let enviandoQR = false;
+
+    // Mesmo papel do core.js (o portal não carrega o core): garante o cliente do banco.
+    function obterClienteSupabase() {
+      if (typeof db !== 'undefined' && db) return db;
+      if (window.supabase && typeof SUPABASE_URL !== 'undefined') {
+        try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return db; } catch (e) {}
       }
-      return dbQR;
+      return null;
+    }
+
+    function lerSessaoLocal() {
+      try { return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null'); } catch (e) { return null; }
+    }
+    function cargosDaSessao() {
+      const s = lerSessaoLocal();
+      return s && Array.isArray(s.cargos_lista) ? s.cargos_lista.map(c => String(c).toLowerCase().trim()) : [];
+    }
+    function podeAbrirOSNoQR() {
+      return cargosDaSessao().some(c => CARGOS_QUE_ABREM_OS.includes(c));
+    }
+
+    function mostrarStatusQR(texto, tipo) {
+      const box = document.getElementById('qrMensagemStatus');
+      const cores = {
+        ok: 'bg-emerald-500 text-slate-950',
+        offline: 'bg-amber-400 text-slate-950',
+        erro: 'bg-rose-600 text-white'
+      };
+      box.className = 'p-3 rounded-xl text-xs font-black text-center ' + (cores[tipo] || cores.ok);
+      box.innerText = texto;
     }
 
     function trocarAbaQR(aba) {
+      if (aba === 'os' && !podeAbrirOSNoQR()) aba = 'horimetro';
       const ehOS = aba === 'os';
       document.getElementById('blocoQROS').classList.toggle('hidden', !ehOS);
       document.getElementById('blocoQRHorimetro').classList.toggle('hidden', ehOS);
@@ -122,7 +158,40 @@
         : 'py-2 rounded-lg text-slate-400 hover:text-white font-bold';
     }
 
-    // Valida estritamente se o horímetro digitado não é menor que o atual nem um salto absurdo
+    function configurarTelaPorPerfil() {
+      const sessao = lerSessaoLocal();
+      const cargos = cargosDaSessao();
+      const equipe = podeAbrirOSNoQR();
+      const aviso = document.getElementById('qrAvisoPerfil');
+
+      if (sessao) document.getElementById('qrUsuarioInput').value = sessao.nome || sessao.matricula || '';
+
+      if (equipe) {
+        document.getElementById('qrAbasContainer').classList.remove('hidden');
+        const ehMecanico = cargos.includes('mecanico');
+        document.getElementById('qrFuncaoWrapper').classList.toggle('hidden', !ehMecanico);
+        document.getElementById('qrFuncaoSelect').value = ehMecanico ? 'mecanico' : 'encarregado';
+        trocarAbaQR('os');
+      } else {
+        // Operador (ou sem login): somente horímetro.
+        document.getElementById('qrAbasContainer').classList.add('hidden');
+        document.getElementById('qrFuncaoWrapper').classList.add('hidden');
+        trocarAbaQR('horimetro');
+        aviso.innerHTML = 'Aqui você lança o <b>horímetro / KM</b>. Para abrir OS, a equipe de manutenção deve entrar no sistema com o login.';
+        aviso.classList.remove('hidden');
+      }
+    }
+
+    // ----- cache da última leitura (permite conferir o valor SEM internet) -----
+    function chaveCacheEquip() { return 'vilasa_qr_equip_' + (equipAtualQR.id || equipAtualQR.tag); }
+    function guardarCacheEquip() {
+      try { localStorage.setItem(chaveCacheEquip(), JSON.stringify({
+        id: equipAtualQR.id, tag: equipAtualQR.tag, nome: equipAtualQR.nome,
+        unidade_medida: equipAtualQR.unidade_medida, horimetro_atual: equipAtualQR.horimetro_atual, obra_id: equipAtualQR.obra_id
+      })); } catch (e) {}
+    }
+
+    // Retorna: { ok, semBase }  (semBase = não havia leitura anterior para comparar)
     function validarHorimetroDigitadoQR(valorStr) {
       const horNovo = parseFloat(valorStr);
       const un = (equipAtualQR.unidade_medida || 'H').toUpperCase();
@@ -130,180 +199,166 @@
 
       if (isNaN(horNovo) || horNovo <= 0) {
         alert(`❌ HORÍMETRO INVÁLIDO!\nDigite a leitura atual de ${un} da máquina ${equipAtualQR.tag}.`);
-        return false;
+        return { ok: false };
       }
-
       if (horAtual > 0 && horNovo < horAtual) {
-        alert(
-          `❌ BLOQUEADO: HORÍMETRO MENOR QUE O ATUAL!\n\n` +
-          `• Equipamento: ${equipAtualQR.tag}\n` +
-          `• Atual no Sistema: ${horAtual} ${un}\n` +
-          `• Você Digitou: ${horNovo} ${un}\n\n` +
-          `O valor não pode ser menor que ${horAtual} ${un}. Verifique o painel da máquina!`
-        );
-        return false;
+        alert(`❌ BLOQUEADO: HORÍMETRO MENOR QUE O ATUAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Atual no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO valor não pode ser menor que ${horAtual} ${un}. Verifique o painel da máquina!`);
+        return { ok: false };
       }
-
-      const limiteSalto = un === 'KM' ? 5000 : 300;
+      const limiteSalto = un === 'KM' ? LIMITE_SALTO_KM : LIMITE_SALTO_HORIMETRO;
       if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
-        alert(
-          `❌ BLOQUEADO: VALOR MUITO ACIMA DO NORMAL!\n\n` +
-          `• Equipamento: ${equipAtualQR.tag}\n` +
-          `• Último no Sistema: ${horAtual} ${un}\n` +
-          `• Você Digitou: ${horNovo} ${un}\n\n` +
-          `O horímetro subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não digitou um número a mais!`
-        );
-        return false;
+        alert(`❌ BLOQUEADO: VALOR MUITO ACIMA DO NORMAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Último no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO horímetro subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não digitou um número a mais!`);
+        return { ok: false };
       }
-
-      return true;
+      return { ok: true, semBase: !(horAtual > 0) };
     }
 
     async function carregarEquipamentoDoQR() {
-      inicializarClienteQR();
+      configurarTelaPorPerfil();
       const params = new URLSearchParams(window.location.search);
       equipAtualQR.id = params.get('id') || '';
       equipAtualQR.tag = (params.get('tag') || 'EQUIP').toUpperCase();
       equipAtualQR.nome = (params.get('nome') || 'Equipamento').toUpperCase();
       equipAtualQR.unidade_medida = (params.get('un') || 'H').toUpperCase();
 
-      // Se o usuário já estiver logado no aparelho, pré-preenche nome e função (Mecânico ou Encarregado)
+      // 1) Última leitura guardada neste celular (vale mesmo sem sinal)
       try {
-        const sessao = JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
-        if (sessao) {
-          document.getElementById('qrUsuarioInput').value = sessao.nome || sessao.matricula || '';
-          const cargos = Array.isArray(sessao.cargos_lista) ? sessao.cargos_lista.map(c => String(c).toLowerCase()) : [];
-          if (cargos.includes('mecanico')) {
-            document.getElementById('qrFuncaoSelect').value = 'mecanico';
-          }
-        }
+        const salvo = JSON.parse(localStorage.getItem(chaveCacheEquip()) || 'null');
+        if (salvo) equipAtualQR = { ...equipAtualQR, ...salvo };
       } catch (e) {}
 
-      // Busca o horímetro mais recente no Supabase
-      if (navigator.onLine && dbQR) {
+      // 2) Leitura mais recente do servidor (quando houver sinal)
+      const cliente = obterClienteSupabase();
+      if (navigator.onLine && cliente) {
         try {
-          let query = dbQR.from('equipamentos').select('*');
-          if (equipAtualQR.id) query = query.eq('id', equipAtualQR.id);
-          else query = query.eq('tag', equipAtualQR.tag);
-          const { data } = await query.maybeSingle();
-          if (data) {
-            equipAtualQR = data;
+          let query = cliente.from('equipamentos').select('id, tag, nome, unidade_medida, horimetro_atual, obra_id');
+          query = equipAtualQR.id ? query.eq('id', equipAtualQR.id) : query.eq('tag', equipAtualQR.tag);
+          const { data, error } = await query.maybeSingle();
+          if (!error && data) {
+            equipAtualQR = { ...equipAtualQR, ...data };
+            guardarCacheEquip();
           }
         } catch (e) {}
       }
 
       document.getElementById('qrTagBadge').innerText = equipAtualQR.tag;
       document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome;
-      document.getElementById('qrHorimetroAtual').innerText = `${equipAtualQR.horimetro_atual || 0} ${equipAtualQR.unidade_medida || 'H'}`;
-      document.getElementById('qrLabelHorimetro').innerText = `Horímetro / ${equipAtualQR.unidade_medida || 'H'} Atual (Mín: ${equipAtualQR.horimetro_atual || 0})`;
+      atualizarTextoHorimetro();
+      atualizarBadgeStatusRede();
     }
 
-    async function verificarSeUsuarioEhMecanicoNoBanco(textoUsuario, funcaoSelecionada) {
-      if (funcaoSelecionada === 'mecanico') return true;
-      if (!navigator.onLine || !dbQR || !textoUsuario) return false;
-      try {
-        const limpo = textoUsuario.trim().toLowerCase();
-        const { data } = await dbQR.from('perfis_usuarios').select('*');
-        const achou = (data || []).find(u =>
-          u.ativo !== false &&
-          (String(u.matricula || '').toLowerCase() === limpo || String(u.nome || '').toLowerCase() === limpo)
-        );
-        if (achou && Array.isArray(achou.cargos_lista)) {
-          return achou.cargos_lista.map(c => String(c).toLowerCase()).includes('mecanico');
-        }
-      } catch (e) {}
-      return false;
+    function atualizarTextoHorimetro() {
+      const un = equipAtualQR.unidade_medida || 'H';
+      document.getElementById('qrHorimetroAtual').innerText = `${equipAtualQR.horimetro_atual || 0} ${un}`;
+      document.getElementById('qrLabelHorimetro').innerText = `Horímetro / ${un} Atual (Mín: ${equipAtualQR.horimetro_atual || 0})`;
+    }
+
+    function confirmarSemBase(horNovo) {
+      const un = equipAtualQR.unidade_medida || 'H';
+      return confirm(`⚠️ Este celular ainda não tem a leitura anterior de ${equipAtualQR.tag} e não consegue conferir o valor.\n\nVocê confirma que a leitura do painel é ${horNovo} ${un}?`);
+    }
+
+    // Grava horímetro (diário + equipamento) pela fila segura. Devolve { ok, offline }.
+    async function gravarLeituraHorimetro(horNovo, usuarioNome) {
+      const r1 = await gravarDadosOfflineSafe('diario_horimetro', 'INSERT', {
+        equipamento_id: equipAtualQR.id,
+        leitura: horNovo,
+        operador_nome: usuarioNome,
+        registrado_em: new Date().toISOString()
+      });
+      if (r1.error) return { ok: false };
+      const r2 = await gravarDadosOfflineSafe('equipamentos', 'HORIMETRO_MAX', { horimetro_atual: horNovo }, equipAtualQR.id);
+      if (r2.error) return { ok: false };
+      equipAtualQR.horimetro_atual = horNovo;
+      guardarCacheEquip();
+      atualizarTextoHorimetro();
+      return { ok: true, offline: r1.offline || r2.offline };
     }
 
     async function enviarOSViaQRCode() {
+      if (enviandoQR) return;
+      if (!podeAbrirOSNoQR()) return alert('Para abrir OS, entre no sistema com seu login (equipe de manutenção).');
+      if (!equipAtualQR.id) return alert('Este QR não tem a identificação do equipamento. Peça ao PCM para reimprimir a etiqueta.');
+
       const usuarioNome = document.getElementById('qrUsuarioInput').value.trim().toUpperCase();
-      const funcaoSel = document.getElementById('qrFuncaoSelect').value;
       const horStr = document.getElementById('qrHorimetroInput').value;
       const localizacao = document.getElementById('qrLocalizacaoInput').value.trim().toUpperCase();
       const problema = document.getElementById('qrProblemaInput').value.trim().toUpperCase();
+      const funcaoSel = document.getElementById('qrFuncaoSelect').value;
 
       if (!usuarioNome) return alert('Informe sua Matrícula ou Nome!');
-      if (!validarHorimetroDigitadoQR(horStr)) return;
+      const v = validarHorimetroDigitadoQR(horStr);
+      if (!v.ok) return;
       if (!localizacao) return alert('Informe a Localização onde o equipamento está!');
       if (!problema) return alert('Descreva o problema do equipamento!');
-
       const horNovo = parseFloat(horStr);
-      const ehMecanico = await verificarSeUsuarioEhMecanicoNoBanco(usuarioNome, funcaoSel);
+      if (v.semBase && !navigator.onLine && !confirmarSemBase(horNovo)) return;
 
-      const payloadOS = {
-        equipamento_id: equipAtualQR.id,
-        obra_id: equipAtualQR.obra_id || null,
-        status: ehMecanico ? 'em_execucao' : 'aberta',
-        motivo_rep: 'CORRETIVA',
-        local_manutencao_pcm: localizacao,
-        descricao_problema: problema,
-        mecanico_nome: ehMecanico ? usuarioNome : '',
-        horimetro_os: horNovo,
-        aberta_em: new Date().toISOString()
-      };
+      // Só assume a OS se a pessoa realmente tem o cargo de mecânico no login.
+      const ehMecanico = funcaoSel === 'mecanico' && cargosDaSessao().includes('mecanico');
 
+      enviandoQR = true;
       try {
-        if (navigator.onLine && dbQR) {
-          const { error } = await dbQR.from('ordens_servico').insert([payloadOS]);
-          if (error) throw error;
-          await dbQR.from('equipamentos').update({ horimetro_atual: horNovo }).eq('id', equipAtualQR.id);
-          await dbQR.from('diario_horimetro').insert([{
-            equipamento_id: equipAtualQR.id,
-            leitura: horNovo,
-            operador_nome: usuarioNome,
-            registrado_em: new Date().toISOString()
-          }]);
-        } else if (typeof enfileirarOperacaoOffline === 'function') {
-          enfileirarOperacaoOffline('ordens_servico', 'INSERT', payloadOS);
-          enfileirarOperacaoOffline('equipamentos', 'UPDATE', { horimetro_atual: horNovo }, equipAtualQR.id);
-        }
+        const rOS = await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
+          equipamento_id: equipAtualQR.id,
+          obra_id: equipAtualQR.obra_id || null,
+          status: ehMecanico ? 'em_execucao' : 'aberta',
+          motivo_rep: 'CORRETIVA',
+          local_manutencao_pcm: localizacao,
+          descricao_problema: problema,
+          mecanico_nome: ehMecanico ? usuarioNome : '',
+          horimetro_os: horNovo,
+          aberta_em: new Date().toISOString()
+        });
+        if (rOS.error) return mostrarStatusQR('❌ A OS NÃO foi registrada. Tente novamente.', 'erro');
 
-        equipAtualQR.horimetro_atual = horNovo;
-        document.getElementById('qrHorimetroAtual').innerText = `${horNovo} ${equipAtualQR.unidade_medida || 'H'}`;
+        const rHor = await gravarLeituraHorimetro(horNovo, usuarioNome);
         document.getElementById('qrProblemaInput').value = '';
-
-        const box = document.getElementById('qrMensagemStatus');
-        box.className = 'p-3 rounded-xl text-xs font-black text-center bg-emerald-500 text-slate-950';
-        box.innerText = ehMecanico
-          ? `✅ OS aberta e JÁ EM ATENDIMENTO no nome do mecânico ${usuarioNome}!`
-          : `✅ OS aberta com sucesso! Equipe de mecânicos notificada.`;
-        box.classList.remove('hidden');
-      } catch (err) {
-        alert('Erro ao registrar OS: ' + (err.message || err));
+        const offline = rOS.offline || rHor.offline;
+        if (offline) {
+          mostrarStatusQR('📲 SEM SINAL: a OS ficou SALVA NO CELULAR e será enviada sozinha quando voltar o sinal. Mantenha este celular com o site instalado.', 'offline');
+        } else {
+          mostrarStatusQR(ehMecanico ? `✅ OS aberta e JÁ EM ATENDIMENTO no nome de ${usuarioNome}!` : '✅ OS aberta com sucesso! Equipe de mecânicos notificada.', 'ok');
+        }
+      } finally {
+        enviandoQR = false;
+        atualizarBadgeStatusRede();
       }
     }
 
     async function enviarApenasHorimetroViaQRCode() {
+      if (enviandoQR) return;
+      if (!equipAtualQR.id) return alert('Este QR não tem a identificação do equipamento. Peça ao PCM para reimprimir a etiqueta.');
       const usuarioNome = document.getElementById('qrUsuarioInput').value.trim().toUpperCase();
       const horStr = document.getElementById('qrHorimetroInput').value;
 
       if (!usuarioNome) return alert('Informe sua Matrícula ou Nome!');
-      if (!validarHorimetroDigitadoQR(horStr)) return;
-
+      const v = validarHorimetroDigitadoQR(horStr);
+      if (!v.ok) return;
       const horNovo = parseFloat(horStr);
-      try {
-        if (navigator.onLine && dbQR) {
-          await dbQR.from('equipamentos').update({ horimetro_atual: horNovo }).eq('id', equipAtualQR.id);
-          await dbQR.from('diario_horimetro').insert([{
-            equipamento_id: equipAtualQR.id,
-            leitura: horNovo,
-            operador_nome: usuarioNome,
-            registrado_em: new Date().toISOString()
-          }]);
-        }
-        equipAtualQR.horimetro_atual = horNovo;
-        document.getElementById('qrHorimetroAtual').innerText = `${horNovo} ${equipAtualQR.unidade_medida || 'H'}`;
+      if (v.semBase && !navigator.onLine && !confirmarSemBase(horNovo)) return;
 
-        const box = document.getElementById('qrMensagemStatus');
-        box.className = 'p-3 rounded-xl text-xs font-black text-center bg-emerald-500 text-slate-950';
-        box.innerText = `✅ Horímetro atualizado para ${horNovo} ${equipAtualQR.unidade_medida || 'H'}!`;
-        box.classList.remove('hidden');
-      } catch (err) {
-        alert('Erro ao salvar horímetro: ' + (err.message || err));
+      enviandoQR = true;
+      try {
+        const r = await gravarLeituraHorimetro(horNovo, usuarioNome);
+        if (!r.ok) return mostrarStatusQR('❌ A leitura NÃO foi registrada. Tente novamente.', 'erro');
+        document.getElementById('qrHorimetroInput').value = '';
+        const un = equipAtualQR.unidade_medida || 'H';
+        if (r.offline) {
+          mostrarStatusQR(`📲 SEM SINAL: leitura de ${horNovo} ${un} SALVA NO CELULAR. Será enviada sozinha quando voltar o sinal.`, 'offline');
+        } else {
+          mostrarStatusQR(`✅ Horímetro atualizado para ${horNovo} ${un}!`, 'ok');
+        }
+      } finally {
+        enviandoQR = false;
+        atualizarBadgeStatusRede();
       }
     }
 
     document.addEventListener('DOMContentLoaded', carregarEquipamentoDoQR);
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
+    }
   </script>
 </body>
 </html>
