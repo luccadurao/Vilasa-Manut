@@ -22,17 +22,17 @@ function obterClienteSupabase() {
   return null;
 }
 
-// 1. MATRIZ DE PERMISSÕES POR CARGO (RBAC)
+// 1. MATRIZ DE PERMISSÕES POR CARGO (RBAC) - SEM RELATÓRIOS P/ OPERADOR, MECÂNICO E ENCARREGADO
 const MATRIZ_PERMISSOES_CARGOS = {
   operador: {
     label: 'Operador de Equipamento',
     abas_visiveis: ['os'],
-    acoes: ['lancar_horimetro_qr', 'exportar_relatorios']
+    acoes: ['lancar_horimetro_qr']
   },
   mecanico: {
     label: 'Mecânico / Eletricista',
     abas_visiveis: ['os', 'preventivas', 'estoque'],
-    acoes: ['abrir_os', 'executar_os', 'lancar_horimetro_qr', 'exportar_relatorios']
+    acoes: ['abrir_os', 'executar_os', 'lancar_horimetro_qr']
   },
   almoxarife: {
     label: 'Almoxarife / Compras',
@@ -42,7 +42,7 @@ const MATRIZ_PERMISSOES_CARGOS = {
   encarregado: {
     label: 'Encarregado',
     abas_visiveis: ['os'],
-    acoes: ['abrir_os', 'exportar_relatorios']
+    acoes: ['abrir_os']
   },
   pcm: {
     label: 'Analista de PCM',
@@ -96,7 +96,6 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
     if (exibirAlerta) alert('Acesso restrito ao Administrador.');
     return false;
   }
-  if (acao === 'exportar_relatorios') return true;
 
   const resultado = cargos.some(cargo => {
     const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
@@ -174,16 +173,20 @@ async function restaurarSessaoSalva() {
     document.getElementById('telaLogin')?.classList.remove('hidden');
   }
 }
-
-// Reconstrói os botões do topo separando: CSV Completo, Imprimir Tudo, Imprimir REP (1 Pág.) e Exportar PNG (1 Pág.)
+// Esconde toda a barra de relatórios se for Operador, Mecânico ou Encarregado
 function montarBotoesBarraExportacaoUniversal() {
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
   const barraPai = elTit?.parentElement?.parentElement || elTit?.parentElement;
   if (!barraPai) return;
 
+  if (!podeExecutarAcao('exportar_relatorios')) {
+    barraPai.classList.add('hidden');
+    return;
+  }
+  barraPai.classList.remove('hidden');
+
   let containerBotoes = document.getElementById('containerBotoesExportacaoTopoV2');
   if (!containerBotoes) {
-    // Esconde os botões antigos para não duplicar nem sobrescrever errado
     Array.from(barraPai.querySelectorAll('button')).forEach(b => b.classList.add('hidden'));
     containerBotoes = document.createElement('div');
     containerBotoes.id = 'containerBotoesExportacaoTopoV2';
@@ -191,36 +194,33 @@ function montarBotoesBarraExportacaoUniversal() {
     barraPai.appendChild(containerBotoes);
   }
 
-  containerBotoes.innerHTML = `
+  containerBotoes.innerHTML = 
     <button type="button" onclick="acionarExportacaoUniversalCSV()"
-      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5"
-      title="Exportar planilha completa com todas as informações">
+      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5">
       <i class="fa-solid fa-file-csv"></i>
       <span>Planilha Completa (CSV)</span>
     </button>
 
     <button type="button" onclick="imprimirRelatorioGeralCompleto()"
-      class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow flex items-center gap-1.5"
-      title="Imprimir relatório completo com todos os itens e colunas">
+      class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow flex items-center gap-1.5">
       <i class="fa-solid fa-print"></i>
       <span>Imprimir Tudo (Completo)</span>
     </button>
 
     <button type="button" onclick="gerarRelatorioCompletoPDF()"
-      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow flex items-center gap-1.5"
-      title="Imprimir resumo enxuto de 1 página (Na aba OS: apenas máquinas abertas/paradas)">
+      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow flex items-center gap-1.5">
       <i class="fa-solid fa-bolt"></i>
       <span>Imprimir 1 Pág. (Parados/REP)</span>
     </button>
 
     <button type="button" onclick="gerarResumoExecutivoPNG()"
-      class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 font-black text-xs shadow flex items-center gap-1.5"
-      title="Baixar imagem PNG de 1 página (até 25 máquinas paradas)">
+      class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 font-black text-xs shadow flex items-center gap-1.5">
       <i class="fa-solid fa-image"></i>
       <span>Exportar 1 Pág. (PNG)</span>
     </button>
-  `;
+  ;
 }
+
 
 async function inicializarSistemaPosLogin() {
   document.getElementById('telaLogin')?.classList.add('hidden');
