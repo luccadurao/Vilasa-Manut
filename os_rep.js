@@ -366,7 +366,8 @@ function validarHorimetroAberturaOS(equipamento, valorDigitado) {
   }
 
   // 2. Bloqueia se houver um salto absurdo (ex: digitou um zero a mais)
-  const limiteSalto = un === 'KM' ? 5000 : 300;
+  const padraoSalto = un === 'KM' ? 5000 : 300;
+  const limiteSalto = Math.max(Number(equipamento?.limite_salto) || 0, padraoSalto); // limite do equipamento, nunca abaixo do padrão
   if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
     const podeForcar = usuarioPodeClassificarPCM();
     const msgSalto =

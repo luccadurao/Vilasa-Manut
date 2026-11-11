@@ -205,7 +205,8 @@
         alert(`❌ BLOQUEADO: HORÍMETRO MENOR QUE O ATUAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Atual no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO valor não pode ser menor que ${horAtual} ${un}. Verifique o painel da máquina!`);
         return { ok: false };
       }
-      const limiteSalto = un === 'KM' ? LIMITE_SALTO_KM : LIMITE_SALTO_HORIMETRO;
+      const padraoSalto = un === 'KM' ? LIMITE_SALTO_KM : LIMITE_SALTO_HORIMETRO;
+      const limiteSalto = Math.max(Number(equipAtualQR.limite_salto) || 0, padraoSalto); // do equipamento, nunca abaixo do padrão
       if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
         alert(`❌ BLOQUEADO: VALOR MUITO ACIMA DO NORMAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Último no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO horímetro subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não digitou um número a mais!`);
         return { ok: false };
