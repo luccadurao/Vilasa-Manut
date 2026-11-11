@@ -366,8 +366,8 @@ function validarHorimetroAberturaOS(equipamento, valorDigitado) {
   }
 
   // 2. Bloqueia se houver um salto absurdo (ex: digitou um zero a mais)
-  const padraoSalto = un === 'KM' ? 5000 : 300;
-  const limiteSalto = Math.max(Number(equipamento?.limite_salto) || 0, padraoSalto); // limite do equipamento, nunca abaixo do padrão
+  const infoSalto = calcularLimiteSalto(un, equipamento?.horimetro_atualizado_em, Date.now());
+  const limiteSalto = infoSalto.limite;
   if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
     const podeForcar = usuarioPodeClassificarPCM();
     const msgSalto =
@@ -375,7 +375,7 @@ function validarHorimetroAberturaOS(equipamento, valorDigitado) {
       `• Equipamento: ${equipamento.tag}\n` +
       `• Último Registrado: ${horAtual} ${un}\n` +
       `• Valor Digitado: ${horNovo} ${un} (+${(horNovo - horAtual).toFixed(1)} ${un})\n\n` +
-      `O valor digitado subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não foi digitado um número a mais!`;
+      `${explicarLimiteSalto(un, infoSalto)}\nConfira se não foi digitado um número a mais!`;
 
     if (!podeForcar) {
       alert(msgSalto);
@@ -505,7 +505,7 @@ async function confirmarAberturaSolicitacaoOS() {
   });
 
   // Atualiza também o horímetro atual da máquina na tabela equipamentos
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo }, eqId);
+  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo, horimetro_atualizado_em: new Date().toISOString() }, eqId);
   eqObj.horimetro_atual = horNovo;
 
   document.getElementById('modalSolicitacaoNovaOSV2')?.classList.add('hidden');
@@ -660,7 +660,7 @@ async function salvarExecucaoOSComChips(osId) {
   if (!isNaN(horSaida)) {
     payload.horimetro_os = horSaida;
     if (statusSel === 'concluida') {
-      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida }, os.equipamento_id);
+      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida, horimetro_atualizado_em: new Date().toISOString() }, os.equipamento_id);
     }
   }
 

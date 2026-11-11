@@ -45,12 +45,20 @@ language plpgsql set search_path = '' as $$
 begin
   if auth.uid() is null then return new; end if;              -- chamadas internas/administrativas
   if app.tem_cargo('pcm', 'engenheiro') then return new; end if;   -- (admin já incluído)
-  if (to_jsonb(new) - 'horimetro_atual') is distinct from (to_jsonb(old) - 'horimetro_atual') then
+  if (to_jsonb(new) - 'horimetro_atual' - 'horimetro_atualizado_em')
+     is distinct from (to_jsonb(old) - 'horimetro_atual' - 'horimetro_atualizado_em') then
     raise exception 'Seu perfil só pode atualizar o horímetro do equipamento.' using errcode = '42501';
   end if;
-  if new.horimetro_atual is not null and old.horimetro_atual is not null
-     and new.horimetro_atual < old.horimetro_atual then
-    raise exception 'O horímetro não pode diminuir. Peça a correção ao PCM/Engenharia.' using errcode = 'P0001';
+  if new.horimetro_atual is not null and old.horimetro_atual is not null then
+    if new.horimetro_atual < old.horimetro_atual then
+      raise exception 'O horímetro não pode diminuir. Peça a correção ao PCM/Engenharia.' using errcode = 'P0001';
+    end if;
+    -- Limite físico: horas -> no máximo o tempo que passou; KM -> no máximo 100 km por dia (app.limite_salto)
+    if old.horimetro_atual > 0 and new.horimetro_atual > old.horimetro_atual
+       and (new.horimetro_atual - old.horimetro_atual)
+           > app.limite_salto(old.unidade_medida, old.horimetro_atualizado_em, new.horimetro_atualizado_em) then
+      raise exception 'Aumento do horímetro maior que o possível desde a última leitura. Confira o valor no painel.' using errcode = 'P0001';
+    end if;
   end if;
   return new;
 end $$;

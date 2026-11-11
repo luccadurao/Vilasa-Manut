@@ -112,6 +112,34 @@ async function executarOperacaoNoBanco(item, modoReenvio = false) {
   }
 }
 
+// ---------- limite de salto do horímetro (mesma regra do servidor) -----------
+// Horas: só pode subir o tempo que realmente passou desde a última leitura (+ tolerância de relógio).
+// KM: no máximo 100 km por dia desde a última leitura (mínimo 1 dia).
+// Sem data da última leitura: vale o limite fixo antigo (300 H / 5000 KM).
+const CFG_LIMITE_PADRAO = { limite_km_dia: 100, tolerancia_horas: 0.5, fixo_horas: 300, fixo_km: 5000 };
+
+function calcularLimiteSalto(unidade, baseEm, quandoMs, cfg) {
+  const c = Object.assign({}, CFG_LIMITE_PADRAO, cfg || {});
+  const km = String(unidade || 'H').toUpperCase() === 'KM';
+  const base = baseEm ? new Date(baseEm).getTime() : NaN;
+  if (!Number.isFinite(base)) return { limite: Number(km ? c.fixo_km : c.fixo_horas), porTempo: false, horas: null, dias: null };
+  const horas = Math.max(0, ((quandoMs || Date.now()) - base) / 3600000);
+  if (km) {
+    const dias = Math.max(1, Math.ceil(horas / 24));
+    return { limite: Number(c.limite_km_dia) * dias, porTempo: true, horas, dias };
+  }
+  return { limite: horas + Number(c.tolerancia_horas), porTempo: true, horas, dias: null };
+}
+
+function explicarLimiteSalto(unidade, info) {
+  const un = String(unidade || 'H').toUpperCase();
+  const lim = Math.floor(info.limite * 10) / 10;
+  if (!info.porTempo) return `O aumento máximo aceito de uma só vez é ${lim} ${un}.`;
+  if (un === 'KM') return `Desde a última leitura são ${info.dias} dia(s): o máximo é 100 km por dia, ou seja, até +${lim} KM.`;
+  const h = Math.round(info.horas * 10) / 10;
+  return `Desde a última leitura passaram ${h} h, então o horímetro só pode ter subido até +${lim} h.`;
+}
+
 // ---------- leitura com cache -----------------------------------------------
 
 // Cópias dos dados para uso sem sinal ficam no IndexedDB (aguenta dezenas de MB; o localStorage
@@ -344,6 +372,8 @@ function atualizarBadgeStatusRede() {
 }
 
 window.lerDadosComFallbackOffline = lerDadosComFallbackOffline;
+window.calcularLimiteSalto = calcularLimiteSalto;
+window.explicarLimiteSalto = explicarLimiteSalto;
 window.limparCacheLocalDeDados = limparCacheLocalDeDados;
 window.gravarDadosOfflineSafe = gravarDadosOfflineSafe;
 window.sincronizarFilaOffline = sincronizarFilaOffline;

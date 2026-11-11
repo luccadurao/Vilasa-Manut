@@ -108,8 +108,6 @@
     // Obs.: nesta etapa a regra vale na tela; o bloqueio definitivo no banco (RLS) vem na etapa de segurança.
     // ========================================================================
     const CARGOS_QUE_ABREM_OS = ['mecanico', 'almoxarife', 'encarregado', 'pcm', 'engenheiro', 'admin'];
-    const LIMITE_SALTO_HORIMETRO = 300; // mesmo valor usado antes (H)
-    const LIMITE_SALTO_KM = 5000;       // mesmo valor usado antes (KM)
 
     let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null };
     let enviandoQR = false;
@@ -205,10 +203,9 @@
         alert(`❌ BLOQUEADO: HORÍMETRO MENOR QUE O ATUAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Atual no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO valor não pode ser menor que ${horAtual} ${un}. Verifique o painel da máquina!`);
         return { ok: false };
       }
-      const padraoSalto = un === 'KM' ? LIMITE_SALTO_KM : LIMITE_SALTO_HORIMETRO;
-      const limiteSalto = Math.max(Number(equipAtualQR.limite_salto) || 0, padraoSalto); // do equipamento, nunca abaixo do padrão
-      if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
-        alert(`❌ BLOQUEADO: VALOR MUITO ACIMA DO NORMAL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Último no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un}\n\nO horímetro subiu mais de ${limiteSalto} ${un} de uma só vez. Confira se não digitou um número a mais!`);
+      const info = calcularLimiteSalto(un, equipAtualQR.horimetro_atualizado_em, Date.now(), equipAtualQR.cfg);
+      if (horAtual > 0 && (horNovo - horAtual) > info.limite) {
+        alert(`❌ BLOQUEADO: VALOR IMPOSSÍVEL!\n\n• Equipamento: ${equipAtualQR.tag}\n• Último no Sistema: ${horAtual} ${un}\n• Você Digitou: ${horNovo} ${un} (+${(horNovo - horAtual).toFixed(1)})\n\n${explicarLimiteSalto(un, info)}\nConfira se não digitou um número a mais!`);
         return { ok: false };
       }
       return { ok: true, semBase: !(horAtual > 0) };
@@ -270,6 +267,7 @@
       });
       if (r.error) return { ok: false };
       equipAtualQR.horimetro_atual = horNovo;
+      equipAtualQR.horimetro_atualizado_em = new Date().toISOString();
       guardarCacheEquip();
       atualizarTextoHorimetro();
       return { ok: true, offline: r.offline };

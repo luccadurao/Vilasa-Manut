@@ -188,7 +188,6 @@ function gerarLinhasHtmlTabelaFrota(lista, podeGerenciar) {
           <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
           ${podeGerenciar ? `
             <button onclick="abrirModalTransferirObraEquipamento('${e.id}')" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold">🔄 Obra</button>
-            <button onclick="definirLimiteSaltoEquipamento('${e.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-800 font-bold" title="Limite de salto do horímetro/KM">🎚️ Limite</button>
             <button onclick="abrirModalCicloVidaDesmobilizacao('${e.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold">⚙️ Status</button>
           ` : ''}
         </td>
@@ -408,21 +407,6 @@ async function salvarNovoEquipamentoV2() {
 
   document.getElementById('modalNovoEquipV2')?.classList.add('hidden');
   await carregarFrota('ativo');
-}
-
-async function definirLimiteSaltoEquipamento(equipId) {
-  if (!podeExecutarAcao('gerenciar_frota', true)) return;
-  const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
-  if (!eq) return;
-  const un = (eq.unidade_medida || 'H').toUpperCase();
-  const padrao = un === 'KM' ? 5000 : 300;
-  const atual = Number(eq.limite_salto) > padrao ? Number(eq.limite_salto) : padrao;
-  const resp = prompt(`Limite de salto de ${eq.tag} (${un}).\n\nÉ o maior aumento aceito de uma só leitura. O mínimo é o padrão (${padrao} ${un}); só é possível AUMENTAR para equipamentos que rodam muito por dia.\n\nAtual: ${atual} ${un}. Digite o novo valor (ou deixe igual ao padrão para voltar ao normal):`, String(atual));
-  if (resp === null) return;
-  const novo = parseFloat(String(resp).replace(',', '.'));
-  if (!Number.isFinite(novo) || novo < padrao) return alert(`Valor inválido. O limite não pode ser menor que o padrão (${padrao} ${un}).`);
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { limite_salto: novo > padrao ? novo : null }, eq.id);
-  await carregarFrota(filtroSituacaoFrota);
 }
 
 function abrirModalCicloVidaDesmobilizacao(equipId) {
