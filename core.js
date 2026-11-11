@@ -192,14 +192,16 @@ async function encerrarSessao() {
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem('vilasa_obra_ativa_v2');
+  try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }
 
-function encerrarSessaoSemPerguntar() {
+async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem('vilasa_obra_ativa_v2');
+  try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }
@@ -225,6 +227,7 @@ async function restaurarSessaoSalva() {
           // Servidor respondeu e não há mais login válido (senha trocada, usuário removido...). Pede novo login.
           // A fila de registros pendentes NÃO é apagada.
           localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+          try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
           usuarioLogado = null;
           return mostrarLogin();
         }

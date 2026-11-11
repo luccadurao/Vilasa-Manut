@@ -114,17 +114,78 @@ async function executarOperacaoNoBanco(item, modoReenvio = false) {
 
 // ---------- leitura com cache -----------------------------------------------
 
+// Cópias dos dados para uso sem sinal ficam no IndexedDB (aguenta dezenas de MB; o localStorage
+// do celular estoura em ~5 MB). Se o IndexedDB não existir, usa o localStorage como antes.
+const IDB_NOME = 'vilasa_dados_v1';
+const IDB_TABELA = 'cache';
+let _idbPromessa = null;
+
+function abrirIDB() {
+  if (_idbPromessa) return _idbPromessa;
+  _idbPromessa = new Promise((resolve) => {
+    try {
+      if (typeof indexedDB === 'undefined' || !indexedDB) return resolve(null);
+      const req = indexedDB.open(IDB_NOME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_TABELA);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    } catch (e) { resolve(null); }
+  });
+  return _idbPromessa;
+}
+
+function idbOperar(modo, fn) {
+  return abrirIDB().then(idb => new Promise((resolve, reject) => {
+    if (!idb) return reject(new Error('sem IndexedDB'));
+    try {
+      const tx = idb.transaction(IDB_TABELA, modo);
+      const r = fn(tx.objectStore(IDB_TABELA));
+      tx.oncomplete = () => resolve(r && r.result);
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('falha IndexedDB'));
+    } catch (e) { reject(e); }
+  }));
+}
+
+async function cacheGravarDados(chave, dados) {
+  try {
+    await idbOperar('readwrite', st => st.put(dados, chave));
+    try { localStorage.removeItem(`vilasa_cache_${chave}`); } catch (e) {} // libera a cópia antiga
+    return true;
+  } catch (e) {
+    try { localStorage.setItem(`vilasa_cache_${chave}`, JSON.stringify(dados)); return true; }
+    catch (e2) { console.warn('Cache local cheio:', e2); return false; }
+  }
+}
+
+async function cacheLerDados(chave) {
+  try {
+    const v = await idbOperar('readonly', st => st.get(chave));
+    if (v !== undefined && v !== null) return v;
+  } catch (e) { /* cai para o localStorage */ }
+  try {
+    const bruto = localStorage.getItem(`vilasa_cache_${chave}`);
+    if (bruto) return JSON.parse(bruto);
+  } catch (e) { /* ignora */ }
+  return null;
+}
+
+// Ao sair: apaga as cópias de dados (a fila de registros pendentes NÃO é apagada).
+async function limparCacheLocalDeDados() {
+  try { await idbOperar('readwrite', st => st.clear()); } catch (e) {}
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith('vilasa_cache_') || k.startsWith('vilasa_qr_equip_'))
+      .forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+}
+
 async function lerDadosComFallbackOffline(chaveCache, fnQuerySupabase) {
   try {
     if (typeof obterClienteSupabase === 'function') obterClienteSupabase();
     if (navigator.onLine && typeof fnQuerySupabase === 'function') {
       const res = await fnQuerySupabase();
       if (res && !res.error && res.data) {
-        try {
-          localStorage.setItem(`vilasa_cache_${chaveCache}`, JSON.stringify(res.data));
-        } catch (e) {
-          console.warn('Cache local cheio:', e);
-        }
+        await cacheGravarDados(chaveCache, res.data);
         return { data: res.data, error: null, offline: false };
       }
       if (res && res.error && !erroEhRecuperavel(res)) {
@@ -135,14 +196,8 @@ async function lerDadosComFallbackOffline(chaveCache, fnQuerySupabase) {
     console.warn(`Modo offline para ${chaveCache}:`, err);
   }
 
-  let dados = [];
-  try {
-    const cacheLocal = localStorage.getItem(`vilasa_cache_${chaveCache}`);
-    if (cacheLocal) dados = JSON.parse(cacheLocal);
-  } catch (e) {
-    dados = [];
-  }
-  return { data: dados, error: null, offline: true };
+  const dados = await cacheLerDados(chaveCache);
+  return { data: dados || [], error: null, offline: true };
 }
 
 // ---------- gravação --------------------------------------------------------
@@ -289,6 +344,7 @@ function atualizarBadgeStatusRede() {
 }
 
 window.lerDadosComFallbackOffline = lerDadosComFallbackOffline;
+window.limparCacheLocalDeDados = limparCacheLocalDeDados;
 window.gravarDadosOfflineSafe = gravarDadosOfflineSafe;
 window.sincronizarFilaOffline = sincronizarFilaOffline;
 window.enfileirarOperacaoOffline = enfileirarOperacaoOffline;

@@ -7,7 +7,7 @@
 //    guardada na hora e atualiza em segundo plano.
 //  • Chamadas ao banco (supabase.co) NUNCA passam por aqui: o app trata offline sozinho.
 // ============================================================================
-const VERSAO = 'v4';
+const VERSAO = 'v5';
 const CACHE_NAME = `vilasa-pwa-${VERSAO}`;
 const TEMPO_LIMITE_REDE_MS = 4000;
 
@@ -15,16 +15,15 @@ const ARQUIVOS_LOCAIS = [
   './', './index.html', './qr.html', './manifest.webmanifest',
   './config.js', './core.js', './offline_sync.js', './os_rep.js', './pcm_sap.js',
   './frota.js', './estoque.js', './kpis.js', './admin.js',
-  './icon-192.png', './icon-512.png', './apple-touch-icon.png'
+  './icon-192.png', './icon-512.png', './apple-touch-icon.png',
+  './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
+  './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',
+  './vendor/fa/webfonts/fa-regular-400.woff2', './vendor/fa/webfonts/fa-brands-400.woff2'
 ];
 
-const LIBS_EXTERNAS = [
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
-];
-const HOSTS_EXTERNOS = ['cdn.tailwindcss.com', 'cdnjs.cloudflare.com', 'cdn.jsdelivr.net'];
+// As bibliotecas agora ficam dentro do próprio site (pasta vendor/): nada depende de sites externos.
+const LIBS_EXTERNAS = [];
+const HOSTS_EXTERNOS = [];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -74,6 +73,16 @@ self.addEventListener('fetch', (event) => {
       if (guardada) { event.waitUntil(atualiza); return guardada; }
       const r = await atualiza;
       return r || Response.error();
+    })());
+    return;
+  }
+
+  // Bibliotecas do próprio site (vendor/): não mudam, então a cópia guardada vale na hora (sem esperar a rede).
+  if (url.origin === self.location.origin && url.pathname.includes('/vendor/')) {
+    event.respondWith((async () => {
+      const guardada = await caches.match(req, { ignoreSearch: true });
+      if (guardada) return guardada;
+      try { return guardar(req, await fetch(req)); } catch (e) { return Response.error(); }
     })());
     return;
   }
