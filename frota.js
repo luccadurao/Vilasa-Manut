@@ -131,7 +131,7 @@ function renderizarThColunaFiltravelFrota(colKey, titulo) {
     <th class="p-2.5 align-top select-none border-r border-slate-800 last:border-r-0">
       <div onclick="alternarInputFiltroColunaFrota('${colKey}', event)"
         class="flex items-center justify-between gap-1.5 cursor-pointer group ${ativo ? 'text-white bg-amber-600/30 px-1.5 py-0.5 rounded' : 'hover:text-white'}">
-        <span>${titulo}</span>
+        <span>${esc(titulo)}</span>
         <i class="fa-solid ${ativo ? 'fa-filter text-amber-300' : 'fa-caret-down text-slate-400 group-hover:text-amber-300'} text-[10px]"></i>
       </div>
       ${aberto ? `
@@ -173,17 +173,17 @@ function gerarLinhasHtmlTabelaFrota(lista, podeGerenciar) {
           <input type="checkbox" value="${e.id}" class="chk-qr-equipamento rounded text-amber-500 cursor-pointer" />
         </td>
         <td class="p-2.5 font-black whitespace-nowrap">
-          <span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${e.tag}</span>
+          <span class="bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-xs">${esc(e.tag)}</span>
         </td>
-        <td class="p-2.5 font-extrabold text-slate-900">${e.nome || '-'}</td>
-        <td class="p-2.5 font-bold text-slate-700">${e.marca || '-'}</td>
-        <td class="p-2.5 font-bold text-slate-700">${e.modelo || '-'}</td>
+        <td class="p-2.5 font-extrabold text-slate-900">${esc(e.nome || '-')}</td>
+        <td class="p-2.5 font-bold text-slate-700">${esc(e.marca || '-')}</td>
+        <td class="p-2.5 font-bold text-slate-700">${esc(e.modelo || '-')}</td>
         <td class="p-2.5 font-bold text-slate-700 text-center">${e.ano_fabricacao || '-'}</td>
-        <td class="p-2.5 font-semibold text-slate-700">${e.numero_serie || '-'}</td>
-        <td class="p-2.5 font-black text-amber-800">${e.placa || '-'}</td>
+        <td class="p-2.5 font-semibold text-slate-700">${esc(e.numero_serie || '-')}</td>
+        <td class="p-2.5 font-black text-amber-800">${esc(e.placa || '-')}</td>
         <td class="p-2.5">${propBadge}</td>
-        <td class="p-2.5 font-bold text-slate-700 whitespace-nowrap">📍 ${nomeObra}</td>
-        <td class="p-2.5 font-black text-slate-900 whitespace-nowrap">${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}</td>
+        <td class="p-2.5 font-bold text-slate-700 whitespace-nowrap">📍 ${esc(nomeObra)}</td>
+        <td class="p-2.5 font-black text-slate-900 whitespace-nowrap">${e.horimetro_atual || 0} ${esc(e.unidade_medida || 'H')}</td>
         <td class="p-2.5 text-right space-x-1 whitespace-nowrap">
           <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
           ${podeGerenciar ? `
@@ -371,7 +371,7 @@ function abrirModalCadastroEquipamentoV2() {
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Obra</label>
             <select id="eqV2Obra" class="w-full border rounded-lg p-2 font-bold">
-              ${cacheObras.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>${o.codigo}</option>`).join('')}
+              ${cacheObras.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>${esc(o.codigo)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -422,7 +422,7 @@ function abrirModalCicloVidaDesmobilizacao(equipId) {
   }
   modal.innerHTML = `
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border">
-      <h3 class="text-base font-black text-slate-900 mb-3">Alterar Status / Vínculo (${eq.tag})</h3>
+      <h3 class="text-base font-black text-slate-900 mb-3">Alterar Status / Vínculo (${esc(eq.tag)})</h3>
       <div class="space-y-3 text-xs">
         <select id="cicloPropSelect" class="w-full border rounded-lg p-2 font-bold">
           <option value="proprio" ${eq.propriedade !== 'alugado' ? 'selected' : ''}>🏢 Próprio</option>
@@ -491,9 +491,9 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
     const imgApi = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(gerarUrlQRCodeOfflineReady(eq))}`;
     return `
       <div style="border:3px solid #0f172a; border-radius:14px; padding:14px; width:240px; text-align:center; font-family:sans-serif; page-break-inside:avoid;">
-        <div style="background:#f59e0b; color:#0f172a; font-weight:900; font-size:20px; padding:4px 8px; border-radius:8px;">${eq.tag}</div>
-        <div style="font-size:11px; font-weight:700; margin:6px 0;">${eq.nome || ''}</div>
-        <div style="font-size:9px; font-weight:600; color:#475569;">${eq.ano_fabricacao ? `Ano: ${eq.ano_fabricacao} | ` : ''}Série: ${eq.numero_serie || 'N/I'} ${eq.placa ? `| Placa: ${eq.placa}` : ''}</div>
+        <div style="background:#f59e0b; color:#0f172a; font-weight:900; font-size:20px; padding:4px 8px; border-radius:8px;">${esc(eq.tag)}</div>
+        <div style="font-size:11px; font-weight:700; margin:6px 0;">${esc(eq.nome || '')}</div>
+        <div style="font-size:9px; font-weight:600; color:#475569;">${eq.ano_fabricacao ? `Ano: ${eq.ano_fabricacao} | ` : ''}Série: ${esc(eq.numero_serie || 'N/I')} ${eq.placa ? `| Placa: ${esc(eq.placa)}` : ''}</div>
         <img src="${imgApi}" style="width:160px; height:160px; margin:4px auto;" />
         <div style="font-size:10px; font-weight:800;">LEITURA DE HORÍMETRO / OS</div>
       </div>
@@ -514,7 +514,7 @@ function exportarRelatorioFrotaCSV() {
     (e.modelo || '').replace(/;/g, ','), e.ano_fabricacao || '', e.numero_serie || '', e.placa || '',
     e.propriedade || 'proprio', e.situacao_ciclo || 'ativo',
     String(e.horimetro_atual || 0).replace('.', ','), e.unidade_medida || 'H'
-  ].join(';'));
+  ].map(csvCelula).join(';'));
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

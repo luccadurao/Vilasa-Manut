@@ -252,7 +252,7 @@ function renderizarDashboardKPIs(d) {
           <h3 class="text-xs font-black uppercase text-slate-900 border-b pb-2 mb-3">🚨 Top 10 Críticos de Horas Paradas</h3>
           <table class="w-full text-left text-[11px]">
             <thead><tr class="text-slate-500 border-b"><th class="py-1.5">Prefixo</th><th class="py-1.5 text-center">Falhas</th><th class="py-1.5 text-right">Corret.</th><th class="py-1.5 text-right">Prev.</th><th class="py-1.5 text-right">Total</th></tr></thead>
-            <tbody class="divide-y">${topViloes.map(m => `<tr><td class="py-1.5 font-black text-amber-700">${m.tag}</td><td class="py-1.5 text-center font-bold">${m.qtdFalhas}</td><td class="py-1.5 text-right text-rose-600 font-bold">${m.horasCorretiva.toFixed(1)}h</td><td class="py-1.5 text-right text-blue-600 font-bold">${m.horasPreventiva.toFixed(1)}h</td><td class="py-1.5 text-right font-black">${m.totalParado.toFixed(1)}h</td></tr>`).join('')}</tbody>
+            <tbody class="divide-y">${topViloes.map(m => `<tr><td class="py-1.5 font-black text-amber-700">${esc(m.tag)}</td><td class="py-1.5 text-center font-bold">${m.qtdFalhas}</td><td class="py-1.5 text-right text-rose-600 font-bold">${m.horasCorretiva.toFixed(1)}h</td><td class="py-1.5 text-right text-blue-600 font-bold">${m.horasPreventiva.toFixed(1)}h</td><td class="py-1.5 text-right font-black">${m.totalParado.toFixed(1)}h</td></tr>`).join('')}</tbody>
           </table>
         </div>
 
@@ -260,7 +260,7 @@ function renderizarDashboardKPIs(d) {
           <h3 class="text-xs font-black uppercase text-slate-900 border-b pb-2 mb-3">💵 Top 10 Custos de Peças/NF por Máquina</h3>
           <table class="w-full text-left text-[11px]">
             <thead><tr class="text-slate-500 border-b"><th class="py-1.5">Prefixo</th><th class="py-1.5">Equipamento</th><th class="py-1.5 text-right">Custo</th></tr></thead>
-            <tbody class="divide-y">${topCustos.map(m => `<tr><td class="py-1.5 font-black text-amber-700">${m.tag}</td><td class="py-1.5 font-semibold truncate max-w-[140px]">${m.nome || '-'}</td><td class="py-1.5 text-right font-black text-emerald-700">${formatarMoedaBR(m.custoPecas)}</td></tr>`).join('')}</tbody>
+            <tbody class="divide-y">${topCustos.map(m => `<tr><td class="py-1.5 font-black text-amber-700">${esc(m.tag)}</td><td class="py-1.5 font-semibold truncate max-w-[140px]">${esc(m.nome || '-')}</td><td class="py-1.5 text-right font-black text-emerald-700">${formatarMoedaBR(m.custoPecas)}</td></tr>`).join('')}</tbody>
           </table>
         </div>
 
@@ -268,7 +268,7 @@ function renderizarDashboardKPIs(d) {
           <h3 class="text-xs font-black uppercase text-slate-900 border-b pb-2 mb-3">👷 Produtividade da Equipe no Período</h3>
           <table class="w-full text-left text-[11px]">
             <thead><tr class="text-slate-500 border-b"><th class="py-1.5">Mecânico</th><th class="py-1.5 text-center">C/ Parada</th><th class="py-1.5 text-center">S/ Parada</th><th class="py-1.5 text-right">Total OS</th></tr></thead>
-            <tbody class="divide-y">${rankingMec.map(mec => `<tr><td class="py-1.5 font-black">${mec.nome}</td><td class="py-1.5 text-center font-bold text-rose-600">${mec.corretivas}</td><td class="py-1.5 text-center font-bold text-emerald-700">${mec.semParada}</td><td class="py-1.5 text-right font-black">${mec.total}</td></tr>`).join('')}</tbody>
+            <tbody class="divide-y">${rankingMec.map(mec => `<tr><td class="py-1.5 font-black">${esc(mec.nome)}</td><td class="py-1.5 text-center font-bold text-rose-600">${mec.corretivas}</td><td class="py-1.5 text-center font-bold text-emerald-700">${mec.semParada}</td><td class="py-1.5 text-right font-black">${mec.total}</td></tr>`).join('')}</tbody>
           </table>
         </div>
       </div>
@@ -278,7 +278,7 @@ function renderizarDashboardKPIs(d) {
 
 function exportarRelatorioKPIsCSV() {
   const cab = ['PERIODO_INICIO', 'PERIODO_FIM', 'PREFIXO_FILTRO', 'EXPORTADO_EM'];
-  const linha = [filtroKpiDataInicio, filtroKpiDataFim, filtroKpiPrefixo || 'TODOS', new Date().toLocaleString('pt-BR')].join(';');
+  const linha = [filtroKpiDataInicio, filtroKpiDataFim, filtroKpiPrefixo || 'TODOS', new Date().toLocaleString('pt-BR')].map(csvCelula).join(';');
   const blob = new Blob(['\uFEFF' + cab.join(';') + '\n' + linha], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

@@ -165,21 +165,21 @@ function renderizarQuadroEnxutoParadosREP(lista) {
           const horasParadas = Math.max(0.1, ((new Date() - new Date(o.aberta_em)) / 3600000)).toFixed(1);
           const labelStatus = o.status === 'pausada_peca'
             ? '📦 AGUARD. PEÇA'
-            : (o.mecanico_nome ? `🔧 ${o.mecanico_nome}` : '🚨 AGUARD. MECÂNICO ASSUMIR');
+            : (o.mecanico_nome ? `🔧 ${esc(o.mecanico_nome)}` : '🚨 AGUARD. MECÂNICO ASSUMIR');
 
           return `
             <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
               <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">#${o.numero_os || (idx + 1)}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-800">${o.equipamentos?.nome || '-'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${o.equipamentos?.marca || '-'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-black text-amber-700">${o.equipamentos?.tag || '-'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">${o.motivo_rep || 'CORRETIVA'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-700">${o.classificacao_falha || '-'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-600">${o.local_manutencao_pcm || 'OFICINA'}</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-900">${o.descricao_problema || '-'}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-800">${esc(o.equipamentos?.nome || '-')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${esc(o.equipamentos?.marca || '-')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-black text-amber-700">${esc(o.equipamentos?.tag || '-')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-700">${esc(o.motivo_rep || 'CORRETIVA')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-700">${esc(o.classificacao_falha || '-')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold text-slate-600">${esc(o.local_manutencao_pcm || 'OFICINA')}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-semibold text-slate-900">${esc(o.descricao_problema || '-')}</td>
               <td class="py-1.5 px-2 border border-slate-200 text-slate-600">${new Date(o.aberta_em).toLocaleString('pt-BR')}</td>
               <td class="py-1.5 px-2 border border-slate-200 text-center font-black text-rose-600">${horasParadas}h</td>
-              <td class="py-1.5 px-2 border border-slate-200 font-bold ${o.mecanico_nome ? 'text-emerald-700' : 'text-rose-600'}">${labelStatus}</td>
+              <td class="py-1.5 px-2 border border-slate-200 font-bold ${esc(o.mecanico_nome ? 'text-emerald-700' : 'text-rose-600')}">${labelStatus}</td>
             </tr>
           `;
         }).join('')}
@@ -265,7 +265,7 @@ function renderizarCardsListaOS(lista) {
     const aguardandoAssumir = o.status === 'aberta' && !o.mecanico_nome && !o.concluida_em;
     const statusBadge = aguardandoAssumir
       ? `<span class="px-2 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black animate-pulse">🚨 CHAMADO ABERTO • AGUARDANDO MECÂNICO</span>`
-      : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300 text-[10px] font-black uppercase">${o.status}</span>`;
+      : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300 text-[10px] font-black uppercase">${esc(o.status)}</span>`;
 
     const horasDecorridas = o.aberta_em
       ? (((o.concluida_em ? new Date(o.concluida_em) : new Date()) - new Date(o.aberta_em)) / 3600000).toFixed(1)
@@ -276,28 +276,28 @@ function renderizarCardsListaOS(lista) {
         <div>
           <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
             <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-sm font-black text-slate-900 bg-amber-400 px-2.5 py-0.5 rounded">${o.equipamentos?.tag || 'SEM TAG'}</span>
+              <span class="text-sm font-black text-slate-900 bg-amber-400 px-2.5 py-0.5 rounded">${esc(o.equipamentos?.tag || 'SEM TAG')}</span>
               ${o.numero_os ? `<span class="text-[11px] font-black text-slate-400">#${o.numero_os}</span>` : ''}
-              <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">${o.motivo_rep || 'CORRETIVA'}</span>
-              ${o.classificacao_falha ? `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">${o.classificacao_falha}</span>` : ''}
+              <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">${esc(o.motivo_rep || 'CORRETIVA')}</span>
+              ${o.classificacao_falha ? `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">${esc(o.classificacao_falha)}</span>` : ''}
             </div>
             ${statusBadge}
           </div>
 
-          <p class="text-xs font-bold text-slate-600 mb-2">${o.equipamentos?.nome || ''} • Local: <strong>${o.local_manutencao_pcm || 'OFICINA'}</strong> • Tempo: <strong class="text-rose-600">${horasDecorridas}h</strong></p>
+          <p class="text-xs font-bold text-slate-600 mb-2">${esc(o.equipamentos?.nome || '')} • Local: <strong>${esc(o.local_manutencao_pcm || 'OFICINA')}</strong> • Tempo: <strong class="text-rose-600">${horasDecorridas}h</strong></p>
 
           <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-800">
-            ${o.descricao_problema || '-'}
+            ${esc(o.descricao_problema || '-')}
           </div>
 
-          ${o.servico_executado ? `<p class="mt-2 text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200"><strong>Serviço Executado:</strong> ${o.servico_executado}</p>` : ''}
+          ${o.servico_executado ? `<p class="mt-2 text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200"><strong>Serviço Executado:</strong> ${esc(o.servico_executado)}</p>` : ''}
         </div>
 
         <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-2">
           <div>
             <div><strong>Início:</strong> ${new Date(o.aberta_em).toLocaleString('pt-BR')}</div>
             ${o.concluida_em ? `<div><strong>Fim:</strong> <span class="text-emerald-700 font-bold">${new Date(o.concluida_em).toLocaleString('pt-BR')}</span></div>` : ''}
-            <div><strong>Mecânicos:</strong> <span class="text-slate-800 font-bold">${o.mecanico_nome || 'Aguardando mecânico assumir'}</span></div>
+            <div><strong>Mecânicos:</strong> <span class="text-slate-800 font-bold">${esc(o.mecanico_nome || 'Aguardando mecânico assumir')}</span></div>
           </div>
 
           <div class="flex items-center gap-1.5 flex-wrap">
@@ -435,7 +435,7 @@ async function abrirModalSolicitacaoAberturaOS() {
           <label class="block font-black uppercase text-slate-700 mb-1">1. Equipamento (Prefixo)</label>
           <select id="novaOSEquipId" onchange="atualizarDicaHorimetroNovaOS(this.value)" class="w-full border rounded-lg p-2.5 font-bold">
             <option value="">-- Selecione o Equipamento --</option>
-            ${cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').map(e => `<option value="${e.id}">${e.tag} - ${e.nome} (Atual: ${e.horimetro_atual || 0} ${e.unidade_medida || 'H'})</option>`).join('')}
+            ${cacheEquipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').map(e => `<option value="${e.id}">${esc(e.tag)} - ${esc(e.nome)} (Atual: ${e.horimetro_atual || 0} ${esc(e.unidade_medida || 'H')})</option>`).join('')}
           </select>
         </div>
 
@@ -550,7 +550,7 @@ async function abrirModalExecucaoOSComChips(osId) {
 
   modal.innerHTML = `
     <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8">
-      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">🔧 Atendimento e Fechamento de OS (${os.equipamentos?.tag || ''})</h3>
+      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">🔧 Atendimento e Fechamento de OS (${esc(os.equipamentos?.tag || '')})</h3>
       <div class="space-y-4 text-xs">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -573,9 +573,9 @@ async function abrirModalExecucaoOSComChips(osId) {
             ${mecanicos.map(m => {
               const ativo = nomesSalvos.includes(String(m.nome).toUpperCase());
               return `
-                <button type="button" data-mec-nome="${m.nome}" onclick="alternarSelecaoChipMecanico(this)"
+                <button type="button" data-mec-nome="${esc(m.nome)}" onclick="alternarSelecaoChipMecanico(this)"
                   class="chip-mecanico-v2 px-3 py-1.5 rounded-lg text-xs font-extrabold border transition flex items-center gap-1.5 ${ativo ? 'bg-amber-500 text-slate-950 border-amber-600 shadow' : 'bg-white text-slate-700 border-slate-300'}">
-                  <i class="fa-solid ${ativo ? 'fa-square-check' : 'fa-square'}"></i><span>${m.nome}</span>
+                  <i class="fa-solid ${ativo ? 'fa-square-check' : 'fa-square'}"></i><span>${esc(m.nome)}</span>
                 </button>
               `;
             }).join('')}
@@ -584,7 +584,7 @@ async function abrirModalExecucaoOSComChips(osId) {
 
         <div>
           <label class="block font-black uppercase text-slate-600 mb-1">Serviço Executado</label>
-          <textarea id="execV2Acao" rows="3" placeholder="Descreva o serviço executado..." class="w-full border rounded-lg p-2.5 font-semibold uppercase">${os.servico_executado || ''}</textarea>
+          <textarea id="execV2Acao" rows="3" placeholder="Descreva o serviço executado..." class="w-full border rounded-lg p-2.5 font-semibold uppercase">${esc(os.servico_executado || '')}</textarea>
         </div>
 
         <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
@@ -700,7 +700,7 @@ async function abrirModalIntervencaoCampoComboio() {
           <label class="block font-black uppercase text-slate-700 mb-1">Equipamento (Prefixo)</label>
           <select id="comboioEquipamentoId" class="w-full border rounded-lg p-2.5 font-bold">
             <option value="">-- Selecione o Equipamento --</option>
-            ${cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('')}
+            ${cacheEquipamentos.map(e => `<option value="${e.id}">${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
           </select>
         </div>
 
@@ -724,9 +724,9 @@ async function abrirModalIntervencaoCampoComboio() {
           <label class="block font-black uppercase text-slate-700 mb-1">👷 Mecânicos Presentes:</label>
           <div id="containerChipsComboioV2" class="flex flex-wrap gap-1.5 bg-slate-50 p-2.5 rounded-xl border">
             ${mecanicos.map(m => `
-              <button type="button" data-mec-nome="${m.nome}" onclick="alternarSelecaoChipMecanico(this)"
+              <button type="button" data-mec-nome="${esc(m.nome)}" onclick="alternarSelecaoChipMecanico(this)"
                 class="chip-mecanico-v2 px-3 py-1 rounded-lg text-xs font-extrabold border transition flex items-center gap-1.5 bg-white text-slate-700 border-slate-300">
-                <i class="fa-solid fa-square"></i><span>${m.nome}</span>
+                <i class="fa-solid fa-square"></i><span>${esc(m.nome)}</span>
               </button>
             `).join('')}
           </div>
@@ -808,7 +808,7 @@ async function abrirModalLancamentoCompletoPCM(osId = null) {
         <div>
           <span class="bg-blue-600 text-white font-black px-2.5 py-0.5 rounded text-[10px] uppercase">Controle Total PCM & REP</span>
           <h3 class="text-lg font-black text-slate-900 mt-1">
-            ${os ? `✏️ Classificar / Editar OS #${os.numero_os || ''} (${os.equipamentos?.tag || ''})` : '📋 Lançamento Completo / Retroativo de Manutenção (PCM)'}
+            ${os ? `✏️ Classificar / Editar OS #${os.numero_os || ''} (${esc(os.equipamentos?.tag || '')})` : '📋 Lançamento Completo / Retroativo de Manutenção (PCM)'}
           </h3>
         </div>
         <button onclick="document.getElementById('modalLancamentoCompletoPCMV2').classList.add('hidden')" class="text-slate-400 text-2xl font-black">&times;</button>
@@ -820,7 +820,7 @@ async function abrirModalLancamentoCompletoPCM(osId = null) {
             <label class="block font-black uppercase text-slate-700 mb-1">Equipamento (Prefixo)</label>
             <select id="pcmFullEquipId" class="w-full border rounded-lg p-2 font-bold bg-white">
               <option value="">-- Selecione --</option>
-              ${cacheEquipamentos.map(e => `<option value="${e.id}" ${os && String(os.equipamento_id) === String(e.id) ? 'selected' : ''}>${e.tag} - ${e.nome}</option>`).join('')}
+              ${cacheEquipamentos.map(e => `<option value="${e.id}" ${os && String(os.equipamento_id) === String(e.id) ? 'selected' : ''}>${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -866,18 +866,18 @@ async function abrirModalLancamentoCompletoPCM(osId = null) {
           </div>
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Local da Manutenção</label>
-            <input type="text" id="pcmFullLocalManut" value="${os?.local_manutencao_pcm || 'OFICINA'}" placeholder="OFICINA, CAMPO, EXTERNA..." class="w-full border rounded-lg p-2 font-bold uppercase" />
+            <input type="text" id="pcmFullLocalManut" value="${esc(os?.local_manutencao_pcm || 'OFICINA')}" placeholder="OFICINA, CAMPO, EXTERNA..." class="w-full border rounded-lg p-2 font-bold uppercase" />
           </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Descrição do Problema / Defeito</label>
-            <textarea id="pcmFullProblema" rows="3" class="w-full border rounded-lg p-2 font-bold uppercase">${os?.descricao_problema || ''}</textarea>
+            <textarea id="pcmFullProblema" rows="3" class="w-full border rounded-lg p-2 font-bold uppercase">${esc(os?.descricao_problema || '')}</textarea>
           </div>
           <div>
             <label class="block font-black uppercase text-slate-700 mb-1">Serviço Executado / Solução</label>
-            <textarea id="pcmFullServico" rows="3" class="w-full border rounded-lg p-2 font-bold uppercase">${os?.servico_executado || ''}</textarea>
+            <textarea id="pcmFullServico" rows="3" class="w-full border rounded-lg p-2 font-bold uppercase">${esc(os?.servico_executado || '')}</textarea>
           </div>
         </div>
 
@@ -887,9 +887,9 @@ async function abrirModalLancamentoCompletoPCM(osId = null) {
             ${mecanicos.map(m => {
               const ativo = nomesSalvos.includes(String(m.nome).toUpperCase());
               return `
-                <button type="button" data-mec-nome="${m.nome}" onclick="alternarSelecaoChipMecanico(this)"
+                <button type="button" data-mec-nome="${esc(m.nome)}" onclick="alternarSelecaoChipMecanico(this)"
                   class="chip-mecanico-v2 px-3 py-1 rounded-lg text-xs font-extrabold border transition flex items-center gap-1.5 ${ativo ? 'bg-amber-500 text-slate-950 border-amber-600 shadow' : 'bg-white text-slate-700 border-slate-300'}">
-                  <i class="fa-solid ${ativo ? 'fa-square-check' : 'fa-square'}"></i><span>${m.nome}</span>
+                  <i class="fa-solid ${ativo ? 'fa-square-check' : 'fa-square'}"></i><span>${esc(m.nome)}</span>
                 </button>
               `;
             }).join('')}

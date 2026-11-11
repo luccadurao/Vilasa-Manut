@@ -447,7 +447,7 @@ function renderizarSecaoUsuariosMultiCargo() {
           <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border">
             ${listaCargosDisponiveis.map(c => `
               <label class="flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
-                <input type="checkbox" value="${c.id}" class="chk-cargo-adm rounded" /><span>${c.label}</span>
+                <input type="checkbox" value="${c.id}" class="chk-cargo-adm rounded" /><span>${esc(c.label)}</span>
               </label>
             `).join('')}
           </div>
@@ -461,7 +461,7 @@ function renderizarSecaoUsuariosMultiCargo() {
             </label>
             ${cacheObras.map(o => `
               <label class="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
-                <input type="checkbox" value="${o.id}" class="chk-obra-adm rounded" /><span>📍 ${o.codigo} - ${o.nome}</span>
+                <input type="checkbox" value="${o.id}" class="chk-obra-adm rounded" /><span>📍 ${esc(o.codigo)} - ${esc(o.nome)}</span>
               </label>
             `).join('')}
           </div>
@@ -480,7 +480,7 @@ function renderizarSecaoUsuariosMultiCargo() {
               const cargos = obterCargosUsuario(u);
               return `
                 <tr class="hover:bg-slate-50">
-                  <td class="p-3"><span class="bg-slate-900 text-amber-400 font-black px-2 py-0.5 rounded text-[11px]">${u.matricula}</span><div class="font-extrabold mt-1">${u.nome}</div></td>
+                  <td class="p-3"><span class="bg-slate-900 text-amber-400 font-black px-2 py-0.5 rounded text-[11px]">${esc(u.matricula)}</span><div class="font-extrabold mt-1">${esc(u.nome)}</div></td>
                   <td class="p-3"><div class="flex flex-wrap gap-1">${cargos.map(c => `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-black uppercase text-[10px]">${c}</span>`).join('')}</div></td>
                   <td class="p-3 font-black ${u.ativo !== false ? 'text-emerald-700' : 'text-rose-600'}">${u.ativo !== false ? 'ATIVO' : 'INATIVO'}</td>
                   <td class="p-3 text-right space-x-1 whitespace-nowrap">
@@ -563,7 +563,7 @@ function renderizarSecaoGerenciarObras() {
         <table class="w-full text-left border-collapse text-xs">
           <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Código</th><th class="p-3">Nome da Obra</th><th class="p-3">Status</th></tr></thead>
           <tbody class="divide-y">
-            ${cacheObras.map(o => `<tr><td class="p-3 font-black text-amber-700">${o.codigo}</td><td class="p-3 font-extrabold">${o.nome}</td><td class="p-3 font-black text-emerald-700">${o.ativa !== false ? 'ATIVA' : 'ENCERRADA'}</td></tr>`).join('')}
+            ${cacheObras.map(o => `<tr><td class="p-3 font-black text-amber-700">${esc(o.codigo)}</td><td class="p-3 font-extrabold">${esc(o.nome)}</td><td class="p-3 font-black text-emerald-700">${o.ativa !== false ? 'ATIVA' : 'ENCERRADA'}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>

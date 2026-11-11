@@ -110,6 +110,20 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
   return resultado;
 }
 
+// Escapa texto vindo do banco/digitado antes de colocar em HTML (evita código malicioso na tela e nos relatórios).
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Células de CSV: impede que o Excel execute fórmulas (=, +, -, @) digitadas em campos de texto.
+function csvCelula(v) {
+  let t = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t)) t = "'" + t;
+  return t.replace(/[\r\n;]+/g, ' ');
+}
+
 // 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
 // Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
 // continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
@@ -364,7 +378,7 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
   const podeVerConsolidado = temAcessoGlobal || obrasLiberadas.length > 1;
   if (obrasLiberadas.length <= 1 && !podeVerConsolidado) {
     const unica = obrasLiberadas[0];
-    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 Obra: ${unica ? `${unica.codigo} - ${unica.nome}` : 'Matriz Geral'}</div>`;
+    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 Obra: ${unica ? `${esc(unica.codigo)} - ${esc(unica.nome)}` : 'Matriz Geral'}</div>`;
     return;
   }
 
@@ -373,7 +387,7 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
     <select id="selectObraGlobalTopo" onchange="trocarObraAtivaGlobal(this.value)"
       class="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-extrabold">
       ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 TODAS AS OBRAS (CONSOLIDADO)</option>` : ''}
-      ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${o.codigo} - ${o.nome}</option>`).join('')}
+      ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
     </select>
   `;
 }
@@ -477,7 +491,7 @@ async function acionarExportacaoUniversalCSV() {
         o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '',
         o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'EM ABERTO',
         dias
-      ].join(';');
+      ].map(csvCelula).join(';');
     });
 
     const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -497,7 +511,7 @@ async function acionarExportacaoUniversalCSV() {
   if (!table) return alert('Nenhuma tabela visível para exportar nesta seção.');
 
   const linhas = Array.from(table.querySelectorAll('tr')).map(tr =>
-    Array.from(tr.querySelectorAll('th,td')).map(td => `"${td.innerText.replace(/\n/g, ' ').replace(/"/g, '""').trim()}"`).join(';')
+    Array.from(tr.querySelectorAll('th,td')).map(td => `"${csvCelula(td.innerText.trim()).replace(/"/g, '""')}"`).join(';')
   );
   const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
@@ -668,18 +682,18 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
 
   const kpisHtml = rel.kpisResumo.map(k => `
     <div style="border:1px solid #cbd5e1; border-radius:8px; padding:7px 10px; background:#f8fafc; flex:1;">
-      <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
-      <div style="font-size:15px; font-weight:900; color:#0f172a; margin-top:2px;">${k.valor}</div>
+      <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${esc(k.label)}</div>
+      <div style="font-size:15px; font-weight:900; color:#0f172a; margin-top:2px;">${esc(k.valor)}</div>
     </div>
   `).join('');
 
-  const thHtml = rel.colunas.map(c => `<th style="padding:${padCel}; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:9.5px; text-transform:uppercase; text-align:left;">${c}</th>`).join('');
-  const trHtml = linhasParaImprimir.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:${padCel}; border:1px solid #cbd5e1; font-size:${fontCel}; color:#1e293b; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${cel}</td>`).join('')}</tr>`).join('');
+  const thHtml = rel.colunas.map(c => `<th style="padding:${padCel}; border:1px solid #334155; background:#0f172a; color:#fbbf24; font-size:9.5px; text-transform:uppercase; text-align:left;">${esc(c)}</th>`).join('');
+  const trHtml = linhasParaImprimir.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:${padCel}; border:1px solid #cbd5e1; font-size:${fontCel}; color:#1e293b; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${esc(cel)}</td>`).join('')}</tr>`).join('');
 
   win.document.write(`
     <html>
       <head>
-        <title>Impressão - ${rel.titulo}</title>
+        <title>Impressão - ${esc(rel.titulo)}</title>
         <style>
           @page { size: landscape; margin: 7mm; }
           body { font-family: Arial, sans-serif; margin: 0; padding: 4px; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -692,8 +706,8 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
         <div style="border-bottom:2px solid #f59e0b; padding-bottom:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
             <div style="font-size:10px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
-            <h1 style="margin:2px 0; font-size:15px;">${rel.titulo}</h1>
-            <div style="font-size:10px; color:#475569; font-weight:700;">${rel.subtitulo}</div>
+            <h1 style="margin:2px 0; font-size:15px;">${esc(rel.titulo)}</h1>
+            <div style="font-size:10px; color:#475569; font-weight:700;">${esc(rel.subtitulo)}</div>
           </div>
           <div style="text-align:right; font-size:9px; color:#64748b;">Impresso em: ${new Date().toLocaleString('pt-BR')}</div>
         </div>
@@ -718,22 +732,22 @@ async function gerarResumoExecutivoPNG() {
     <div style="background:#0f172a; color:#ffffff; padding:12px 18px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div>
         <div style="color:#fbbf24; font-size:10px; font-weight:900;">VILASA CMMS • QUADRO EXECUTIVO (1 PÁGINA)</div>
-        <div style="font-size:17px; font-weight:900; margin-top:2px;">${rel.titulo}</div>
-        <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">${rel.subtitulo}</div>
+        <div style="font-size:17px; font-weight:900; margin-top:2px;">${esc(rel.titulo)}</div>
+        <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">${esc(rel.subtitulo)}</div>
       </div>
       <div style="text-align:right; font-size:11px; color:#fbbf24; font-weight:800;">${new Date().toLocaleString('pt-BR')}</div>
     </div>
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:12px;">
       ${rel.kpisResumo.map(k => `
         <div style="background:#f8fafc; border:1px solid #cbd5e1; border-left:4px solid #f59e0b; border-radius:8px; padding:8px 10px;">
-          <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${k.label}</div>
-          <div style="font-size:18px; font-weight:900; color:#0f172a; margin-top:2px;">${k.valor}</div>
+          <div style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase;">${esc(k.label)}</div>
+          <div style="font-size:18px; font-weight:900; color:#0f172a; margin-top:2px;">${esc(k.valor)}</div>
         </div>
       `).join('')}
     </div>
     <table style="width:100%; border-collapse:collapse; font-size:10px;">
-      <thead><tr style="background:#1e293b; color:#fbbf24;">${rel.colunas.map(c => `<th style="padding:5px 7px; text-align:left; border:1px solid #334155;">${c}</th>`).join('')}</tr></thead>
-      <tbody>${topLinhas.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:4.5px 7px; border:1px solid #cbd5e1; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${cel}</td>`).join('')}</tr>`).join('')}</tbody>
+      <thead><tr style="background:#1e293b; color:#fbbf24;">${rel.colunas.map(c => `<th style="padding:5px 7px; text-align:left; border:1px solid #334155;">${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${topLinhas.map((l, idx) => `<tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${l.map((cel, cIdx) => `<td style="padding:4.5px 7px; border:1px solid #cbd5e1; font-weight:${cIdx === 0 || cIdx === l.length - 1 ? '800' : '600'};">${esc(cel)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>
   `;
   document.body.appendChild(cardExecutivo);

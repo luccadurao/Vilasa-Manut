@@ -188,7 +188,7 @@ function renderizarTabelaProjecaoPCM(planosCalculados, podeEditar) {
 
             return `
               <tr class="hover:bg-slate-50">
-                <td class="p-3"><span class="font-black text-slate-950 bg-amber-400 px-2 py-0.5 rounded">${p.equipamento.tag}</span><div class="font-bold text-slate-600 mt-0.5">${p.equipamento.nome}</div></td>
+                <td class="p-3"><span class="font-black text-slate-950 bg-amber-400 px-2 py-0.5 rounded">${esc(p.equipamento.tag)}</span><div class="font-bold text-slate-600 mt-0.5">${esc(p.equipamento.nome)}</div></td>
                 <td class="p-3 font-semibold"><div><strong>${p.ultimo_pacote_executado || '250H'}</strong> aos <strong>${c.horUltimo} ${un}</strong></div><div class="text-[11px] text-slate-500">Data: ${dtUltima}</div></td>
                 <td class="p-3 font-black">${c.horAtual} ${un}</td>
                 <td class="p-3"><span class="px-2.5 py-1 rounded bg-blue-100 text-blue-900 font-black">${c.proximoPacote}</span><div class="text-[11px] text-slate-500 mt-0.5">Alvo: ${c.proximoHorimetroAlvo} ${un}</div></td>
@@ -238,8 +238,8 @@ function renderizarPreventivasEmExecucao(listaAtivas, podeEditar) {
         return `
           <div class="bg-white p-4 rounded-xl border-2 border-blue-500 shadow flex flex-col justify-between gap-3">
             <div>
-              <div class="flex justify-between"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded">${eq?.tag || 'EQUIP'}</span><span class="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded">PREVENTIVA ${ex.pacote}</span></div>
-              <p class="text-xs font-bold mt-1">${eq?.nome || ''}</p>
+              <div class="flex justify-between"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded">${esc(eq?.tag || 'EQUIP')}</span><span class="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded">PREVENTIVA ${esc(ex.pacote)}</span></div>
+              <p class="text-xs font-bold mt-1">${esc(eq?.nome || '')}</p>
               <p class="text-xs text-slate-500">Início: ${new Date(ex.data_entrada).toLocaleString('pt-BR')}</p>
             </div>
             ${podeEditar ? `<button onclick="concluirPreventivaQueEstavaNoREP('${ex.id}')" class="w-full py-2 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs">✅ Concluir e Liberar do REP</button>` : ''}
@@ -329,7 +329,7 @@ function abrirModalPlanoComHistoricoCompleto(equipamentoIdPreSelecionado = '') {
             <label class="block font-black uppercase text-slate-700 mb-1">1. Equipamento</label>
             <select id="planoHistEquipId" onchange="carregarDadosExistentesNoModalPlano(this.value)" class="w-full border rounded-lg p-2 font-bold bg-white">
               <option value="">-- Selecione --</option>
-              ${cacheEquipamentos.map(e => `<option value="${e.id}" ${String(e.id) === String(equipamentoIdPreSelecionado) ? 'selected' : ''}>${e.tag} - ${e.nome}</option>`).join('')}
+              ${cacheEquipamentos.map(e => `<option value="${e.id}" ${String(e.id) === String(equipamentoIdPreSelecionado) ? 'selected' : ''}>${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -475,7 +475,7 @@ function renderizarTabelaHistoricoProprioPreventivas(termoBusca = '') {
         <tbody class="divide-y divide-slate-200">
           ${lista.map(h => {
             const dt = h.data_conclusao || h.data_entrada;
-            return `<tr><td class="p-3 font-bold">${dt ? new Date(dt).toLocaleDateString('pt-BR') : '-'}</td><td class="p-3 font-black text-amber-700">${h.equipamento?.tag || '-'}</td><td class="p-3 font-semibold">${h.equipamento?.nome || '-'}</td><td class="p-3 font-black text-blue-900">${h.pacote}</td><td class="p-3 font-black">${h.horimetro_execucao}</td><td class="p-3">${h.mecanicos_nomes || ''} ${h.observacoes || ''}</td></tr>`;
+            return `<tr><td class="p-3 font-bold">${dt ? new Date(dt).toLocaleDateString('pt-BR') : '-'}</td><td class="p-3 font-black text-amber-700">${esc(h.equipamento?.tag || '-')}</td><td class="p-3 font-semibold">${esc(h.equipamento?.nome || '-')}</td><td class="p-3 font-black text-blue-900">${esc(h.pacote)}</td><td class="p-3 font-black">${h.horimetro_execucao}</td><td class="p-3">${esc(h.mecanicos_nomes || '')} ${esc(h.observacoes || '')}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -492,7 +492,7 @@ function exportarHistoricoProprioPreventivasCSV() {
       dt ? new Date(dt).toLocaleDateString('pt-BR') : '', eq?.tag || '', (eq?.nome || '').replace(/;/g, ','),
       h.pacote || '', String(h.horimetro_execucao || 0).replace('.', ','), h.status || '',
       (h.mecanicos_nomes || '').replace(/;/g, ','), (h.observacoes || '').replace(/;/g, ',')
-    ].join(';');
+    ].map(csvCelula).join(';');
   });
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');

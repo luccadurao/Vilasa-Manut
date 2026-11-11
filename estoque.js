@@ -169,12 +169,12 @@ function renderizarGradeRecadastroRapidoEmLote(listaPecas) {
           <tbody id="tbodyGradeRapidaEstoque" class="divide-y divide-slate-200">
             ${listaPecas.map(p => `
               <tr class="linha-grade-rapida-est" data-id="${p.id}">
-                <td class="p-1.5"><input type="text" value="${p.id_interno || ''}" class="gr-id-interno w-28 border rounded p-1.5 font-black uppercase bg-amber-50" /></td>
-                <td class="p-1.5"><input type="text" value="${p.descricao || ''}" class="gr-desc w-full min-w-[200px] border rounded p-1.5 font-bold uppercase" /></td>
+                <td class="p-1.5"><input type="text" value="${esc(p.id_interno || '')}" class="gr-id-interno w-28 border rounded p-1.5 font-black uppercase bg-amber-50" /></td>
+                <td class="p-1.5"><input type="text" value="${esc(p.descricao || '')}" class="gr-desc w-full min-w-[200px] border rounded p-1.5 font-bold uppercase" /></td>
                 <td class="p-1.5"><input type="text" value="${(p.codigos_paralelos || []).join(', ')}" class="gr-paralelos w-full min-w-[180px] border rounded p-1.5 font-semibold uppercase" /></td>
                 <td class="p-1.5"><input type="number" step="0.1" value="${p.quantidade || 0}" class="gr-qtd w-20 border rounded p-1.5 font-black text-emerald-800" /></td>
                 <td class="p-1.5"><input type="number" step="0.1" value="${p.estoque_minimo || 0}" class="gr-min w-20 border rounded p-1.5 font-bold" /></td>
-                <td class="p-1.5"><input type="text" value="${p.unidade || 'UN'}" class="gr-un w-14 border rounded p-1.5 font-bold uppercase" /></td>
+                <td class="p-1.5"><input type="text" value="${esc(p.unidade || 'UN')}" class="gr-un w-14 border rounded p-1.5 font-bold uppercase" /></td>
                 <td class="p-1.5"><input type="number" step="0.01" value="${p.custo_unitario || 0}" class="gr-custo w-24 border rounded p-1.5 font-bold" /></td>
                 <td class="p-1.5 text-center">
                   <button onclick="excluirItemAlmoxDireto('${p.id}', this)" class="text-rose-600 font-black px-2 py-1">🗑️</button>
@@ -276,8 +276,8 @@ function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
 
             return `
               <tr class="hover:bg-slate-50">
-                <td class="p-3"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-1 rounded text-xs">${p.id_interno || 'VIL-S/N'}</span></td>
-                <td class="p-3 font-extrabold text-slate-900">${p.descricao || '-'}</td>
+                <td class="p-3"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-1 rounded text-xs">${esc(p.id_interno || 'VIL-S/N')}</span></td>
+                <td class="p-3 font-extrabold text-slate-900">${esc(p.descricao || '-')}</td>
                 <td class="p-3">
                   <div class="flex flex-wrap gap-1">
                     ${paralelos.length > 0
@@ -285,7 +285,7 @@ function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
                       : `<span class="text-slate-400 italic">Sem paralelo</span>`}
                   </div>
                 </td>
-                <td class="p-3 font-black text-sm ${abaixoMin ? 'text-rose-600' : 'text-emerald-700'}">${p.quantidade || 0} ${p.unidade || 'UN'}</td>
+                <td class="p-3 font-black text-sm ${abaixoMin ? 'text-rose-600' : 'text-emerald-700'}">${p.quantidade || 0} ${esc(p.unidade || 'UN')}</td>
                 <td class="p-3 font-bold text-slate-700">R$ ${Number(p.custo_unitario || 0).toFixed(2)}</td>
                 <td class="p-3 text-right space-x-1 whitespace-nowrap">
                   ${podeOperar ? `
@@ -430,7 +430,7 @@ function abrirModalBotao2EntradaNF() {
           <label class="block font-black uppercase text-blue-950 mb-1">🔗 Vincular ao Item do Catálogo (Soma Saldo):</label>
           <select id="b2PecaCadastradaId" onchange="preencherDadosPecaAoSelecionarNaNF(this.value)" class="w-full border rounded-lg p-2 font-bold bg-white">
             <option value="">-- Item Avulso (Sem vínculo com estoque) --</option>
-            ${cachePecas.map(p => `<option value="${p.id}">${p.id_interno} - ${p.descricao} (${(p.codigos_paralelos || []).join(', ')})</option>`).join('')}
+            ${cachePecas.map(p => `<option value="${p.id}">${esc(p.id_interno)} - ${esc(p.descricao)} (${(p.codigos_paralelos || []).join(', ')})</option>`).join('')}
           </select>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -521,7 +521,7 @@ function abrirModalBotao3SaidaMaquina() {
           <label class="block font-black uppercase text-slate-700 mb-1">Equipamento Destino</label>
           <select id="b3EquipamentoId" class="w-full border rounded-lg p-2 font-bold">
             <option value="">-- Selecione a Máquina --</option>
-            ${cacheEquipamentos.map(e => `<option value="${e.id}">${e.tag} - ${e.nome}</option>`).join('')}
+            ${cacheEquipamentos.map(e => `<option value="${e.id}">${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
           </select>
         </div>
 
@@ -529,7 +529,7 @@ function abrirModalBotao3SaidaMaquina() {
           <label class="block font-black uppercase text-slate-700 mb-1">Item do Catálogo</label>
           <select id="b3PecaId" onchange="preencherDescSaidaBotao3(this.value)" class="w-full border rounded-lg p-2 font-bold">
             <option value="">-- Selecione pelo Nosso Código ou Descrição --</option>
-            ${cachePecas.map(p => `<option value="${p.id}">${p.id_interno} - ${p.descricao} (Saldo: ${p.quantidade})</option>`).join('')}
+            ${cachePecas.map(p => `<option value="${p.id}">${esc(p.id_interno)} - ${esc(p.descricao)} (Saldo: ${p.quantidade})</option>`).join('')}
           </select>
         </div>
 
@@ -637,9 +637,9 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
             return `
               <tr>
                 <td class="p-3 font-semibold text-slate-600">${new Date(m.registrado_em).toLocaleString('pt-BR')}</td>
-                <td class="p-3 font-black">${m.tipo_movimento}</td>
-                <td class="p-3 font-bold">${m.numero_nf || '-'}</td>
-                <td class="p-3 font-extrabold">${m.descricao_item}</td>
+                <td class="p-3 font-black">${esc(m.tipo_movimento)}</td>
+                <td class="p-3 font-bold">${esc(m.numero_nf || '-')}</td>
+                <td class="p-3 font-extrabold">${esc(m.descricao_item)}</td>
                 <td class="p-3 font-black">${m.quantidade}</td>
                 <td class="p-3 font-bold">R$ ${Number(m.valor_unitario || 0).toFixed(2)}</td>
                 <td class="p-3 font-bold">${eq ? eq.tag : (m.fornecedor || '-')}</td>
@@ -658,7 +658,7 @@ function exportarInventarioAlmoxCSV() {
     p.id_interno || '', (p.descricao || '').replace(/;/g, ','), (p.codigos_paralelos || []).join(' | '),
     String(p.quantidade || 0).replace('.', ','), p.unidade || 'UN',
     String(p.custo_unitario || 0).replace('.', ','), String(p.estoque_minimo || 0).replace('.', ',')
-  ].join(';'));
+  ].map(csvCelula).join(';'));
 
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
