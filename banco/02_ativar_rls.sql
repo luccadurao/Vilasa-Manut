@@ -53,7 +53,7 @@ begin
     if new.horimetro_atual < old.horimetro_atual then
       raise exception 'O horímetro não pode diminuir. Peça a correção ao PCM/Engenharia.' using errcode = 'P0001';
     end if;
-    -- Limite físico: horas -> no máximo o tempo que passou; KM -> no máximo 100 km por dia (app.limite_salto)
+    -- Limite físico: horas -> no máximo o tempo que passou; KM -> no máximo 200 km por dia (app.limite_salto)
     if old.horimetro_atual > 0 and new.horimetro_atual > old.horimetro_atual
        and (new.horimetro_atual - old.horimetro_atual)
            > app.limite_salto(old.unidade_medida, old.horimetro_atualizado_em, new.horimetro_atualizado_em) then

@@ -114,9 +114,9 @@ async function executarOperacaoNoBanco(item, modoReenvio = false) {
 
 // ---------- limite de salto do horímetro (mesma regra do servidor) -----------
 // Horas: só pode subir o tempo que realmente passou desde a última leitura (+ tolerância de relógio).
-// KM: no máximo 100 km por dia desde a última leitura (mínimo 1 dia).
+// KM: no máximo 200 km por dia desde a última leitura (mínimo 1 dia).
 // Sem data da última leitura: vale o limite fixo antigo (300 H / 5000 KM).
-const CFG_LIMITE_PADRAO = { limite_km_dia: 100, tolerancia_horas: 0.5, fixo_horas: 300, fixo_km: 5000 };
+const CFG_LIMITE_PADRAO = { limite_km_dia: 200, tolerancia_horas: 0.5, fixo_horas: 300, fixo_km: 5000 };
 
 function calcularLimiteSalto(unidade, baseEm, quandoMs, cfg) {
   const c = Object.assign({}, CFG_LIMITE_PADRAO, cfg || {});
@@ -135,7 +135,7 @@ function explicarLimiteSalto(unidade, info) {
   const un = String(unidade || 'H').toUpperCase();
   const lim = Math.floor(info.limite * 10) / 10;
   if (!info.porTempo) return `O aumento máximo aceito de uma só vez é ${lim} ${un}.`;
-  if (un === 'KM') return `Desde a última leitura são ${info.dias} dia(s): o máximo é 100 km por dia, ou seja, até +${lim} KM.`;
+  if (un === 'KM') return `Desde a última leitura são ${info.dias} dia(s): o máximo é 200 km por dia, ou seja, até +${lim} KM.`;
   const h = Math.round(info.horas * 10) / 10;
   return `Desde a última leitura passaram ${h} h, então o horímetro só pode ter subido até +${lim} h.`;
 }

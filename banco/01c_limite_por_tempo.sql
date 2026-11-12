@@ -1,13 +1,13 @@
 -- Substitui o limite fixo / por equipamento (01b) por regras FÍSICAS baseadas no tempo desde a última leitura:
 --   • Equipamento em HORAS: o horímetro não pode subir mais do que o tempo real que passou
 --     (50 h de manhã; 10 h depois, no máximo 60 h) + tolerância de 0,5 h para diferença de relógio.
---   • Equipamento em KM: no máximo 100 km por dia desde a última leitura (mínimo 1 dia).
+--   • Equipamento em KM: no máximo 200 km por dia desde a última leitura (mínimo 1 dia).
 --   • Sem leitura anterior com data (equipamentos ainda sem histórico): vale o limite fixo antigo (300 H / 5000 KM).
 drop function if exists public.qr_equipamento(uuid, text);
 alter table public.equipamentos drop column if exists limite_salto;
 alter table public.equipamentos add column if not exists horimetro_atualizado_em timestamptz;
 alter table public.configuracoes_sistema
-  add column if not exists limite_km_dia numeric not null default 100,
+  add column if not exists limite_km_dia numeric not null default 200,
   add column if not exists tolerancia_horas numeric not null default 0.5;
 
 create or replace function app.limite_salto(p_un text, p_base timestamptz, p_quando timestamptz default now())
@@ -19,7 +19,7 @@ begin
     return case when km then coalesce(c.limite_salto_km, 5000) else coalesce(c.limite_salto_horas, 300) end;
   end if;
   h := greatest(0, extract(epoch from (least(coalesce(p_quando, now()), now()) - p_base)) / 3600.0);
-  if km then return coalesce(c.limite_km_dia, 100) * greatest(1, ceil(h / 24.0)); end if;
+  if km then return coalesce(c.limite_km_dia, 200) * greatest(1, ceil(h / 24.0)); end if;
   return h + coalesce(c.tolerancia_horas, 0.5);
 end $$;
 revoke all on function app.limite_salto(text, timestamptz, timestamptz) from public;
