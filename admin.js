@@ -5,6 +5,11 @@
 let subAbaAdminAtual = 'usuarios';
 let cacheLinhasModoDeus = [];
 
+// Mesma regra da Frota: sem espaço/hífen, número final sem zeros à esquerda (CB-044 = CB44)
+function chaveTagAdmin(t) {
+  return String(t || '').toUpperCase().replace(/[\s-]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+}
+
 async function carregarUsuariosAdmin(subAba = subAbaAdminAtual) {
   if (!podeExecutarAcao('acesso_modo_deus', true)) return;
   subAbaAdminAtual = subAba;
@@ -285,9 +290,17 @@ async function processarUploadPlanilhaCSV(event, tipo) {
           obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
         };
 
-        const existente = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === payload.tag);
-        if (existente) await db.from('equipamentos').update(payload).eq('id', existente.id);
-        else await db.from('equipamentos').insert([payload]);
+        const existente = cacheEquipamentos.find(e => chaveTagAdmin(e.tag) === chaveTagAdmin(payload.tag));
+        if (existente) {
+          // mantém o prefixo padronizado, a obra definida e nunca regride o horímetro por planilha
+          delete payload.tag; delete payload.obra_id; delete payload.situacao_ciclo;
+          if (!(payload.horimetro_atual > Number(existente.horimetro_atual || 0))) delete payload.horimetro_atual;
+          const { error: eUp } = await db.from('equipamentos').update(payload).eq('id', existente.id);
+          if (eUp) throw new Error(`Linha ${idx + 2} (${tag}): ${eUp.message}`);
+        } else {
+          const { error: eIn } = await db.from('equipamentos').insert([payload]);
+          if (eIn) throw new Error(`Linha ${idx + 2} (${tag}): ${eIn.message}`);
+        }
         importados++;
       }
     } else if (tipo === 'almoxarifado') {
@@ -310,6 +323,11 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         });
       });
 
+      const jaExistem = new Set(((await buscarTudoSemLimite('pecas_estoque', 'id', true, 'id, id_interno')) || []).map(p => String(p.id_interno || '').toUpperCase()));
+      const antes = lotePecas.length;
+      for (let k = lotePecas.length - 1; k >= 0; k--) if (jaExistem.has(lotePecas[k].id_interno)) lotePecas.splice(k, 1);
+      if (antes - lotePecas.length > 0) alert(`ℹ️ ${antes - lotePecas.length} peça(s) já existiam (mesmo código interno) e foram ignoradas.`);
+
       for (let i = 0; i < lotePecas.length; i += 100) {
         atualizarProgresso(`📦 Gravando Almoxarifado: ${i} / ${lotePecas.length}...`);
         const fatia = lotePecas.slice(i, i + 100);
@@ -327,36 +345,18 @@ async function processarUploadPlanilhaCSV(event, tipo) {
       cacheEquipamentos = eqBanco;
       const mapaEquipPorTag = {};
       cacheEquipamentos.forEach(e => {
-        mapaEquipPorTag[String(e.tag || '').trim().toUpperCase()] = e;
+        mapaEquipPorTag[chaveTagAdmin(e.tag)] = e;
       });
 
-      const tagsNovasParaCriar = new Set();
+      // Equipamento só nasce no cadastro do PCM: tag desconhecida aborta a importação (nada é gravado).
+      const tagsDesconhecidas = new Set();
       dadosLinhas.forEach(cols => {
         const tag = String(cols[0] || '').trim().toUpperCase();
-        if (tag && !mapaEquipPorTag[tag]) tagsNovasParaCriar.add(tag);
+        if (tag && !mapaEquipPorTag[chaveTagAdmin(tag)]) tagsDesconhecidas.add(tag);
       });
-
-      if (tagsNovasParaCriar.size > 0) {
-        const novosEquipamentos = Array.from(tagsNovasParaCriar).map(tag => ({
-          tag,
-          nome: `EQUIPAMENTO ${tag}`,
-          propriedade: tag.includes('-AL-') ? 'alugado' : 'proprio',
-          situacao_ciclo: 'ativo',
-          unidade_medida: 'H',
-          horimetro_atual: 0,
-          obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
-        }));
-
-        for (let i = 0; i < novosEquipamentos.length; i += 100) {
-          atualizarProgresso(`🚜 Criando prefixos novos na Frota (${i + 1}/${novosEquipamentos.length})...`);
-          const fatiaEq = novosEquipamentos.slice(i, i + 100);
-          const { data: criados, error: errEq } = await db.from('equipamentos').insert(fatiaEq).select();
-          if (errEq) throw new Error('Ao cadastrar prefixos novos: ' + errEq.message);
-          (criados || []).forEach(e => {
-            mapaEquipPorTag[String(e.tag).trim().toUpperCase()] = e;
-            cacheEquipamentos.push(e);
-          });
-        }
+      if (tagsDesconhecidas.size > 0) {
+        const lista = Array.from(tagsDesconhecidas);
+        throw new Error(`${lista.length} prefixo(s) não existem na Frota: ${lista.slice(0, 30).join(', ')}${lista.length > 30 ? '…' : ''}. Cadastre-os na Frota (ou corrija a planilha) e importe de novo. Nada foi gravado.`);
       }
 
       const loteOS = [];
@@ -365,7 +365,7 @@ async function processarUploadPlanilhaCSV(event, tipo) {
         const tag = String(tagRaw || '').trim().toUpperCase();
         if (!tag) continue;
 
-        const eq = mapaEquipPorTag[tag];
+        const eq = mapaEquipPorTag[chaveTagAdmin(tag)];
         if (!eq) continue;
 
         const problemaFinal = (problemaRaw || servicoRaw || classifFalha || 'MANUTENÇÃO REGISTRADA').trim().toUpperCase();
@@ -575,7 +575,10 @@ async function criarNovaObraAdmin() {
   const codigo = document.getElementById('admObraCodigo').value.trim().toUpperCase();
   const nome = document.getElementById('admObraNome').value.trim().toUpperCase();
   if (!codigo || !nome) return alert('Informe Código e Nome da Obra!');
-  await db.from('obras').insert([{ codigo, nome, ativa: true }]);
+  if (!navigator.onLine) return alert('📵 Precisa de internet.');
+  if (cacheObras.some(o => String(o.codigo).toUpperCase() === codigo)) return alert('Já existe uma obra com esse código.');
+  const { error } = await db.from('obras').insert([{ codigo, nome, ativa: true }]);
+  if (error) return alert('❌ Não foi possível cadastrar: ' + error.message);
   await carregarObrasEMontarSeletorTopo();
   await carregarUsuariosAdmin('obras');
 }
@@ -588,7 +591,7 @@ function renderizarSecaoModoDeusTabelas() {
     <div class="bg-white p-5 rounded-2xl border-2 border-amber-500 space-y-3 text-xs">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 class="text-sm font-black uppercase text-slate-900">⚡ Controle Mestre: Editor Direto das 9 Tabelas</h3>
+          <h3 class="text-sm font-black uppercase text-slate-900">⚡ Controle Mestre: Editor Direto das 8 Tabelas</h3>
           <p class="text-[11px] text-slate-500">Altere qualquer célula e clique em <strong>💾 Salvar</strong> na linha correspondente.</p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -600,7 +603,6 @@ function renderizarSecaoModoDeusTabelas() {
             <option value="planos_preventiva">4. planos_preventiva</option>
             <option value="execucoes_preventiva">5. execucoes_preventiva</option>
             <option value="movimentacoes_almoxarifado">6. movimentacoes_almoxarifado</option>
-            <option value="perfis_usuarios">7. perfis_usuarios</option>
             <option value="obras">8. obras</option>
             <option value="diario_horimetro">9. diario_horimetro</option>
           </select>
@@ -617,7 +619,7 @@ async function carregarTabelaEditorAdmin() {
   if (!cont) return;
   cont.innerHTML = `<p class="p-4 text-slate-500 font-bold">Carregando ${tabela}...</p>`;
   cacheLinhasModoDeus = await buscarTudoSemLimite(tabela, null, false,
-    tabela === 'perfis_usuarios' ? 'id, matricula, nome, cargos_lista, obras_permitidas, ativo' : '*');
+    '*');
   filtrarLinhasModoDeusNaTela();
 }
 
@@ -664,29 +666,54 @@ function filtrarLinhasModoDeusNaTela() {
   `;
 }
 
+async function registrarAuditoriaAdmin(tabela, registroId, acao, antes, depois) {
+  const { error } = await db.from('admin_auditoria').insert([{ tabela, registro_id: String(registroId), acao, antes, depois }]);
+  if (error) console.error('Auditoria não gravada:', error.message);
+  return !error;
+}
+
 async function salvarLinhaEditadaModoDeus(tabela, idRegistro, btnEl) {
+  if (!navigator.onLine) return alert('📵 Precisa de internet.');
+  const original = (cacheLinhasModoDeus || []).find(r => String(r.id) === String(idRegistro));
+  if (!original) return alert('Registro não encontrado. Recarregue a tabela.');
   const tr = btnEl.closest('tr');
-  const payload = {};
-  tr.querySelectorAll('.inp-celula-modo-deus').forEach(inp => {
+  const mudancas = {};
+  for (const inp of tr.querySelectorAll('.inp-celula-modo-deus')) {
     const col = inp.dataset.col;
     const raw = inp.value.trim();
-    if (raw === '') payload[col] = null;
+    const orig = original[col];
+    let novo;
+    if (raw === '') novo = null;
     else if (inp.dataset.isJson === '1') {
-      try { payload[col] = JSON.parse(raw); } catch (e) { payload[col] = raw.split(',').map(s => s.trim()); }
-    } else if (raw === 'true') payload[col] = true;
-    else if (raw === 'false') payload[col] = false;
-    else payload[col] = raw;
-  });
+      try { novo = JSON.parse(raw); } catch (e) { novo = raw.split(',').map(x => x.trim()); }
+    } else if (typeof orig === 'number') {
+      novo = Number(raw.replace(',', '.'));
+      if (isNaN(novo)) return alert(`Valor inválido em "${col}": esperado número.`);
+    } else if (typeof orig === 'boolean') {
+      novo = raw === 'true';
+    } else novo = raw;
+    if (JSON.stringify(novo) !== JSON.stringify(orig ?? null)) mudancas[col] = novo;
+  }
+  if (!Object.keys(mudancas).length) return alert('Nada foi alterado nesta linha.');
+  const antes = {};
+  Object.keys(mudancas).forEach(c => { antes[c] = original[c] ?? null; });
 
-  const { error } = await db.from(tabela).update(payload).eq('id', idRegistro);
+  const { error } = await db.from(tabela).update(mudancas).eq('id', idRegistro);
   if (error) return alert('Erro ao salvar: ' + error.message);
+  await registrarAuditoriaAdmin(tabela, idRegistro, 'UPDATE', antes, mudancas);
+  Object.assign(original, mudancas);
   btnEl.innerText = '✅ Salvo!';
   setTimeout(() => { btnEl.innerText = '💾 Salvar'; }, 1500);
 }
 
 async function excluirLinhaModoDeus(tabela, idRegistro, btnEl) {
-  if (!confirm(`Excluir registro de ${tabela}?`)) return;
+  if (!navigator.onLine) return alert('📵 Precisa de internet.');
+  const original = (cacheLinhasModoDeus || []).find(r => String(r.id) === String(idRegistro));
+  const resp = prompt(`Excluir registro de ${tabela}? Isso NÃO pode ser desfeito.\nDigite EXCLUIR para confirmar:`);
+  if (resp !== 'EXCLUIR') return;
   const { error } = await db.from(tabela).delete().eq('id', idRegistro);
   if (error) return alert('Erro ao excluir: ' + error.message);
+  await registrarAuditoriaAdmin(tabela, idRegistro, 'DELETE', original || null, null);
+  cacheLinhasModoDeus = (cacheLinhasModoDeus || []).filter(r => String(r.id) !== String(idRegistro));
   btnEl.closest('tr')?.remove();
 }
