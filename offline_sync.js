@@ -228,6 +228,25 @@ async function lerDadosComFallbackOffline(chaveCache, fnQuerySupabase) {
   return { data: dados || [], error: null, offline: true };
 }
 
+// Mostra na lista o que ainda está na fila de envio (OS aberta/alterada sem sinal aparece na hora, marcada _pendente).
+function aplicarPendentesNaLista(tabela, lista, enriquecer) {
+  const base = Array.isArray(lista) ? lista.map(r => ({ ...r })) : [];
+  const fila = lerFilaOffline().filter(i => i.tabela === tabela);
+  for (const it of fila) {
+    if (it.operacao === 'INSERT' && it.payload && it.payload.id) {
+      const i = base.findIndex(r => String(r.id) === String(it.payload.id));
+      let nova = { ...it.payload, _pendente: true };
+      if (typeof enriquecer === 'function') nova = enriquecer(nova);
+      if (i >= 0) base[i] = { ...base[i], ...nova }; else base.unshift(nova);
+    } else if (it.operacao === 'UPDATE' && it.idRegistro) {
+      const i = base.findIndex(r => String(r.id) === String(it.idRegistro));
+      if (i >= 0) base[i] = { ...base[i], ...it.payload, _pendente: true };
+    }
+  }
+  return base;
+}
+window.aplicarPendentesNaLista = aplicarPendentesNaLista;
+
 // ---------- gravação --------------------------------------------------------
 
 function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null) {

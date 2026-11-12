@@ -4,6 +4,14 @@
 
 let abaStatusOSAtual = 'ativas';
 let _qtdOSAbetasAnterior = null;
+let limiteConcluidasOS = 300;
+let temMaisConcluidasOS = false;
+let pecasPorOS = {}; // os_id -> [{desc, qtd}]
+
+async function carregarMaisConcluidasOS() {
+  limiteConcluidasOS += 300;
+  await carregarOrdensServico('concluidas');
+}
 
 const LISTA_MOTIVOS_REP = [
   'CORRETIVA',
@@ -83,14 +91,33 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
     }
   });
 
-  const res = await lerDadosComFallbackOffline('ordens_servico', () =>
-    db.from('ordens_servico')
-      .select('*, equipamentos(id, tag, nome, marca, modelo, unidade_medida, obra_id, horimetro_atual)')
-      .order('aberta_em', { ascending: false })
-      .limit(600)
-  );
+  // Ativas: SEMPRE todas (sem limite). Concluídas: as mais recentes, com "carregar mais".
+  const SEL_OS = '*, equipamentos(id, tag, nome, marca, modelo, unidade_medida, obra_id, horimetro_atual, horimetro_atualizado_em)';
+  const [rAtivas, rConcl] = await Promise.all([
+    lerDadosComFallbackOffline('os_ativas', () =>
+      db.from('ordens_servico').select(SEL_OS).neq('status', 'concluida').order('aberta_em', { ascending: false })),
+    lerDadosComFallbackOffline('os_concluidas', () =>
+      db.from('ordens_servico').select(SEL_OS).eq('status', 'concluida').order('aberta_em', { ascending: false }).limit(limiteConcluidasOS))
+  ]);
+  temMaisConcluidasOS = (rConcl.data || []).length >= limiteConcluidasOS;
 
-  let lista = res.data || [];
+  // Junta o que o servidor mandou com o que ainda está na fila de envio (OS feita sem sinal aparece na hora).
+  const juntas = [...(rAtivas.data || []), ...(rConcl.data || [])];
+  let lista = aplicarPendentesNaLista('ordens_servico', juntas, nova => ({
+    ...nova,
+    equipamentos: nova.equipamentos || (cacheEquipamentos || []).find(e => String(e.id) === String(nova.equipamento_id)) || null
+  }));
+  // "Assumir" feito sem sinal: já aparece com o nome do mecânico até o envio.
+  lerFilaOffline().filter(i => i.operacao === 'RPC' && i.tabela === 'os_assumir' && i.payload).forEach(i => {
+    const r = lista.find(x => String(x.id) === String(i.payload.p_os));
+    if (!r || r.concluida_em) return;
+    const nomes = String(r.mecanico_nome || '').split(',').map(n => n.trim().toUpperCase()).filter(Boolean);
+    if (!nomes.includes(i.payload.p_nome)) nomes.push(i.payload.p_nome);
+    r.mecanico_nome = nomes.join(', ');
+    if (['aberta', 'pausada_peca'].includes(r.status)) r.status = 'em_execucao';
+    r._pendente = true;
+  });
+  lista.sort((x, y) => new Date(y.aberta_em || 0) - new Date(x.aberta_em || 0));
   if (typeof filtrarListaPorObraAtiva === 'function') lista = filtrarListaPorObraAtiva(lista);
 
   // Verifica novas OS abertas sem mecânico para notificar equipe
@@ -106,6 +133,7 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
   }
 
   cacheOrdens = lista;
+  await carregarPecasConsumidasPorOS();
   renderizarQuadroEnxutoParadosREP(lista);
 
   let listaFiltrada = [];
@@ -120,6 +148,31 @@ async function carregarOrdensServico(aba = abaStatusOSAtual) {
   }
 
   renderizarCardsListaOS(listaFiltrada);
+  if (aba === 'concluidas' && temMaisConcluidasOS && navigator.onLine) {
+    document.getElementById('listaOrdensServico')?.insertAdjacentHTML('beforeend',
+      `<div class="col-span-full text-center"><button onclick="carregarMaisConcluidasOS()" class="px-4 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">⬇ Carregar mais 300 concluídas</button></div>`);
+  }
+}
+
+// Peças que o almoxarifado lançou em cada OS (saída menos devolução). Sem sinal usa a última cópia guardada.
+async function carregarPecasConsumidasPorOS() {
+  try {
+    const r = await lerDadosComFallbackOffline('mov_por_os', () =>
+      db.from('movimentacoes_almoxarifado').select('os_id,tipo_movimento,descricao_item,quantidade')
+        .not('os_id', 'is', null).order('registrado_em', { ascending: false }).limit(2000));
+    const mapa = {};
+    (r.data || []).forEach(m => {
+      if (!m.os_id) return;
+      const sinal = m.tipo_movimento === 'DEVOLUCAO' ? -1 : (['SAIDA_ESTOQUE', 'NOTA_APLICADA'].includes(m.tipo_movimento) ? 1 : 0);
+      if (!sinal) return;
+      const l = (mapa[m.os_id] = mapa[m.os_id] || {});
+      l[m.descricao_item] = (l[m.descricao_item] || 0) + sinal * Number(m.quantidade || 0);
+    });
+    pecasPorOS = {};
+    Object.keys(mapa).forEach(id => {
+      pecasPorOS[id] = Object.entries(mapa[id]).filter(([, q]) => q > 0).map(([desc, qtd]) => ({ desc, qtd }));
+    });
+  } catch (e) { pecasPorOS = {}; }
 }
 
 // ----------------------------------------------------------------------------
@@ -267,6 +320,7 @@ function renderizarCardsListaOS(lista) {
       ? `<span class="px-2 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black animate-pulse">🚨 CHAMADO ABERTO • AGUARDANDO MECÂNICO</span>`
       : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300 text-[10px] font-black uppercase">${esc(o.status)}</span>`;
 
+    const badgePendente = o._pendente ? `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-400 text-[10px] font-black">⏳ AGUARDANDO ENVIO</span>` : '';
     const horasDecorridas = o.aberta_em
       ? (((o.concluida_em ? new Date(o.concluida_em) : new Date()) - new Date(o.aberta_em)) / 3600000).toFixed(1)
       : '0.0';
@@ -281,7 +335,7 @@ function renderizarCardsListaOS(lista) {
               <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">${esc(o.motivo_rep || 'CORRETIVA')}</span>
               ${o.classificacao_falha ? `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">${esc(o.classificacao_falha)}</span>` : ''}
             </div>
-            ${statusBadge}
+            <div class="flex items-center gap-1">${badgePendente}${statusBadge}</div>
           </div>
 
           <p class="text-xs font-bold text-slate-600 mb-2">${esc(o.equipamentos?.nome || '')} • Local: <strong>${esc(o.local_manutencao_pcm || 'OFICINA')}</strong> • Tempo: <strong class="text-rose-600">${horasDecorridas}h</strong></p>
@@ -290,6 +344,7 @@ function renderizarCardsListaOS(lista) {
             ${esc(o.descricao_problema || '-')}
           </div>
 
+          ${(pecasPorOS[o.id] || []).length ? `<p class="mt-2 text-xs text-blue-900 bg-blue-50 p-2 rounded border border-blue-200"><strong>📦 Peças:</strong> ${(pecasPorOS[o.id]).map(p => `${esc(p.qtd)}× ${esc(p.desc)}`).join(' • ')}</p>` : ''}
           ${o.servico_executado ? `<p class="mt-2 text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200"><strong>Serviço Executado:</strong> ${esc(o.servico_executado)}</p>` : ''}
         </div>
 
@@ -306,7 +361,7 @@ function renderizarCardsListaOS(lista) {
                 ✋ Assumir OS
               </button>
             ` : ''}
-            ${podeExecutar ? `
+            ${podeExecutar && o.status !== 'concluida' ? `
               <button onclick="abrirModalExecucaoOSComChips('${o.id}')" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-xs">
                 🔧 Atender / Fechar
               </button>
@@ -328,14 +383,9 @@ async function assumirAtendimentoOS(osId) {
   const os = cacheOrdens.find(o => String(o.id) === String(osId));
   if (!os) return;
 
-  const nomeMec = (usuarioLogado?.nome || usuarioLogado?.matricula || 'MECÂNICO').toUpperCase();
-  const atuais = (os.mecanico_nome || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-  if (!atuais.includes(nomeMec)) atuais.push(nomeMec);
-
-  await gravarDadosOfflineSafe('ordens_servico', 'UPDATE', {
-    status: 'em_execucao',
-    mecanico_nome: atuais.join(', ')
-  }, osId);
+  const nomeMec = String(usuarioLogado?.nome || usuarioLogado?.matricula || 'MECÂNICO').trim().toUpperCase();
+  // O servidor SOMA o nome à lista (dois mecânicos assumindo juntos ficam os dois), mesmo vindo da fila offline.
+  await gravarDadosOfflineSafe('os_assumir', 'RPC', { p_os: osId, p_nome: nomeMec });
 
   await carregarOrdensServico(abaStatusOSAtual);
 }
@@ -365,26 +415,26 @@ function validarHorimetroAberturaOS(equipamento, valorDigitado) {
     return false;
   }
 
-  // 2. Bloqueia se houver um salto absurdo (ex: digitou um zero a mais)
-  const infoSalto = calcularLimiteSalto(un, equipamento?.horimetro_atualizado_em, Date.now());
-  const limiteSalto = infoSalto.limite;
-  if (horAtual > 0 && (horNovo - horAtual) > limiteSalto) {
+  return checarSaltoHorimetro(equipamento, horNovo, Date.now());
+}
+
+// Confere se o aumento é possível no tempo que passou. Vale offline (usa só o cache do celular).
+// quandoMs = momento em que a leitura foi tirada. PCM/Admin pode forçar; os demais são barrados.
+function checarSaltoHorimetro(equipamento, horNovo, quandoMs) {
+  const un = (equipamento?.unidade_medida || 'H').toUpperCase();
+  const horAtual = parseFloat(equipamento?.horimetro_atual || 0);
+  const infoSalto = calcularLimiteSalto(un, equipamento?.horimetro_atualizado_em, quandoMs || Date.now());
+  if (horAtual > 0 && (horNovo - horAtual) > infoSalto.limite) {
     const podeForcar = usuarioPodeClassificarPCM();
     const msgSalto =
-      `❌ ABERTURA BLOQUEADA (SALTO DE HORÍMETRO INCONSISTENTE)!\n\n` +
+      `❌ SALTO DE HORÍMETRO INCONSISTENTE!\n\n` +
       `• Equipamento: ${equipamento.tag}\n` +
       `• Último Registrado: ${horAtual} ${un}\n` +
       `• Valor Digitado: ${horNovo} ${un} (+${(horNovo - horAtual).toFixed(1)} ${un})\n\n` +
       `${explicarLimiteSalto(un, infoSalto)}\nConfira se não foi digitado um número a mais!`;
-
-    if (!podeForcar) {
-      alert(msgSalto);
-      return false;
-    } else {
-      return confirm(msgSalto + `\n\nComo você é do PCM/Admin, deseja forçar esse valor mesmo assim?`);
-    }
+    if (!podeForcar) { alert(msgSalto); return false; }
+    return confirm(msgSalto + `\n\nComo você é do PCM/Admin, deseja forçar esse valor mesmo assim?`);
   }
-
   return true;
 }
 
@@ -409,7 +459,7 @@ async function abrirModalSolicitacaoAberturaOS() {
   }
 
   if (!cacheEquipamentos || cacheEquipamentos.length === 0) {
-    const { data } = await db.from('equipamentos').select('*').order('tag');
+    const { data } = await lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'));
     cacheEquipamentos = data || [];
   }
 
@@ -507,6 +557,7 @@ async function confirmarAberturaSolicitacaoOS() {
   // Atualiza também o horímetro atual da máquina na tabela equipamentos
   await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo, horimetro_atualizado_em: new Date().toISOString() }, eqId);
   eqObj.horimetro_atual = horNovo;
+  eqObj.horimetro_atualizado_em = new Date().toISOString();
 
   document.getElementById('modalSolicitacaoNovaOSV2')?.classList.add('hidden');
   await carregarOrdensServico('ativas');
@@ -658,9 +709,17 @@ async function salvarExecucaoOSComChips(osId) {
   };
 
   if (!isNaN(horSaida)) {
+    const eqOS = (cacheEquipamentos || []).find(e => String(e.id) === String(os.equipamento_id)) || os.equipamentos;
+    const horAtualEq = parseFloat(eqOS?.horimetro_atual || 0);
+    // Só vale como nova leitura da máquina se subiu; e o salto precisa caber no tempo que passou.
+    const subiu = statusSel === 'concluida' && eqOS && horSaida > horAtualEq;
+    if (subiu && !checarSaltoHorimetro(eqOS, horSaida, Date.now())) return;
     payload.horimetro_os = horSaida;
-    if (statusSel === 'concluida') {
-      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida, horimetro_atualizado_em: new Date().toISOString() }, os.equipamento_id);
+    if (subiu) {
+      const agoraIso = new Date().toISOString();
+      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida, horimetro_atualizado_em: agoraIso }, os.equipamento_id);
+      eqOS.horimetro_atual = horSaida;
+      eqOS.horimetro_atualizado_em = agoraIso;
     }
   }
 
@@ -679,7 +738,7 @@ async function salvarExecucaoOSComChips(osId) {
 async function abrirModalIntervencaoCampoComboio() {
   if (!podeExecutarAcao('executar_os', true)) return;
   if (!cacheEquipamentos || cacheEquipamentos.length === 0) {
-    const { data } = await db.from('equipamentos').select('*').order('tag');
+    const { data } = await lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'));
     cacheEquipamentos = data || [];
   }
   const mecanicos = await obterListaMecanicosParaChips();
@@ -781,7 +840,7 @@ async function abrirModalLancamentoCompletoPCM(osId = null) {
   if (!usuarioPodeClassificarPCM()) return alert('Acesso restrito ao PCM e Administração.');
 
   if (!cacheEquipamentos || cacheEquipamentos.length === 0) {
-    const { data } = await db.from('equipamentos').select('*').order('tag');
+    const { data } = await lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'));
     cacheEquipamentos = data || [];
   }
   const mecanicos = await obterListaMecanicosParaChips();
@@ -951,8 +1010,19 @@ async function salvarLancamentoCompletoPCM(osId = '') {
   if (!osId) await gravarDadosOfflineSafe('ordens_servico', 'INSERT', payload);
   else await gravarDadosOfflineSafe('ordens_servico', 'UPDATE', payload, osId);
 
-  if (!isNaN(horimetro) && horimetro > (parseFloat(eqObj?.horimetro_atual) || 0)) {
-    await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horimetro }, eqId);
+  // A máquina só recebe essa leitura se ela for a mais recente (OS antiga não faz o horímetro "voltar no tempo")
+  // e se o salto couber no tempo decorrido. A OS guarda a leitura de qualquer forma.
+  if (!isNaN(horimetro) && eqObj && horimetro > (parseFloat(eqObj.horimetro_atual) || 0)) {
+    const momento = new Date(payload.concluida_em || payload.aberta_em).getTime();
+    const baseMs = eqObj.horimetro_atualizado_em ? new Date(eqObj.horimetro_atualizado_em).getTime() : 0;
+    if (momento >= baseMs && momento <= Date.now()) {
+      if (checarSaltoHorimetro(eqObj, horimetro, momento)) {
+        const quando = new Date(momento).toISOString();
+        await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horimetro, horimetro_atualizado_em: quando }, eqId);
+        eqObj.horimetro_atual = horimetro;
+        eqObj.horimetro_atualizado_em = quando;
+      }
+    }
   }
 
   document.getElementById('modalLancamentoCompletoPCMV2')?.classList.add('hidden');
