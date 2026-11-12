@@ -3,6 +3,30 @@
 // ============================================================================
 
 let cacheMovimentacoesAlmox = [];
+let cacheOSAlmox = {}; // id -> numero_os (só para mostrar no histórico)
+
+// Toda mudança de saldo passa por aqui: o servidor trava a linha, confere saldo e grava histórico na mesma operação.
+async function almoxMover(dados) {
+  const r = await gravarDadosOfflineSafe('almox_movimentar', 'RPC', { p: { id: novoUuid(), ...dados } });
+  return !r.error;
+}
+
+async function buscarOSAbertasDaMaquina(equipId) {
+  if (!equipId || !navigator.onLine || typeof db === 'undefined' || !db) return [];
+  try {
+    const { data } = await db.from('ordens_servico').select('id,numero_os,status,descricao_problema')
+      .eq('equipamento_id', equipId).order('aberta_em', { ascending: false }).limit(15);
+    return data || [];
+  } catch (e) { return []; }
+}
+
+async function preencherSelectOSAlmox(selId, equipId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const lista = await buscarOSAbertasDaMaquina(equipId);
+  sel.innerHTML = '<option value="">-- Sem OS vinculada --</option>' + lista.map(o =>
+    `<option value="${esc(o.id)}">OS ${esc(o.numero_os)} · ${esc(o.status || '')} · ${esc((o.descricao_problema || '').slice(0, 40))}</option>`).join('');
+}
 let abaVisualizacaoEstoque = 'catalogo'; // 'catalogo', 'edicao_rapida_lote', 'historico_nf_saidas'
 
 async function carregarEstoque(aba = abaVisualizacaoEstoque) {
@@ -21,6 +45,14 @@ async function carregarEstoque(aba = abaVisualizacaoEstoque) {
   cachePecas = resPecas.data || [];
   cacheMovimentacoesAlmox = resMovs.data || [];
   cacheEquipamentos = resEq.data || [];
+
+  try {
+    const ids = [...new Set(cacheMovimentacoesAlmox.map(m => m.os_id).filter(Boolean))];
+    if (ids.length && navigator.onLine && db) {
+      const { data } = await db.from('ordens_servico').select('id,numero_os').in('id', ids);
+      (data || []).forEach(o => { cacheOSAlmox[o.id] = o.numero_os; });
+    }
+  } catch (e) { /* histórico segue sem o número da OS */ }
 
   renderizarPainelAlmoxarifado3Botoes();
 }
@@ -65,7 +97,7 @@ function renderizarPainelAlmoxarifado3Botoes() {
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">ALMOXARIFADO CENTRAL & CONTROLE DE EQUIVALÊNCIAS</span>
-            <h2 class="text-lg font-black">Gestão por Código Interno Mestre, Entrada de NF e Saída p/ Máquina</h2>
+            <h2 class="text-lg font-black">Gestão por Código Interno Mestre, Entrada de NF e Saída p/ Máquina e Notas Aplicadas</h2>
           </div>
           ${podeOperar ? `
             <button onclick="carregarEstoque('edicao_rapida_lote')" class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
@@ -75,7 +107,7 @@ function renderizarPainelAlmoxarifado3Botoes() {
         </div>
 
         ${podeOperar ? `
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <button onclick="abrirModalBotao1CadastrarItem()"
               class="p-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-left transition shadow-lg flex items-start gap-3">
               <div class="bg-slate-950 text-amber-400 w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0">1</div>
@@ -100,6 +132,15 @@ function renderizarPainelAlmoxarifado3Botoes() {
               <div>
                 <div class="font-black text-sm uppercase">📤 Saída para Máquina</div>
                 <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Baixa de prateleira OU <strong>Saída Direta de NF recém-chegada</strong>.</p>
+              </div>
+            </button>
+
+            <button onclick="abrirModalNotaAplicada()"
+              class="p-4 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 text-left transition shadow-lg flex items-start gap-3">
+              <div class="bg-slate-950 text-rose-400 w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0">4</div>
+              <div>
+                <div class="font-black text-sm uppercase">🧾 Nota já Aplicada</div>
+                <p class="text-[11px] font-semibold text-slate-900 mt-0.5">Compra na rua já usada na máquina (ou <strong>OFICINA</strong>). Não mexe no estoque.</p>
               </div>
             </button>
           </div>
@@ -225,19 +266,30 @@ async function salvarTodaGradeRapidaEstoque() {
     if (!descricao) continue;
 
     const codigos_paralelos = rawPar.split(/[,;|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    // O saldo NÃO vai neste gravar: mudar saldo só pelo lançamento de movimento (fica no histórico).
     const payload = {
       id_interno: id_interno || gerarProximoNossoCodigoInterno(),
       descricao,
       codigos_paralelos,
-      quantidade,
       estoque_minimo,
       unidade,
       custo_unitario,
       obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
     };
 
-    if (id) await db.from('pecas_estoque').update(payload).eq('id', id);
-    else await db.from('pecas_estoque').insert([payload]);
+    let pecaId = id;
+    let saldoAntes = 0;
+    if (id) {
+      const antiga = cachePecas.find(p => String(p.id) === String(id));
+      saldoAntes = parseFloat(antiga?.quantidade || 0);
+      await db.from('pecas_estoque').update(payload).eq('id', id);
+    } else {
+      pecaId = novoUuid();
+      await db.from('pecas_estoque').insert([{ ...payload, id: pecaId, quantidade: 0 }]);
+    }
+    if (Math.abs(quantidade - saldoAntes) > 0.0001) {
+      await almoxMover({ tipo: 'AJUSTE_INVENTARIO', peca_id: pecaId, quantidade, motivo: id ? 'AJUSTE NA PLANILHA RÁPIDA' : 'SALDO INICIAL (PLANILHA)' });
+    }
     salvos++;
   }
 
@@ -305,14 +357,18 @@ function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
 async function ajustarSaldoRapidoPeca(pecaId) {
   const peca = cachePecas.find(p => String(p.id) === String(pecaId));
   if (!peca) return;
-  const novoSaldo = parseFloat(prompt(`Saldo Atual para ${peca.id_interno} - ${peca.descricao}:`, peca.quantidade || 0));
-  if (isNaN(novoSaldo)) return;
-  const novoCusto = parseFloat(prompt(`Custo Unitário (R$):`, peca.custo_unitario || 0));
+  const contado = parseFloat(String(prompt(`Quantidade CONTADA na prateleira para ${peca.id_interno} - ${peca.descricao}:`, peca.quantidade || 0) ?? '').replace(',', '.'));
+  if (isNaN(contado) || contado < 0) return;
+  const novoCusto = parseFloat(String(prompt(`Custo Unitário (R$):`, peca.custo_unitario || 0) ?? '').replace(',', '.'));
 
-  await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
-    quantidade: novoSaldo,
-    custo_unitario: isNaN(novoCusto) ? (peca.custo_unitario || 0) : novoCusto
-  }, pecaId);
+  if (Math.abs(contado - parseFloat(peca.quantidade || 0)) > 0.0001) {
+    const motivo = (prompt('Motivo do ajuste (obrigatório). Ex: contagem, perda, erro de lançamento:') || '').trim();
+    if (!motivo) return alert('Informe o motivo do ajuste.');
+    if (!(await almoxMover({ tipo: 'AJUSTE_INVENTARIO', peca_id: pecaId, quantidade: contado, motivo }))) return;
+  }
+  if (!isNaN(novoCusto) && novoCusto !== parseFloat(peca.custo_unitario || 0)) {
+    await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', { custo_unitario: novoCusto }, pecaId);
+  }
   await carregarEstoque('catalogo');
 }
 
@@ -394,17 +450,21 @@ async function salvarBotao1CadastroItem() {
   if (!id_interno || !descricao) return alert('Informe o Nosso Código e a Descrição!');
 
   const codigos_paralelos = rawParalelos.split(/[,;\n|]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+  const saldoInicial = parseFloat(document.getElementById('b1SaldoInicial').value) || 0;
+  const novoId = novoUuid();
   await gravarDadosOfflineSafe('pecas_estoque', 'INSERT', {
+    id: novoId,
     id_interno,
     descricao,
     codigos_paralelos,
     unidade: document.getElementById('b1Unidade').value.trim().toUpperCase() || 'UN',
-    quantidade: parseFloat(document.getElementById('b1SaldoInicial').value) || 0,
+    quantidade: 0,
     estoque_minimo: parseFloat(document.getElementById('b1EstoqueMin').value) || 0,
     custo_unitario: parseFloat(document.getElementById('b1CustoUnit').value) || 0,
     obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
   });
 
+  if (saldoInicial > 0) await almoxMover({ tipo: 'AJUSTE_INVENTARIO', peca_id: novoId, quantidade: saldoInicial, motivo: 'SALDO INICIAL NO CADASTRO' });
   document.getElementById('modalAlmoxBotao1')?.classList.add('hidden');
   await carregarEstoque('catalogo');
 }
@@ -467,33 +527,11 @@ async function salvarBotao2EntradaNF() {
 
   if (!numero_nf || !descricao_item || quantidade <= 0) return alert('Preencha Nº da NF, Descrição e Quantidade!');
 
-  if (pecaId) {
-    const peca = cachePecas.find(p => String(p.id) === String(pecaId));
-    if (peca) {
-      const paralelos = Array.isArray(peca.codigos_paralelos) ? [...peca.codigos_paralelos] : [];
-      if (codigoNovo && !paralelos.includes(codigoNovo)) paralelos.push(codigoNovo);
-      const novoSaldo = Number((parseFloat(peca.quantidade || 0) + quantidade).toFixed(2));
-
-      await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
-        quantidade: novoSaldo,
-        codigos_paralelos: paralelos,
-        custo_unitario: valor_unitario > 0 ? valor_unitario : (peca.custo_unitario || 0)
-      }, pecaId);
-    }
-  }
-
-  await gravarDadosOfflineSafe('movimentacoes_almoxarifado', 'INSERT', {
-    obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null,
-    tipo_movimento: 'ENTRADA_NF',
-    numero_nf,
-    fornecedor,
-    peca_id: pecaId,
-    descricao_item,
-    quantidade,
-    valor_unitario,
-    observacao: codigoNovo ? `Cód. NF: ${codigoNovo}` : '',
-    registrado_em: new Date().toISOString()
+  const ok = await almoxMover({
+    tipo: 'ENTRADA_NF', numero_nf, fornecedor, peca_id: pecaId, descricao_item, quantidade, valor_unitario,
+    codigo_nf: codigoNovo, obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
   });
+  if (!ok) return;
 
   document.getElementById('modalAlmoxBotao2')?.classList.add('hidden');
   await carregarEstoque('catalogo');
@@ -509,107 +547,160 @@ function abrirModalBotao3SaidaMaquina() {
   }
 
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border max-h-[92vh] overflow-y-auto">
       <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">📤 3. Saída de Material para Máquina</h3>
       <div class="space-y-3 text-xs">
-        <select id="b3ModoSaida" onchange="alternarModoSaidaBotao3(this.value)" class="w-full border-2 border-emerald-500 bg-emerald-50 rounded-lg p-2.5 font-black">
-          <option value="SAIDA_ESTOQUE">📦 1. Saída de Estoque (Baixa Saldo da Prateleira)</option>
-          <option value="SAIDA_DIRETA_NF_MAQUINA">⚡ 2. NF Direto p/ Máquina (Sem passar pela prateleira)</option>
+        <select id="b3ModoSaida" class="w-full border-2 border-emerald-500 bg-emerald-50 rounded-lg p-2.5 font-black">
+          <option value="SAIDA_ESTOQUE">📦 Saída de Estoque (baixa o saldo da prateleira)</option>
+          <option value="DEVOLUCAO">↩️ Devolução ao Estoque (volta o saldo)</option>
         </select>
 
         <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Equipamento Destino</label>
-          <select id="b3EquipamentoId" class="w-full border rounded-lg p-2 font-bold">
+          <label class="block font-black uppercase text-slate-700 mb-1">Equipamento Destino (use OFICINA p/ consumo geral)</label>
+          <select id="b3EquipamentoId" onchange="preencherSelectOSAlmox('b3OsId', this.value)" class="w-full border rounded-lg p-2 font-bold">
             <option value="">-- Selecione a Máquina --</option>
             ${cacheEquipamentos.map(e => `<option value="${e.id}">${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
           </select>
         </div>
 
-        <div id="blocoB3SelectCatalogo">
+        <div>
+          <label class="block font-black uppercase text-slate-700 mb-1">OS (opcional)</label>
+          <select id="b3OsId" class="w-full border rounded-lg p-2 font-bold"><option value="">-- Sem OS vinculada --</option></select>
+        </div>
+
+        <div>
           <label class="block font-black uppercase text-slate-700 mb-1">Item do Catálogo</label>
-          <select id="b3PecaId" onchange="preencherDescSaidaBotao3(this.value)" class="w-full border rounded-lg p-2 font-bold">
+          <select id="b3PecaId" class="w-full border rounded-lg p-2 font-bold">
             <option value="">-- Selecione pelo Nosso Código ou Descrição --</option>
             ${cachePecas.map(p => `<option value="${p.id}">${esc(p.id_interno)} - ${esc(p.descricao)} (Saldo: ${p.quantidade})</option>`).join('')}
           </select>
         </div>
 
-        <div id="blocoB3DadosNFDireta" class="hidden bg-amber-50 p-3 rounded-xl border border-amber-300 grid grid-cols-3 gap-2">
-          <input id="b3NumeroNFDireta" type="text" placeholder="Nº da NF" class="border rounded-lg p-2 font-black uppercase bg-white" />
-          <input id="b3FornecedorDireta" type="text" placeholder="Fornecedor" class="border rounded-lg p-2 font-bold uppercase bg-white" />
-          <input id="b3ValorUnitDireta" type="number" step="0.01" placeholder="Valor Unit. R$" class="border rounded-lg p-2 font-bold bg-white" />
-        </div>
-
         <div class="grid grid-cols-3 gap-2">
-          <input id="b3DescricaoItem" type="text" placeholder="Descrição do Material..." class="col-span-2 border rounded-lg p-2 font-bold uppercase" />
+          <input id="b3RetiradoPor" type="text" placeholder="Quem retirou (obrigatório)" class="col-span-2 border rounded-lg p-2 font-bold uppercase" />
           <input id="b3Quantidade" type="number" step="0.1" value="1" class="border rounded-lg p-2 font-black" />
         </div>
-        <input id="b3Observacao" type="text" placeholder="Retirado por / Observação..." class="w-full border rounded-lg p-2 font-semibold" />
+        <input id="b3Observacao" type="text" placeholder="Observação..." class="w-full border rounded-lg p-2 font-semibold" />
       </div>
       <div class="mt-5 flex justify-end gap-2">
         <button onclick="document.getElementById('modalAlmoxBotao3').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
-        <button onclick="salvarBotao3SaidaMaquina()" class="px-5 py-2 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs">Confirmar Saída</button>
+        <button onclick="salvarBotao3SaidaMaquina()" class="px-5 py-2 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs">Confirmar</button>
       </div>
     </div>
   `;
   modal.classList.remove('hidden');
-  const selEq = document.getElementById('b3EquipamentoId');
-  if (selEq && typeof ativarBuscaPorPrefixoEmSelect === 'function') ativarBuscaPorPrefixoEmSelect(selEq);
-}
-
-function alternarModoSaidaBotao3(modo) {
-  document.getElementById('blocoB3DadosNFDireta')?.classList.toggle('hidden', modo !== 'SAIDA_DIRETA_NF_MAQUINA');
-}
-
-function preencherDescSaidaBotao3(pecaId) {
-  const peca = cachePecas.find(p => String(p.id) === String(pecaId));
-  if (peca) document.getElementById('b3DescricaoItem').value = peca.descricao || '';
+  ['b3EquipamentoId', 'b3PecaId'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && typeof ativarBuscaPorPrefixoEmSelect === 'function') ativarBuscaPorPrefixoEmSelect(el);
+  });
 }
 
 async function salvarBotao3SaidaMaquina() {
-  const modo = document.getElementById('b3ModoSaida').value;
+  const tipo = document.getElementById('b3ModoSaida').value;
   const equipId = document.getElementById('b3EquipamentoId').value;
-  const pecaId = document.getElementById('b3PecaId').value || null;
-  const descricao_item = document.getElementById('b3DescricaoItem').value.trim().toUpperCase();
+  const pecaId = document.getElementById('b3PecaId').value;
   const quantidade = parseFloat(document.getElementById('b3Quantidade').value) || 0;
+  const retirado_por = document.getElementById('b3RetiradoPor').value.trim();
   const observacao = document.getElementById('b3Observacao').value.trim();
+  const os_id = document.getElementById('b3OsId').value || null;
 
-  if (!equipId || !descricao_item || quantidade <= 0) return alert('Selecione a Máquina, Descrição e Quantidade!');
+  if (!equipId) return alert('Selecione a máquina (ou OFICINA).');
+  if (!pecaId) return alert('Selecione o item do estoque!');
+  if (quantidade <= 0) return alert('Informe a quantidade.');
+  if (!retirado_por) return alert('Informe quem retirou / devolveu.');
 
-  let numero_nf = '';
-  let fornecedor = '';
-  let valor_unitario = 0;
-
-  if (modo === 'SAIDA_ESTOQUE') {
-    if (!pecaId) return alert('Selecione o item do estoque!');
-    const peca = cachePecas.find(p => String(p.id) === String(pecaId));
-    if (!peca) return;
-    if (parseFloat(peca.quantidade || 0) < quantidade) return alert(`Saldo insuficiente! Disponível: ${peca.quantidade}`);
-    valor_unitario = parseFloat(peca.custo_unitario || 0);
-    await gravarDadosOfflineSafe('pecas_estoque', 'UPDATE', {
-      quantidade: Number((parseFloat(peca.quantidade || 0) - quantidade).toFixed(2))
-    }, pecaId);
-  } else {
-    numero_nf = document.getElementById('b3NumeroNFDireta').value.trim().toUpperCase();
-    fornecedor = document.getElementById('b3FornecedorDireta').value.trim().toUpperCase();
-    valor_unitario = parseFloat(document.getElementById('b3ValorUnitDireta').value) || 0;
-    if (!numero_nf) return alert('Informe o Nº da NF!');
-  }
-
-  await gravarDadosOfflineSafe('movimentacoes_almoxarifado', 'INSERT', {
-    obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null,
-    tipo_movimento: modo,
-    numero_nf,
-    fornecedor,
-    peca_id: pecaId,
-    descricao_item,
-    quantidade,
-    valor_unitario,
-    equipamento_id: equipId,
-    observacao,
-    registrado_em: new Date().toISOString()
+  const ok = await almoxMover({
+    tipo, peca_id: pecaId, equipamento_id: equipId, os_id, quantidade, retirado_por, observacao,
+    obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
   });
+  if (!ok) return;
 
   document.getElementById('modalAlmoxBotao3')?.classList.add('hidden');
+  await carregarEstoque('historico_nf_saidas');
+}
+
+// ---- 4. Nota já aplicada: compra na rua usada direto na máquina. Várias linhas por nota; não mexe no estoque.
+function abrirModalNotaAplicada() {
+  let modal = document.getElementById('modalAlmoxNotaAplicada');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalAlmoxNotaAplicada';
+    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4';
+    document.body.appendChild(modal);
+  }
+  const oficina = cacheEquipamentos.find(e => String(e.tag).toUpperCase() === 'OFICINA');
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border max-h-[92vh] overflow-y-auto">
+      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">🧾 4. Nota de Compra já Aplicada na Máquina</h3>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-3 gap-2">
+          <input id="b4NumeroNF" type="text" placeholder="Nº da Nota" class="border rounded-lg p-2 font-black uppercase" />
+          <input id="b4Fornecedor" type="text" placeholder="Fornecedor" class="border rounded-lg p-2 font-bold uppercase" />
+          <input id="b4Comprador" type="text" placeholder="Quem comprou" class="border rounded-lg p-2 font-bold uppercase" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="b4EquipamentoId" onchange="preencherSelectOSAlmox('b4OsId', this.value)" class="border rounded-lg p-2 font-bold">
+            <option value="">-- Máquina onde foi aplicado --</option>
+            ${cacheEquipamentos.map(e => `<option value="${e.id}" ${oficina && oficina.id === e.id ? '' : ''}>${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
+          </select>
+          <select id="b4OsId" class="border rounded-lg p-2 font-bold"><option value="">-- Sem OS vinculada --</option></select>
+        </div>
+        <div class="text-[11px] font-semibold text-slate-600">Óleo, graxa e consumo geral: escolha a máquina <strong>OFICINA</strong>.</div>
+        <table class="w-full text-xs"><thead><tr class="text-left text-slate-500 uppercase text-[10px]"><th>Descrição</th><th class="w-20">Qtd</th><th class="w-28">Valor unit. R$</th><th class="w-8"></th></tr></thead>
+          <tbody id="b4Linhas"></tbody></table>
+        <button onclick="adicionarLinhaNotaAplicada()" class="px-3 py-1.5 rounded-lg bg-slate-100 font-black text-xs">+ Adicionar linha</button>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button onclick="document.getElementById('modalAlmoxNotaAplicada').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+        <button onclick="salvarNotaAplicada()" class="px-5 py-2 rounded-lg bg-rose-500 text-slate-950 font-black text-xs">Registrar Nota</button>
+      </div>
+    </div>
+  `;
+  modal.classList.remove('hidden');
+  adicionarLinhaNotaAplicada();
+  const sel = document.getElementById('b4EquipamentoId');
+  if (sel && typeof ativarBuscaPorPrefixoEmSelect === 'function') ativarBuscaPorPrefixoEmSelect(sel);
+}
+
+function adicionarLinhaNotaAplicada() {
+  const tb = document.getElementById('b4Linhas');
+  if (!tb) return;
+  const tr = document.createElement('tr');
+  tr.className = 'linha-nota-aplicada';
+  tr.innerHTML = `
+    <td class="pr-1 py-1"><input type="text" class="n-desc w-full border rounded-lg p-2 font-bold uppercase" placeholder="Ex: FILTRO DE ÓLEO" /></td>
+    <td class="pr-1"><input type="number" step="0.1" value="1" class="n-qtd w-full border rounded-lg p-2 font-black" /></td>
+    <td class="pr-1"><input type="number" step="0.01" value="0" class="n-val w-full border rounded-lg p-2 font-bold" /></td>
+    <td><button onclick="this.closest('tr').remove()" class="text-rose-600 font-black px-1">✖</button></td>`;
+  tb.appendChild(tr);
+}
+
+async function salvarNotaAplicada() {
+  const numero_nf = document.getElementById('b4NumeroNF').value.trim().toUpperCase();
+  const fornecedor = document.getElementById('b4Fornecedor').value.trim().toUpperCase();
+  const retirado_por = document.getElementById('b4Comprador').value.trim();
+  const equipamento_id = document.getElementById('b4EquipamentoId').value;
+  const os_id = document.getElementById('b4OsId').value || null;
+  if (!numero_nf) return alert('Informe o número da nota.');
+  if (!retirado_por) return alert('Informe quem comprou.');
+  if (!equipamento_id) return alert('Escolha a máquina (ou OFICINA).');
+
+  const linhas = Array.from(document.querySelectorAll('#b4Linhas .linha-nota-aplicada')).map(tr => ({
+    descricao_item: tr.querySelector('.n-desc').value.trim().toUpperCase(),
+    quantidade: parseFloat(tr.querySelector('.n-qtd').value) || 0,
+    valor_unitario: parseFloat(tr.querySelector('.n-val').value) || 0
+  })).filter(l => l.descricao_item);
+  if (!linhas.length) return alert('Inclua ao menos um item da nota.');
+  if (linhas.some(l => l.quantidade <= 0)) return alert('Há item com quantidade zerada.');
+
+  for (const l of linhas) {
+    const ok = await almoxMover({
+      tipo: 'NOTA_APLICADA', numero_nf, fornecedor, retirado_por, equipamento_id, os_id, ...l,
+      obra_id: obraAtivaId !== 'TODAS' ? obraAtivaId : null
+    });
+    if (!ok) return;
+  }
+  document.getElementById('modalAlmoxNotaAplicada')?.classList.add('hidden');
   await carregarEstoque('historico_nf_saidas');
 }
 
@@ -629,6 +720,10 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
             <th class="p-3">Qtd</th>
             <th class="p-3">Valor Unit.</th>
             <th class="p-3">Máquina / Fornecedor</th>
+            <th class="p-3">OS</th>
+            <th class="p-3">Quem</th>
+            <th class="p-3">Saldo após</th>
+            <th class="p-3">Motivo / Obs.</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
@@ -642,7 +737,11 @@ function renderizarTabelaMovimentacoesNFEsaidas() {
                 <td class="p-3 font-extrabold">${esc(m.descricao_item)}</td>
                 <td class="p-3 font-black">${m.quantidade}</td>
                 <td class="p-3 font-bold">R$ ${Number(m.valor_unitario || 0).toFixed(2)}</td>
-                <td class="p-3 font-bold">${eq ? eq.tag : (m.fornecedor || '-')}</td>
+                <td class="p-3 font-bold">${esc(eq ? eq.tag : (m.fornecedor || '-'))}</td>
+                <td class="p-3 font-bold">${esc(m.os_id ? (cacheOSAlmox[m.os_id] || '✔') : '-')}</td>
+                <td class="p-3 font-bold">${esc(m.retirado_por || '-')}</td>
+                <td class="p-3 font-bold">${m.saldo_apos ?? '-'}</td>
+                <td class="p-3 text-slate-600">${esc(m.motivo || m.observacao || '')}</td>
               </tr>
             `;
           }).join('')}
