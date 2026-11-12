@@ -356,6 +356,10 @@ async function salvarListaPrev(id) {
 // ---------- PLANO + HISTÓRICO REAL (pacote, data, contador) ----------
 function abrirModalPlanoPreventiva(equipId = '') {
   if (!_somenteOnlinePCM()) return;
+  if (!cacheEstrategiasPrev.some(s => s.ativa)) {
+    alert('Ainda não há estratégia cadastrada. Crie primeiro a estratégia (intervalo e pacotes) na aba 🧩 Estratégias; depois volte aqui para criar o plano.');
+    return carregarPreventivas('estrategias');
+  }
   const plano = cachePlanosPreventiva.find(p => String(p.equipamento_id) === String(equipId) && p.ativo !== false);
   const comPlano = new Set(cachePlanosPreventiva.filter(p => p.ativo !== false).map(p => String(p.equipamento_id)));
   const equips = cacheEquipamentos.filter(e => e.situacao_ciclo === 'ativo' && (String(e.id) === String(equipId) || !comPlano.has(String(e.id))));
@@ -363,7 +367,7 @@ function abrirModalPlanoPreventiva(equipId = '') {
     <h3 class="font-black">📜 Plano e Histórico de Preventivas</h3>
     <div class="grid grid-cols-2 gap-2">
       <label class="text-xs font-black">Equipamento<select id="plEq" onchange="trocarEquipPlanoPrev()" class="${_inp}" ${equipId ? 'disabled' : ''}><option value="">Selecione</option>${equips.map(e => `<option value="${e.id}" ${String(e.id) === String(equipId) ? 'selected' : ''}>${esc(e.tag)} — ${esc(e.nome || '')}</option>`).join('')}</select></label>
-      <label class="text-xs font-black">Estratégia<select id="plEst" onchange="atualizarProximoPacotePlanoPrev()" class="${_inp}"><option value="">Selecione</option>${cacheEstrategiasPrev.filter(s => s.ativa || s.id === plano?.estrategia_id).map(s => `<option value="${s.id}" ${s.id === plano?.estrategia_id ? 'selected' : ''}>${esc(s.codigo)} — ${esc(s.nome)} (${s.intervalo_base} ${s.unidade})</option>`).join('')}</select></label>
+      <label class="text-xs font-black">Estratégia<select id="plEst" onchange="atualizarProximoPacotePlanoPrev()" class="${_inp}"><option value="">${cacheEstrategiasPrev.some(s => s.ativa) ? 'Selecione' : '(nenhuma estratégia cadastrada)'}</option>${cacheEstrategiasPrev.filter(s => s.ativa || s.id === plano?.estrategia_id).map(s => `<option value="${s.id}" ${s.id === plano?.estrategia_id ? 'selected' : ''}>${esc(s.codigo)} — ${esc(s.nome)} (${s.intervalo_base} ${s.unidade})</option>`).join('')}</select></label>
       <label class="text-xs font-black col-span-2">Próximo pacote a executar<select id="plProx" class="${_inp}"></select></label>
     </div>
     <div class="text-xs font-black">Histórico real já executado (pacote, data e leitura da máquina)</div>
@@ -383,9 +387,15 @@ function atualizarProximoPacotePlanoPrev(plano) {
   const pks = cachePacotesPrev.filter(p => p.estrategia_id === estId).sort((a, b) => a.multiplo - b.multiplo);
   const atual = plano && plano.id ? pacoteDoCicloPrev(plano.estrategia_id, (plano.ciclo_atual || 0) + 1) : null;
   sel.innerHTML = pks.map(p => `<option value="${p.multiplo}" ${atual && p.id === atual.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('') || '<option value="">(escolha a estratégia)</option>';
+  // atualiza os pacotes das linhas de histórico ainda não gravadas
+  document.querySelectorAll('.linha-hist-prev:not([data-existente]) .hp-pacote').forEach(selP => {
+    const anterior = selP.value;
+    selP.innerHTML = pks.map(p => `<option ${p.nome === anterior ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+  });
 }
 
 function addLinhaHistoricoPrev(h = {}, somenteLeitura = false) {
+  if (!somenteLeitura && !document.getElementById('plEst').value) return alert('Escolha a estratégia primeiro: os pacotes do histórico vêm dela.');
   const div = document.createElement('div');
   div.className = 'linha-hist-prev grid grid-cols-12 gap-1.5 items-center';
   const estId = document.getElementById('plEst').value;
