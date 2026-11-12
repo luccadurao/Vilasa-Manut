@@ -415,6 +415,8 @@ function validarHorimetroAberturaOS(equipamento, valorDigitado) {
     return false;
   }
 
+  if (!(horAtual > 0) && !confirm(`⚠️ ${equipamento?.tag || 'Este equipamento'} ainda não tem leitura anterior no sistema.\n\nVocê confirma que a leitura do painel é ${horNovo} ${un}?`)) return false;
+
   return checarSaltoHorimetro(equipamento, horNovo, Date.now());
 }
 

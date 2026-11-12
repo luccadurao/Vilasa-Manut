@@ -460,15 +460,16 @@ async function confirmarMudancaCicloVidaEquip(equipId) {
 }
 
 async function abrirModalTransferirObraEquipamento(equipId) {
+  if (!podeExecutarAcao('gerenciar_frota', true)) return;
   const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
   if (!eq) return;
-  const novaObraCod = prompt(`Transferir ${eq.tag} para qual Obra?\n` + cacheObras.map(o => `• ${o.codigo} (${o.nome})`).join('\n'));
-  if (!novaObraCod) return;
-  const obraDest = cacheObras.find(o => o.codigo.toUpperCase() === novaObraCod.trim().toUpperCase());
-  if (!obraDest) return alert('Código de obra não encontrado!');
-
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { obra_id: obraDest.id }, eq.id);
-  await carregarFrota(filtroSituacaoFrota);
+  _modalFrota('modalObraLoteV2', `
+    <h3 class="font-black text-slate-900">🔄 Transferir ${esc(eq.tag)} para qual obra?</h3>
+    <select id="obraLoteSel" class="w-full border rounded-lg p-2 text-sm font-bold">${cacheObras.map(o => `<option value="${o.id}" ${String(o.id) === String(eq.obra_id) ? 'selected' : ''}>${esc(o.codigo)} — ${esc(o.nome)}</option>`).join('')}</select>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="_fecharModalFrota('modalObraLoteV2')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick='confirmarObraEmLote(${JSON.stringify([String(eq.id)])})' class="px-5 py-2 rounded-lg bg-blue-700 text-white font-black text-xs">Transferir</button>
+    </div>`);
 }
 
 // QR impresso no escritório sempre aponta para produção, mesmo se gerado a partir de teste/preview
