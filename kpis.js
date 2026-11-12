@@ -36,6 +36,31 @@ function calcularHorasInterseccaoPeriodo(dtEntradaISO, dtSaidaISO, inicioJanela,
   return fimEfetivo <= iniEfetivo ? 0 : (fimEfetivo - iniEfetivo) / 3600000;
 }
 
+// Lê todas as páginas (o banco corta em 1000 linhas por consulta).
+async function paginarKPI(tabela, montar) {
+  const out = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await montar(db.from(tabela).select('*')).order('id').range(de, de + 999);
+    if (error) return { data: null, error };
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}
+
+// Soma de intervalos sem contar duas vezes o tempo em que há mais de uma OS parada na mesma máquina.
+function uniaoHorasIntervalos(intervalos) {
+  const ord = intervalos.filter(i => i.fim > i.ini).sort((a, b) => a.ini - b.ini);
+  let total = 0, ini = null, fim = null;
+  for (const i of ord) {
+    if (ini === null) { ini = i.ini; fim = i.fim; }
+    else if (i.ini <= fim) { if (i.fim > fim) fim = i.fim; }
+    else { total += fim - ini; ini = i.ini; fim = i.fim; }
+  }
+  if (ini !== null) total += fim - ini;
+  return total / 3600000;
+}
+
 async function calcularKPIs() {
   inicializarDatasPadraoKPI();
 
@@ -46,13 +71,19 @@ async function calcularKPIs() {
   if (inpFim?.value) filtroKpiDataFim = inpFim.value;
   if (inpPref) filtroKpiPrefixo = inpPref.value.trim().toUpperCase();
 
-  const [resEq, resOS, resPrevExec, resPlanos, resPecas, resMovs] = await Promise.all([
+  const isoIni = new Date(filtroKpiDataInicio + 'T00:00:00').toISOString();
+  const isoFim = new Date(filtroKpiDataFim + 'T23:59:59').toISOString();
+  const isoLeituraIni = new Date(new Date(filtroKpiDataInicio + 'T00:00:00').getTime() - 45 * 86400000).toISOString();
+
+  const [resEq, resOS, resPrevExec, resPlanos, resPecas, resMovs, resLeituras] = await Promise.all([
     lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag')),
-    lerDadosComFallbackOffline('ordens_servico', () => db.from('ordens_servico').select('*').order('aberta_em', { ascending: false })),
+    // só as OS que tocam o período (evita o corte de 1000 linhas do banco)
+    lerDadosComFallbackOffline('kpi_os', () => paginarKPI('ordens_servico', q => q.lte('aberta_em', isoFim).or(`concluida_em.is.null,concluida_em.gte.${isoIni}`))),
     lerDadosComFallbackOffline('execucoes_preventiva', () => db.from('execucoes_preventiva').select('*')),
     lerDadosComFallbackOffline('planos_preventiva', () => db.from('planos_preventiva').select('*')),
-    lerDadosComFallbackOffline('pecas_estoque', () => db.from('pecas_estoque').select('*')),
-    lerDadosComFallbackOffline('movimentacoes_almoxarifado', () => db.from('movimentacoes_almoxarifado').select('*'))
+    lerDadosComFallbackOffline('pecas_estoque', () => paginarKPI('pecas_estoque', q => q)),
+    lerDadosComFallbackOffline('kpi_movs', () => paginarKPI('movimentacoes_almoxarifado', q => q.gte('registrado_em', isoIni).lte('registrado_em', isoFim).in('tipo_movimento', ['SAIDA_ESTOQUE', 'SAIDA_DIRETA_NF_MAQUINA', 'NOTA_APLICADA', 'DEVOLUCAO']))),
+    lerDadosComFallbackOffline('kpi_leituras', () => paginarKPI('diario_horimetro', q => q.gte('registrado_em', isoLeituraIni).lte('registrado_em', isoFim).or('medidor.eq.H,medidor.is.null')))
   ]);
 
   let equipamentos = resEq.data || [];
@@ -61,6 +92,7 @@ async function calcularKPIs() {
   let planosPreventiva = resPlanos.data || [];
   let pecasEstoque = resPecas.data || [];
   let movsAlmox = resMovs.data || [];
+  const leiturasPeriodo = resLeituras.data || [];
 
   if (typeof filtrarListaPorObraAtiva === 'function') {
     equipamentos = filtrarListaPorObraAtiva(equipamentos);
@@ -93,6 +125,14 @@ async function calcularKPIs() {
   let horasParadasPreventivaTotal = 0;
   let qtdPreventivasExecutadasNoPeriodo = 0;
 
+  let qtdFalhasMedidorHoras = 0;
+  const intervalosPorEquip = {};
+  function registrarIntervaloParada(os, ehPreventiva) {
+    const ini = Math.max(new Date(os.aberta_em).getTime(), dtInicioJanela.getTime());
+    const fim = Math.min((os.concluida_em ? new Date(os.concluida_em) : new Date()).getTime(), dtFimJanela.getTime());
+    (intervalosPorEquip[os.equipamento_id] = intervalosPorEquip[os.equipamento_id] || []).push({ ini, fim, prev: ehPreventiva });
+  }
+
   ordensCorretivas.forEach(os => {
     if (!idsFrota.has(String(os.equipamento_id))) return;
     const dtAbertura = new Date(os.aberta_em);
@@ -101,11 +141,7 @@ async function calcularKPIs() {
 
     if (String(os.motivo_rep || '').toUpperCase() === 'PREVENTIVA') {
       qtdPreventivasExecutadasNoPeriodo++;
-      if (os.parada_obrigatoria !== false) {
-        const hPrev = calcularHorasInterseccaoPeriodo(os.aberta_em, os.concluida_em, dtInicioJanela, dtFimJanela);
-        horasParadasPreventivaTotal += hPrev;
-        if (mapaViloesPorMaquina[os.equipamento_id]) mapaViloesPorMaquina[os.equipamento_id].horasPreventiva += hPrev;
-      }
+      if (os.parada_obrigatoria !== false) registrarIntervaloParada(os, true);
       return;
     }
 
@@ -121,41 +157,54 @@ async function calcularKPIs() {
     if (os.parada_obrigatoria === false) {
       qtdAvisosSemParada++;
     } else {
-      const hParada = calcularHorasInterseccaoPeriodo(os.aberta_em, os.concluida_em, dtInicioJanela, dtFimJanela);
-      if (hParada > 0) {
-        horasParadasCorretivaTotal += hParada;
+      if (calcularHorasInterseccaoPeriodo(os.aberta_em, os.concluida_em, dtInicioJanela, dtFimJanela) > 0) {
+        registrarIntervaloParada(os, false);
         qtdFalhasCorretivasComParada++;
-        if (mapaViloesPorMaquina[os.equipamento_id]) {
-          mapaViloesPorMaquina[os.equipamento_id].horasCorretiva += hParada;
-          mapaViloesPorMaquina[os.equipamento_id].qtdFalhas++;
-        }
+        const eqF = frotaAtiva.find(e => String(e.id) === String(os.equipamento_id));
+        if (eqF && String(eqF.unidade_medida || 'H').toUpperCase() !== 'KM') qtdFalhasMedidorHoras++;
+        if (mapaViloesPorMaquina[os.equipamento_id]) mapaViloesPorMaquina[os.equipamento_id].qtdFalhas++;
       }
     }
   });
 
-  // Preventivas agora são OS reais (contadas acima); o histórico lançado pelo PCM não é parada medida.
-  execucoesPreventivas.filter(() => false).forEach(ex => {
-    if (!idsFrota.has(String(ex.equipamento_id))) return;
-    const dtIni = new Date(ex.data_entrada);
-    const dtFim = ex.data_conclusao ? new Date(ex.data_conclusao) : new Date();
-    if (dtFim < dtInicioJanela || dtIni > dtFimJanela) return;
+  // Paradas por máquina sem dupla contagem: corretiva = união das corretivas; preventiva = o que a união total tem a mais.
+  Object.entries(intervalosPorEquip).forEach(([eqId, lista]) => {
+    const hCorr = uniaoHorasIntervalos(lista.filter(i => !i.prev));
+    const hPrev = Math.max(0, uniaoHorasIntervalos(lista) - hCorr);
+    horasParadasCorretivaTotal += hCorr;
+    horasParadasPreventivaTotal += hPrev;
+    if (mapaViloesPorMaquina[eqId]) { mapaViloesPorMaquina[eqId].horasCorretiva = hCorr; mapaViloesPorMaquina[eqId].horasPreventiva = hPrev; }
+  });
 
-    qtdPreventivasExecutadasNoPeriodo++;
-    if (ex.parada_obrigatoria !== false) {
-      const hPrev = calcularHorasInterseccaoPeriodo(ex.data_entrada, ex.data_conclusao, dtInicioJanela, dtFimJanela);
-      horasParadasPreventivaTotal += hPrev;
-      if (mapaViloesPorMaquina[ex.equipamento_id]) mapaViloesPorMaquina[ex.equipamento_id].horasPreventiva += hPrev;
-    }
+  // Horas operadas reais (diferença de horímetro no período) das máquinas controladas em horas.
+  let horasOperadasReais = 0, maquinasComLeitura = 0, maquinasHoras = 0;
+  const leiturasPorEquip = {};
+  leiturasPeriodo.forEach(l => { (leiturasPorEquip[l.equipamento_id] = leiturasPorEquip[l.equipamento_id] || []).push({ t: new Date(l.registrado_em).getTime(), v: Number(l.leitura) }); });
+  frotaAtiva.forEach(eq => {
+    if (String(eq.unidade_medida || 'H').toUpperCase() === 'KM') return;
+    maquinasHoras++;
+    const ls = (leiturasPorEquip[eq.id] || []).sort((a, b) => a.t - b.t);
+    if (!ls.length) return;
+    const tIni = dtInicioJanela.getTime(), tFim = dtFimJanela.getTime();
+    const antes = ls.filter(x => x.t <= tIni);
+    const base = antes.length ? antes[antes.length - 1] : ls.find(x => x.t > tIni);
+    const fimL = ls.filter(x => x.t <= tFim).pop();
+    if (!base || !fimL || fimL.t <= base.t) return;
+    maquinasComLeitura++;
+    horasOperadasReais += Math.max(0, fimL.v - base.v);
   });
 
   const horasParadasTotaisDF = Math.min(horasCalendarioTotais, horasParadasCorretivaTotal + horasParadasPreventivaTotal);
   const horasDisponiveisOperacao = Math.max(0, horasCalendarioTotais - horasParadasTotaisDF);
   const dfPercentual = horasCalendarioTotais > 0 ? ((horasDisponiveisOperacao / horasCalendarioTotais) * 100) : 100;
 
-  const horasOperadasParaMTBF = Math.max(0, horasCalendarioTotais - horasParadasCorretivaTotal);
-  const mtbfHoras = qtdFalhasCorretivasComParada > 0 ? (horasOperadasParaMTBF / qtdFalhasCorretivasComParada) : horasOperadasParaMTBF;
+  // MTBF (NBR 5462): horas OPERADAS / falhas. Sem leituras no período, cai para horas de calendário (estimado).
+  const mtbfEstimado = !(horasOperadasReais > 0);
+  const horasOperadasParaMTBF = mtbfEstimado ? Math.max(0, horasCalendarioTotais - horasParadasCorretivaTotal) : horasOperadasReais;
+  const falhasParaMTBF = mtbfEstimado ? qtdFalhasCorretivasComParada : qtdFalhasMedidorHoras;
+  const mtbfHoras = falhasParaMTBF > 0 ? (horasOperadasParaMTBF / falhasParaMTBF) : horasOperadasParaMTBF;
   const mttrHoras = qtdFalhasCorretivasComParada > 0 ? (horasParadasCorretivaTotal / qtdFalhasCorretivasComParada) : 0;
-  const confiabilidade24h = qtdFalhasCorretivasComParada > 0 && mtbfHoras > 0 ? (Math.exp(-24 / mtbfHoras) * 100) : 100;
+  const confiabilidade24h = falhasParaMTBF > 0 && mtbfHoras > 0 ? (Math.exp(-24 / mtbfHoras) * 100) : 100;
 
   let planosEmDia = 0, planosVencidos = 0;
   const planosFiltrados = planosPreventiva.filter(p => p.ativo !== false && Number(p.intervalo_base) > 0 && idsFrota.has(String(p.equipamento_id)));
@@ -172,12 +221,13 @@ async function calcularKPIs() {
 
   let custoConsumidoNoPeriodo = 0;
   movsAlmox.forEach(m => {
-    if (!['SAIDA_ESTOQUE', 'SAIDA_DIRETA_NF_MAQUINA'].includes(m.tipo_movimento)) return;
+    if (!['SAIDA_ESTOQUE', 'SAIDA_DIRETA_NF_MAQUINA', 'NOTA_APLICADA', 'DEVOLUCAO'].includes(m.tipo_movimento)) return;
     const dtMov = new Date(m.registrado_em);
     if (dtMov < dtInicioJanela || dtMov > dtFimJanela) return;
     if (filtroKpiPrefixo && m.equipamento_id && !idsFrota.has(String(m.equipamento_id))) return;
 
-    const custoItem = parseFloat(m.quantidade || 0) * parseFloat(m.valor_unitario || 0);
+    const sinal = m.tipo_movimento === 'DEVOLUCAO' ? -1 : 1;
+    const custoItem = sinal * Math.abs(parseFloat(m.quantidade || 0)) * parseFloat(m.valor_unitario || 0);
     custoConsumidoNoPeriodo += custoItem;
     if (m.equipamento_id && mapaViloesPorMaquina[m.equipamento_id]) mapaViloesPorMaquina[m.equipamento_id].custoPecas += custoItem;
   });
@@ -185,6 +235,7 @@ async function calcularKPIs() {
   renderizarDashboardKPIs({
     frotaTotal: frotaAtiva.length, diasNoPeriodo, dfPercentual, mtbfHoras, mttrHoras, confiabilidade24h,
     horasParadasCorretivaTotal, horasParadasPreventivaTotal, qtdFalhasCorretivasComParada, qtdAvisosSemParada,
+    mtbfEstimado, falhasParaMTBF, maquinasComLeitura, maquinasHoras, horasOperadasReais,
     qtdPreventivasExecutadasNoPeriodo, aderenciaPreventivaPerc, planosEmDia, planosVencidos,
     valorImobilizadoEstoque, custoConsumidoNoPeriodo,
     listaMaquinasAnalitica: Object.values(mapaViloesPorMaquina),
@@ -244,7 +295,7 @@ function renderizarDashboardKPIs(d) {
         <div class="bg-white p-4 rounded-2xl border-l-4 border-blue-500 shadow-sm">
           <span class="text-[11px] font-black uppercase text-slate-500">MTBF (Tempo Entre Falhas)</span>
           <p class="text-3xl font-black text-slate-900 mt-1">${d.mtbfHoras.toFixed(1)} h</p>
-          <p class="text-[11px] text-slate-500 mt-1">Sobre <strong>${d.qtdFalhasCorretivasComParada}</strong> parada(s) corretiva(s)</p>
+          <p class="text-[11px] text-slate-500 mt-1">${d.mtbfEstimado ? '⚠️ Estimado por horas de calendário (sem leituras no período)' : `<strong>${d.horasOperadasReais.toFixed(0)}h</strong> operadas (${d.maquinasComLeitura}/${d.maquinasHoras} máquinas com leitura) / <strong>${d.falhasParaMTBF}</strong> falha(s)`}</p>
         </div>
         <div class="bg-white p-4 rounded-2xl border-l-4 border-amber-500 shadow-sm">
           <span class="text-[11px] font-black uppercase text-slate-500">MTTR (Tempo Médio Reparo)</span>
