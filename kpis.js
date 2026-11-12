@@ -101,6 +101,7 @@ async function calcularKPIs() {
     movsAlmox = filtrarListaPorObraAtiva(movsAlmox);
   }
 
+  // REGRA: só equipamento ATIVO entra em DF/MTBF/MTTR. Desmobilizado (ou qualquer outra situação) fica fora do cálculo.
   let frotaAtiva = equipamentos.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo');
   if (filtroKpiPrefixo) frotaAtiva = frotaAtiva.filter(e => bateComPrefixoEquipamento(e.tag || '', filtroKpiPrefixo));
 
@@ -168,11 +169,13 @@ async function calcularKPIs() {
   });
 
   // Paradas por máquina sem dupla contagem: corretiva = união das corretivas; preventiva = o que a união total tem a mais.
+  const horasParadaPorEquip = {};
   Object.entries(intervalosPorEquip).forEach(([eqId, lista]) => {
     const hCorr = uniaoHorasIntervalos(lista.filter(i => !i.prev));
     const hPrev = Math.max(0, uniaoHorasIntervalos(lista) - hCorr);
     horasParadasCorretivaTotal += hCorr;
     horasParadasPreventivaTotal += hPrev;
+    horasParadaPorEquip[eqId] = hCorr + hPrev;
     if (mapaViloesPorMaquina[eqId]) { mapaViloesPorMaquina[eqId].horasCorretiva = hCorr; mapaViloesPorMaquina[eqId].horasPreventiva = hPrev; }
   });
 
@@ -196,6 +199,14 @@ async function calcularKPIs() {
 
   const horasParadasTotaisDF = Math.min(horasCalendarioTotais, horasParadasCorretivaTotal + horasParadasPreventivaTotal);
   const horasDisponiveisOperacao = Math.max(0, horasCalendarioTotais - horasParadasTotaisDF);
+  // DF separada por tipo de medidor (máquinas em horas x veículos em KM)
+  const dfPorGrupo = {};
+  ['H', 'KM'].forEach(g => {
+    const grupo = frotaAtiva.filter(e => (String(e.unidade_medida || 'H').toUpperCase() === 'KM' ? 'KM' : 'H') === g);
+    const cal = grupo.length * horasJanelaPorMaquina;
+    const par = Math.min(cal, grupo.reduce((a, e) => a + (horasParadaPorEquip[e.id] || 0), 0));
+    dfPorGrupo[g] = { qtd: grupo.length, df: cal > 0 ? ((cal - par) / cal) * 100 : null };
+  });
   const dfPercentual = horasCalendarioTotais > 0 ? ((horasDisponiveisOperacao / horasCalendarioTotais) * 100) : 100;
 
   // MTBF (NBR 5462): horas OPERADAS / falhas. Sem leituras no período, cai para horas de calendário (estimado).
@@ -235,7 +246,7 @@ async function calcularKPIs() {
   renderizarDashboardKPIs({
     frotaTotal: frotaAtiva.length, diasNoPeriodo, dfPercentual, mtbfHoras, mttrHoras, confiabilidade24h,
     horasParadasCorretivaTotal, horasParadasPreventivaTotal, qtdFalhasCorretivasComParada, qtdAvisosSemParada,
-    mtbfEstimado, falhasParaMTBF, maquinasComLeitura, maquinasHoras, horasOperadasReais,
+    dfPorGrupo, mtbfEstimado, falhasParaMTBF, maquinasComLeitura, maquinasHoras, horasOperadasReais,
     qtdPreventivasExecutadasNoPeriodo, aderenciaPreventivaPerc, planosEmDia, planosVencidos,
     valorImobilizadoEstoque, custoConsumidoNoPeriodo,
     listaMaquinasAnalitica: Object.values(mapaViloesPorMaquina),
@@ -291,6 +302,7 @@ function renderizarDashboardKPIs(d) {
           <span class="text-[11px] font-black uppercase text-slate-500">Disponibilidade Física (DF%)</span>
           <p class="text-3xl font-black text-slate-900 mt-1">${d.dfPercentual.toFixed(1)}%</p>
           <p class="text-[11px] text-slate-500 mt-1">Corretivas: <strong>${d.horasParadasCorretivaTotal.toFixed(1)}h</strong> + Prev: <strong>${d.horasParadasPreventivaTotal.toFixed(1)}h</strong></p>
+          <p class="text-[11px] text-slate-600 mt-1">⏱️ Horas: <strong>${d.dfPorGrupo.H.df === null ? '-' : d.dfPorGrupo.H.df.toFixed(1) + '%'}</strong> (${d.dfPorGrupo.H.qtd} máq.) • 🛣️ KM: <strong>${d.dfPorGrupo.KM.df === null ? '-' : d.dfPorGrupo.KM.df.toFixed(1) + '%'}</strong> (${d.dfPorGrupo.KM.qtd} veíc.)</p>
         </div>
         <div class="bg-white p-4 rounded-2xl border-l-4 border-blue-500 shadow-sm">
           <span class="text-[11px] font-black uppercase text-slate-500">MTBF (Tempo Entre Falhas)</span>

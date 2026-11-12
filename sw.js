@@ -7,7 +7,7 @@
 //    guardada na hora e atualiza em segundo plano.
 //  • Chamadas ao banco (supabase.co) NUNCA passam por aqui: o app trata offline sozinho.
 // ============================================================================
-const VERSAO = 'v10';
+const VERSAO = 'v11';
 const CACHE_NAME = `vilasa-pwa-${VERSAO}`;
 const TEMPO_LIMITE_REDE_MS = 4000;
 
