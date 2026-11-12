@@ -24,6 +24,11 @@ function aplicarAtalhoPeriodoKPI(diasOuModo) {
 
   filtroKpiDataInicio = ini.toISOString().slice(0, 10);
   filtroKpiDataFim = hoje.toISOString().slice(0, 10);
+  // calcularKPIs lê os campos de data da tela: atualiza os campos para o atalho não ser sobrescrito pelo valor antigo
+  const inpIni = document.getElementById('kpiInputDataInicio');
+  const inpFim = document.getElementById('kpiInputDataFim');
+  if (inpIni) inpIni.value = filtroKpiDataInicio;
+  if (inpFim) inpFim.value = filtroKpiDataFim;
   calcularKPIs();
 }
 
