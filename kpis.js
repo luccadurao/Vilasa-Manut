@@ -90,11 +90,24 @@ async function calcularKPIs() {
 
   const mapaProdutividadeMecanicos = {};
 
+  let horasParadasPreventivaTotal = 0;
+  let qtdPreventivasExecutadasNoPeriodo = 0;
+
   ordensCorretivas.forEach(os => {
     if (!idsFrota.has(String(os.equipamento_id))) return;
     const dtAbertura = new Date(os.aberta_em);
     const dtSaida = os.concluida_em ? new Date(os.concluida_em) : new Date();
     if (dtSaida < dtInicioJanela || dtAbertura > dtFimJanela) return;
+
+    if (String(os.motivo_rep || '').toUpperCase() === 'PREVENTIVA') {
+      qtdPreventivasExecutadasNoPeriodo++;
+      if (os.parada_obrigatoria !== false) {
+        const hPrev = calcularHorasInterseccaoPeriodo(os.aberta_em, os.concluida_em, dtInicioJanela, dtFimJanela);
+        horasParadasPreventivaTotal += hPrev;
+        if (mapaViloesPorMaquina[os.equipamento_id]) mapaViloesPorMaquina[os.equipamento_id].horasPreventiva += hPrev;
+      }
+      return;
+    }
 
     if (os.mecanico_nome && (os.status === 'concluida' || os.status === 'aguardando_pcm' || os.concluida_em)) {
       os.mecanico_nome.split(',').map(n => n.trim().toUpperCase()).filter(Boolean).forEach(nome => {
@@ -120,10 +133,8 @@ async function calcularKPIs() {
     }
   });
 
-  let horasParadasPreventivaTotal = 0;
-  let qtdPreventivasExecutadasNoPeriodo = 0;
-
-  execucoesPreventivas.forEach(ex => {
+  // Preventivas agora são OS reais (contadas acima); o histórico lançado pelo PCM não é parada medida.
+  execucoesPreventivas.filter(() => false).forEach(ex => {
     if (!idsFrota.has(String(ex.equipamento_id))) return;
     const dtIni = new Date(ex.data_entrada);
     const dtFim = ex.data_conclusao ? new Date(ex.data_conclusao) : new Date();
@@ -147,11 +158,11 @@ async function calcularKPIs() {
   const confiabilidade24h = qtdFalhasCorretivasComParada > 0 && mtbfHoras > 0 ? (Math.exp(-24 / mtbfHoras) * 100) : 100;
 
   let planosEmDia = 0, planosVencidos = 0;
-  const planosFiltrados = planosPreventiva.filter(p => idsFrota.has(String(p.equipamento_id)));
+  const planosFiltrados = planosPreventiva.filter(p => p.ativo !== false && Number(p.intervalo_base) > 0 && idsFrota.has(String(p.equipamento_id)));
   planosFiltrados.forEach(pl => {
     const eq = frotaAtiva.find(e => String(e.id) === String(pl.equipamento_id));
     if (!eq) return;
-    const saldo = (Number(pl.ultimo_horimetro_execucao || 0) + Number(pl.intervalo_base || 250)) - Number(eq.horimetro_atual || 0);
+    const saldo = (Number(pl.ultimo_horimetro_execucao || 0) + Number(pl.intervalo_base || 0)) - Number(eq.horimetro_atual || 0);
     if (saldo <= 0) planosVencidos++;
     else planosEmDia++;
   });

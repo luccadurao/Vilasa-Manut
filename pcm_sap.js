@@ -1,500 +1,476 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 5: PCM_SAP.JS (SEM BOM + CÁLCULO DE RITMO REAL)
+// VILASA CMMS - PREVENTIVAS ESTILO SAP PM
+//  Estratégia (intervalo base H/KM + pacotes por múltiplo) → Lista de tarefas/peças
+//  → Plano por equipamento (contador + histórico) → Chamada: gera OS preventiva no horizonte.
+//  Cadastros (estratégia/lista/plano) são feitos pelo PCM com internet; a execução (OS + checklist)
+//  roda offline pela fila normal de OS.
 // ============================================================================
 
 let cachePlanosPreventiva = [];
 let cacheExecucoesPreventiva = [];
-let subAbaPreventivaAtual = 'painel'; // 'painel', 'em_execucao', 'historico'
+let cacheEstrategiasPrev = [];
+let cachePacotesPrev = [];
+let cacheListasPrev = [];
+let cacheTarefasPrev = [];
+let cacheMateriaisPrev = [];
+let cachePecasPrev = [];
+let subAbaPreventivaAtual = 'painel'; // painel | estrategias | listas | historico
 
-function calcularProximoCicloHierarquico(horimetroUltimo, intervaloBase = 250) {
-  const base = Number(intervaloBase) || 250;
-  const proximoAlvo = Number(horimetroUltimo || 0) + base;
-  let pacote = `${base}H`;
-  if (base === 250) {
-    if (proximoAlvo % 2000 === 0) pacote = '2000H';
-    else if (proximoAlvo % 1000 === 0) pacote = '1000H';
-    else if (proximoAlvo % 500 === 0) pacote = '500H';
-    else pacote = '250H';
-  } else if (base === 500) {
-    if (proximoAlvo % 2000 === 0) pacote = '2000H';
-    else if (proximoAlvo % 1000 === 0) pacote = '1000H';
-    else pacote = '500H';
-  }
-  return { proximoHorimetroAlvo: proximoAlvo, proximoPacote: pacote };
+// ---------- regras (espelham o banco: app.pacote_do_ciclo) ----------
+function pacoteDoCicloPrev(estrategiaId, ciclo) {
+  const pks = cachePacotesPrev.filter(p => p.estrategia_id === estrategiaId && ciclo % p.multiplo === 0);
+  return pks.sort((a, b) => b.multiplo - a.multiplo)[0] || null;
 }
 
-// CALCULA O RITMO REAL BASEADO NO USO EFETIVO DESDE A ÚLTIMA PREVENTIVA
 function calcularStatusPlanoPreventiva(plano, equipamento) {
+  const est = cacheEstrategiasPrev.find(s => s.id === plano.estrategia_id);
+  const un = est?.unidade || (String(equipamento?.unidade_medida || 'H').toUpperCase() === 'KM' ? 'KM' : 'H');
   const horAtual = parseFloat(equipamento?.horimetro_atual || 0);
   const horUltimo = parseFloat(plano?.ultimo_horimetro_execucao || 0);
-  const intervalo = parseFloat(plano?.intervalo_base || 250);
+  const base = parseFloat(est?.intervalo_base || 0);
+  const horizonte = parseFloat(est?.horizonte ?? 0);
+  const proximo = est ? pacoteDoCicloPrev(est.id, (plano.ciclo_atual || 0) + 1) : null;
 
-  let ritmoReal = String(equipamento?.unidade_medida || 'H').toUpperCase() === 'KM' ? 150.0 : 8.0;
+  let ritmo = un === 'KM' ? 150 : 8;
   if (plano?.ultima_data_execucao && horAtual > horUltimo) {
-    const diasCorridos = Math.max(1, (new Date() - new Date(plano.ultima_data_execucao + 'T08:00:00')) / (24 * 3600000));
-    const calculado = (horAtual - horUltimo) / diasCorridos;
-    if (calculado >= 0.5) ritmoReal = Number(calculado.toFixed(1));
+    const dias = Math.max(1, (new Date() - new Date(plano.ultima_data_execucao + 'T08:00:00')) / 86400000);
+    const calc = (horAtual - horUltimo) / dias;
+    if (calc >= 0.5) ritmo = Number(calc.toFixed(1));
   }
-
-  const { proximoHorimetroAlvo, proximoPacote } = calcularProximoCicloHierarquico(horUltimo, intervalo);
-  const saldoHoras = Number((proximoHorimetroAlvo - horAtual).toFixed(1));
-  const diasRestantes = Math.ceil(saldoHoras / ritmoReal);
-
+  const alvo = horUltimo + base;
+  const saldo = Number((alvo - horAtual).toFixed(1));
+  const diasRestantes = Math.ceil(saldo / ritmo);
   const dataPrevista = new Date();
   dataPrevista.setDate(dataPrevista.getDate() + Math.max(0, diasRestantes));
 
-  const limiarAtencao = String(equipamento?.unidade_medida || 'H').toUpperCase() === 'KM' ? 1500 : 50;
   let faixa = 'no_prazo';
-  if (saldoHoras <= 0) faixa = 'vencida';
-  else if (saldoHoras <= limiarAtencao) faixa = 'atencao';
-
-  return { horAtual, horUltimo, proximoHorimetroAlvo, proximoPacote, saldoHoras, diasRestantes, dataPrevista, ritmo: ritmoReal, faixa };
+  if (!est) faixa = 'sem_estrategia';
+  else if (saldo <= 0) faixa = 'vencida';
+  else if (saldo <= horizonte) faixa = 'atencao';
+  return { un, horAtual, horUltimo, alvo, saldo, ritmo, dataPrevista, faixa, proximoPacote: proximo?.nome || '-', horizonte };
 }
 
+// ---------- carga ----------
 async function carregarPreventivas(subAba = subAbaPreventivaAtual) {
   subAbaPreventivaAtual = subAba;
-
-  const [resPlanos, resExecs, resEquip] = await Promise.all([
-    lerDadosComFallbackOffline('planos_preventiva', () => db.from('planos_preventiva').select('*')),
-    lerDadosComFallbackOffline('execucoes_preventiva', () => db.from('execucoes_preventiva').select('*').order('horimetro_execucao', { ascending: false })),
+  const ler = (t, f) => lerDadosComFallbackOffline(t, f);
+  const [planos, execs, equips, ests, pks, listas, tarefas, mats, pecas] = await Promise.all([
+    ler('planos_preventiva', () => db.from('planos_preventiva').select('*')),
+    ler('execucoes_preventiva', () => db.from('execucoes_preventiva').select('*').order('data_conclusao', { ascending: false, nullsFirst: false })),
     (typeof cacheEquipamentos !== 'undefined' && cacheEquipamentos.length > 0)
       ? Promise.resolve({ data: cacheEquipamentos })
-      : lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'))
+      : ler('equipamentos', () => db.from('equipamentos').select('*').order('tag')),
+    ler('preventiva_estrategias', () => db.from('preventiva_estrategias').select('*').order('codigo')),
+    ler('preventiva_pacotes', () => db.from('preventiva_pacotes').select('*').order('multiplo')),
+    ler('preventiva_listas', () => db.from('preventiva_listas').select('*').order('codigo')),
+    ler('preventiva_lista_tarefas', () => db.from('preventiva_lista_tarefas').select('*').order('ordem')),
+    ler('preventiva_lista_materiais', () => db.from('preventiva_lista_materiais').select('*')),
+    ler('pecas_estoque', () => db.from('pecas_estoque').select('id, id_interno, descricao, unidade').order('descricao'))
   ]);
-
-  cacheEquipamentos = resEquip.data || [];
-  cachePlanosPreventiva = resPlanos.data || [];
-  cacheExecucoesPreventiva = resExecs.data || [];
-
+  cachePlanosPreventiva = planos.data || [];
+  cacheExecucoesPreventiva = execs.data || [];
+  cacheEquipamentos = equips.data || [];
+  cacheEstrategiasPrev = ests.data || [];
+  cachePacotesPrev = pks.data || [];
+  cacheListasPrev = listas.data || [];
+  cacheTarefasPrev = tarefas.data || [];
+  cacheMateriaisPrev = mats.data || [];
+  cachePecasPrev = pecas.data || [];
   renderizarInterfaceCompletaPCM();
-
-  if (typeof renderizarQuadroEnxutoParadosREP === 'function' && typeof cacheOrdens !== 'undefined') {
-    renderizarQuadroEnxutoParadosREP(cacheOrdens);
-  }
 }
 
-const _renderREPOriginal = typeof renderizarQuadroEnxutoParadosREP === 'function' ? renderizarQuadroEnxutoParadosREP : null;
-window.renderizarQuadroEnxutoParadosREP = function (listaOrdensCorretivas = []) {
-  let prevParadas = (cacheExecucoesPreventiva || []).filter(p => p.status === 'em_execucao' && p.parada_obrigatoria !== false && !p.data_conclusao);
-  const linhasPrevParaREP = prevParadas.map(p => {
-    const eq = (cacheEquipamentos || []).find(e => String(e.id) === String(p.equipamento_id));
-    return {
-      id: p.id,
-      numero_os: 'PREV',
-      equipamento_id: p.equipamento_id,
-      equipamentos: eq || { tag: 'EQUIP', nome: 'Equipamento em Preventiva', marca: '-' },
-      parada_obrigatoria: true,
-      status: 'em_execucao',
-      motivo_rep: `PREVENTIVA ${p.pacote}`,
-      local_manutencao_pcm: 'OFICINA',
-      descricao_problema: p.observacoes || `Revisão Programada ${p.pacote}`,
-      aberta_em: p.data_entrada,
-      mecanico_nome: p.mecanicos_nomes || 'Equipe Preventiva',
-      concluida_em: null
-    };
-  });
-  if (_renderREPOriginal) _renderREPOriginal([...(listaOrdensCorretivas || []), ...linhasPrevParaREP]);
-};
+function _somenteOnlinePCM() {
+  if (!podeExecutarAcao('gerenciar_preventivas', true)) return false;
+  if (!navigator.onLine) { alert('Este cadastro exige internet (somente PCM).'); return false; }
+  return true;
+}
 
+// ---------- tela ----------
 function renderizarInterfaceCompletaPCM() {
   const sec = document.getElementById('sec-preventivas');
   if (!sec) return;
-
   const podeEditar = podeExecutarAcao('gerenciar_preventivas');
-  let planosVisiveis = cachePlanosPreventiva.map(pl => {
-    const eq = cacheEquipamentos.find(e => String(e.id) === String(pl.equipamento_id));
-    return { ...pl, equipamento: eq };
-  }).filter(pl => Boolean(pl.equipamento));
 
-  if (typeof filtrarListaPorObraAtiva === 'function') planosVisiveis = filtrarListaPorObraAtiva(planosVisiveis);
+  let planos = cachePlanosPreventiva.filter(p => p.ativo !== false).map(pl => ({
+    ...pl, equipamento: cacheEquipamentos.find(e => String(e.id) === String(pl.equipamento_id))
+  })).filter(pl => pl.equipamento);
+  if (typeof filtrarListaPorObraAtiva === 'function') planos = filtrarListaPorObraAtiva(planos);
+  const termo = (document.getElementById('filtroPrefixoPCM')?.value || '').trim().toUpperCase();
+  if (termo) planos = planos.filter(pl => bateComPrefixoEquipamento(pl.equipamento.tag || '', termo));
 
-  const termoBusca = (document.getElementById('filtroPrefixoPCM')?.value || '').trim().toUpperCase();
-  if (termoBusca) planosVisiveis = planosVisiveis.filter(pl => bateComPrefixoEquipamento(pl.equipamento?.tag || '', termoBusca));
-
-  let contVencidas = 0, contAtencao = 0, contNoPrazo = 0;
-  const planosCalculados = planosVisiveis.map(pl => {
+  let venc = 0, aten = 0, ok = 0, sem = 0;
+  const calculados = planos.map(pl => {
     const calc = calcularStatusPlanoPreventiva(pl, pl.equipamento);
-    if (calc.faixa === 'vencida') contVencidas++;
-    else if (calc.faixa === 'atencao') contAtencao++;
-    else contNoPrazo++;
+    if (calc.faixa === 'vencida') venc++; else if (calc.faixa === 'atencao') aten++; else if (calc.faixa === 'sem_estrategia') sem++; else ok++;
     return { ...pl, calc };
-  }).sort((a, b) => a.calc.saldoHoras - b.calc.saldoHoras);
+  }).sort((a, b) => a.calc.saldo - b.calc.saldo);
 
-  const execucoesAtivas = cacheExecucoesPreventiva.filter(e => e.status === 'em_execucao' && !e.data_conclusao);
-
+  const aba = (id, rot) => `<button onclick="carregarPreventivas('${id}')" class="px-3 py-1.5 rounded-lg text-xs font-black ${subAbaPreventivaAtual === id ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">${rot}</button>`;
   sec.innerHTML = `
     <div class="space-y-5">
       <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">ENGENHARIA DE MANUTENÇÃO • SAP PM</span>
-          <h2 class="text-lg font-black">Controle de Planos Preventivos & Histórico Próprio</h2>
-        </div>
-        ${podeEditar ? `
-          <button onclick="abrirModalPlanoComHistoricoCompleto()" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow">
-            + Criar / Editar Plano + Histórico Passado
-          </button>
-        ` : ''}
+        <div><span class="text-[10px] font-black uppercase tracking-widest text-amber-400">ENGENHARIA DE MANUTENÇÃO • ESTILO SAP PM</span>
+          <h2 class="text-lg font-black">Preventivas: Estratégias, Planos e Chamadas</h2></div>
+        ${podeEditar ? `<div class="flex flex-wrap gap-2">
+          <button onclick="gerarOSPreventivasAgora()" class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow">⚙️ Gerar OS no horizonte</button>
+          <button onclick="abrirModalPlanoPreventiva()" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow">+ Plano / Histórico</button></div>` : ''}
       </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div class="bg-rose-50 border border-rose-200 p-3.5 rounded-xl"><span class="text-[11px] font-black uppercase text-rose-700">🔴 Vencidas</span><p class="text-2xl font-black text-rose-900 mt-1">${contVencidas}</p></div>
-        <div class="bg-amber-50 border border-amber-200 p-3.5 rounded-xl"><span class="text-[11px] font-black uppercase text-amber-800">🟡 Atenção (≤ 50h)</span><p class="text-2xl font-black text-amber-900 mt-1">${contAtencao}</p></div>
-        <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl"><span class="text-[11px] font-black uppercase text-emerald-800">🟢 No Prazo</span><p class="text-2xl font-black text-emerald-900 mt-1">${contNoPrazo}</p></div>
-        <div class="bg-blue-50 border border-blue-200 p-3.5 rounded-xl"><span class="text-[11px] font-black uppercase text-blue-800">🛠️ Em Execução Agora</span><p class="text-2xl font-black text-blue-900 mt-1">${execucoesAtivas.length}</p></div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-rose-50 border border-rose-200 p-3 rounded-xl"><span class="text-[11px] font-black uppercase text-rose-700">🔴 Vencidas</span><p class="text-2xl font-black text-rose-900">${venc}</p></div>
+        <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl"><span class="text-[11px] font-black uppercase text-amber-800">🟡 No horizonte</span><p class="text-2xl font-black text-amber-900">${aten}</p></div>
+        <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl"><span class="text-[11px] font-black uppercase text-emerald-800">🟢 No prazo</span><p class="text-2xl font-black text-emerald-900">${ok}</p></div>
+        <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl"><span class="text-[11px] font-black uppercase text-slate-600">Sem estratégia</span><p class="text-2xl font-black text-slate-800">${sem}</p></div>
       </div>
-
       <div class="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
         <div class="flex flex-wrap gap-1.5">
-          <button onclick="carregarPreventivas('painel')" class="px-3 py-1.5 rounded-lg text-xs font-black ${subAbaPreventivaAtual === 'painel' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">📅 Projeção (${planosCalculados.length})</button>
-          <button onclick="carregarPreventivas('em_execucao')" class="px-3 py-1.5 rounded-lg text-xs font-black ${subAbaPreventivaAtual === 'em_execucao' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">🔧 Em Andamento (${execucoesAtivas.length})</button>
-          <button onclick="carregarPreventivas('historico')" class="px-3 py-1.5 rounded-lg text-xs font-black ${subAbaPreventivaAtual === 'historico' ? 'bg-slate-900 text-amber-400' : 'bg-slate-100 text-slate-700'}">📜 Histórico Próprio (${cacheExecucoesPreventiva.length})</button>
+          ${aba('painel', `📅 Programação (${calculados.length})`)}${aba('estrategias', `🧩 Estratégias (${cacheEstrategiasPrev.length})`)}
+          ${aba('listas', `📋 Listas de Tarefas (${cacheListasPrev.length})`)}${aba('historico', `📜 Histórico (${cacheExecucoesPreventiva.length})`)}
         </div>
-        <input id="filtroPrefixoPCM" type="text" value="${termoBusca}" oninput="renderizarInterfaceCompletaPCM()" placeholder="🔍 Filtrar Prefixo..." class="px-3 py-1.5 rounded-lg border text-xs font-bold uppercase" />
+        <input id="filtroPrefixoPCM" type="text" value="${esc(termo)}" oninput="renderizarInterfaceCompletaPCM()" placeholder="🔍 Filtrar Prefixo..." class="px-3 py-1.5 rounded-lg border text-xs font-bold uppercase" />
       </div>
-
       <div>
-        ${subAbaPreventivaAtual === 'painel' ? renderizarTabelaProjecaoPCM(planosCalculados, podeEditar) : ''}
-        ${subAbaPreventivaAtual === 'em_execucao' ? renderizarPreventivasEmExecucao(execucoesAtivas, podeEditar) : ''}
-        ${subAbaPreventivaAtual === 'historico' ? renderizarTabelaHistoricoProprioPreventivas(termoBusca) : ''}
+        ${subAbaPreventivaAtual === 'painel' ? renderizarTabelaProjecaoPCM(calculados, podeEditar) : ''}
+        ${subAbaPreventivaAtual === 'estrategias' ? renderizarEstrategiasPrev(podeEditar) : ''}
+        ${subAbaPreventivaAtual === 'listas' ? renderizarListasPrev(podeEditar) : ''}
+        ${subAbaPreventivaAtual === 'historico' ? renderizarTabelaHistoricoProprioPreventivas(termo) : ''}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-function renderizarTabelaProjecaoPCM(planosCalculados, podeEditar) {
-  if (planosCalculados.length === 0) return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum plano cadastrado.</div>`;
-  return `
-    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
-      <table class="w-full text-left border-collapse text-xs">
-        <thead>
-          <tr class="bg-slate-900 text-amber-400 uppercase text-[11px]">
-            <th class="p-3">Prefixo / Máquina</th>
-            <th class="p-3">Última Preventiva</th>
-            <th class="p-3">Horímetro Atual</th>
-            <th class="p-3">Próximo Pacote</th>
-            <th class="p-3">Saldo Restante</th>
-            <th class="p-3">Data Prevista (Ritmo Real)</th>
-            <th class="p-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200">
-          ${planosCalculados.map(p => {
-            const c = p.calc;
-            const un = p.equipamento.unidade_medida || 'H';
-            const badgeFaixa = c.faixa === 'vencida'
-              ? `<span class="px-2 py-0.5 rounded bg-rose-600 text-white font-black">${c.saldoHoras} ${un} (VENCIDA)</span>`
-              : (c.faixa === 'atencao' ? `<span class="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black">Faltam ${c.saldoHoras} ${un}</span>` : `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Faltam ${c.saldoHoras} ${un}</span>`);
-            const dtUltima = p.ultima_data_execucao ? new Date(p.ultima_data_execucao + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
-
-            return `
-              <tr class="hover:bg-slate-50">
-                <td class="p-3"><span class="font-black text-slate-950 bg-amber-400 px-2 py-0.5 rounded">${esc(p.equipamento.tag)}</span><div class="font-bold text-slate-600 mt-0.5">${esc(p.equipamento.nome)}</div></td>
-                <td class="p-3 font-semibold"><div><strong>${p.ultimo_pacote_executado || '250H'}</strong> aos <strong>${c.horUltimo} ${un}</strong></div><div class="text-[11px] text-slate-500">Data: ${dtUltima}</div></td>
-                <td class="p-3 font-black">${c.horAtual} ${un}</td>
-                <td class="p-3"><span class="px-2.5 py-1 rounded bg-blue-100 text-blue-900 font-black">${c.proximoPacote}</span><div class="text-[11px] text-slate-500 mt-0.5">Alvo: ${c.proximoHorimetroAlvo} ${un}</div></td>
-                <td class="p-3">${badgeFaixa}</td>
-                <td class="p-3 font-bold">${c.dataPrevista.toLocaleDateString('pt-BR')}<div class="text-[10px] text-slate-400">Ritmo Real: ${c.ritmo} ${un}/dia</div></td>
-                <td class="p-3 text-right space-x-1 whitespace-nowrap">
-                  ${podeEditar ? `
-                    <button onclick="iniciarParadaPreventivaNoREP('${p.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white font-black text-[11px]">🛑 Iniciar no REP</button>
-                    <button onclick="abrirModalConcluirPreventivaDireto('${p.id}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-black text-[11px]">✅ Baixar</button>
-                    <button onclick="abrirModalPlanoComHistoricoCompleto('${p.equipamento_id}')" class="px-2 py-1.5 rounded-lg bg-slate-200 text-slate-800 font-bold text-[11px]">📜 Histórico</button>
-                  ` : ''}
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+function renderizarTabelaProjecaoPCM(calculados, podeEditar) {
+  if (!calculados.length) return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum plano cadastrado. Crie uma estratégia e depois o plano do equipamento.</div>`;
+  return `<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm"><table class="w-full text-left border-collapse text-xs">
+    <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Equipamento</th><th class="p-3">Última</th><th class="p-3">Contador atual</th><th class="p-3">Próxima chamada</th><th class="p-3">Saldo</th><th class="p-3">Previsão</th><th class="p-3 text-right">Ações</th></tr></thead>
+    <tbody class="divide-y divide-slate-200">${calculados.map(p => {
+      const c = p.calc, un = c.un;
+      const est = cacheEstrategiasPrev.find(s => s.id === p.estrategia_id);
+      const osAberta = p.os_aberta_id ? (typeof cacheOrdens !== 'undefined' ? cacheOrdens.find(o => o.id === p.os_aberta_id) : null) : null;
+      const badge = c.faixa === 'sem_estrategia' ? `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-black">SEM ESTRATÉGIA</span>`
+        : c.faixa === 'vencida' ? `<span class="px-2 py-0.5 rounded bg-rose-600 text-white font-black">${c.saldo} ${un} (VENCIDA)</span>`
+        : c.faixa === 'atencao' ? `<span class="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black">Faltam ${c.saldo} ${un}</span>`
+        : `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Faltam ${c.saldo} ${un}</span>`;
+      const dtU = p.ultima_data_execucao ? new Date(p.ultima_data_execucao + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+      return `<tr class="hover:bg-slate-50">
+        <td class="p-3"><span class="font-black text-slate-950 bg-amber-400 px-2 py-0.5 rounded">${esc(p.equipamento.tag)}</span><div class="font-bold text-slate-600 mt-0.5">${esc(p.equipamento.nome || '')}</div><div class="text-[10px] text-slate-400">${esc(est?.nome || '')}</div></td>
+        <td class="p-3 font-semibold"><strong>${esc(p.ultimo_pacote_executado || '-')}</strong> aos <strong>${c.horUltimo} ${un}</strong><div class="text-[11px] text-slate-500">${dtU}</div></td>
+        <td class="p-3 font-black">${c.horAtual} ${un}</td>
+        <td class="p-3"><span class="px-2.5 py-1 rounded bg-blue-100 text-blue-900 font-black">${esc(c.proximoPacote)}</span><div class="text-[11px] text-slate-500 mt-0.5">Alvo: ${c.alvo} ${un}</div></td>
+        <td class="p-3">${badge}${p.os_aberta_id ? `<div class="text-[10px] font-black text-blue-700 mt-1">OS ${osAberta ? '#' + osAberta.numero_os : ''} ABERTA</div>` : ''}</td>
+        <td class="p-3 font-bold">${c.dataPrevista.toLocaleDateString('pt-BR')}<div class="text-[10px] text-slate-400">Ritmo: ${c.ritmo} ${un}/dia</div></td>
+        <td class="p-3 text-right space-x-1 whitespace-nowrap">${podeEditar ? `
+          ${!p.os_aberta_id && p.estrategia_id ? `<button onclick="gerarOSPreventivaDoPlano('${p.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white font-black text-[11px]">⚙️ Gerar OS</button>` : ''}
+          <button onclick="abrirModalPlanoPreventiva('${p.equipamento_id}')" class="px-2 py-1.5 rounded-lg bg-slate-200 text-slate-800 font-bold text-[11px]">📜 Plano/Histórico</button>` : ''}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 
-async function iniciarParadaPreventivaNoREP(planoId) {
-  const plano = cachePlanosPreventiva.find(p => String(p.id) === String(planoId));
-  if (!plano) return;
-  const eq = cacheEquipamentos.find(e => String(e.id) === String(plano.equipamento_id));
-  const calc = calcularStatusPlanoPreventiva(plano, eq);
-
-  await gravarDadosOfflineSafe('execucoes_preventiva', 'INSERT', {
-    plano_id: plano.id,
-    equipamento_id: plano.equipamento_id,
-    pacote: calc.proximoPacote,
-    status: 'em_execucao',
-    parada_obrigatoria: true,
-    data_entrada: new Date().toISOString(),
-    horimetro_execucao: eq?.horimetro_atual || calc.proximoHorimetroAlvo,
-    observacoes: `Revisão Programada ${calc.proximoPacote}`
-  });
-  await carregarPreventivas('em_execucao');
+// ---------- geração de OS (servidor) ----------
+async function gerarOSPreventivasAgora() {
+  if (!_somenteOnlinePCM()) return;
+  const { data, error } = await db.rpc('preventiva_gerar_os', {});
+  if (error) return alert('Erro ao gerar: ' + error.message);
+  alert(`${data?.geradas || 0} OS preventiva(s) gerada(s).`);
+  await carregarPreventivas();
+  if (typeof carregarOrdensServico === 'function') carregarOrdensServico();
+}
+async function gerarOSPreventivaDoPlano(planoId) {
+  if (!_somenteOnlinePCM()) return;
+  const { data, error } = await db.rpc('preventiva_gerar_os', { p_plano: planoId });
+  if (error) return alert('Erro ao gerar: ' + error.message);
+  alert(data?.geradas ? 'OS preventiva gerada.' : 'Nada a gerar (já existe OS aberta para este ciclo).');
+  await carregarPreventivas();
 }
 
-function renderizarPreventivasEmExecucao(listaAtivas, podeEditar) {
-  if (listaAtivas.length === 0) return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhuma preventiva em andamento agora.</div>`;
-  return `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      ${listaAtivas.map(ex => {
-        const eq = cacheEquipamentos.find(e => String(e.id) === String(ex.equipamento_id));
-        return `
-          <div class="bg-white p-4 rounded-xl border-2 border-blue-500 shadow flex flex-col justify-between gap-3">
-            <div>
-              <div class="flex justify-between"><span class="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded">${esc(eq?.tag || 'EQUIP')}</span><span class="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded">PREVENTIVA ${esc(ex.pacote)}</span></div>
-              <p class="text-xs font-bold mt-1">${esc(eq?.nome || '')}</p>
-              <p class="text-xs text-slate-500">Início: ${new Date(ex.data_entrada).toLocaleString('pt-BR')}</p>
-            </div>
-            ${podeEditar ? `<button onclick="concluirPreventivaQueEstavaNoREP('${ex.id}')" class="w-full py-2 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs">✅ Concluir e Liberar do REP</button>` : ''}
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-async function concluirPreventivaQueEstavaNoREP(execId) {
-  const ex = cacheExecucoesPreventiva.find(e => String(e.id) === String(execId));
-  if (!ex) return;
-  const eq = cacheEquipamentos.find(e => String(e.id) === String(ex.equipamento_id));
-  const horFinal = parseFloat(prompt(`Horímetro/KM de conclusão da revisão ${ex.pacote}:`, ex.horimetro_execucao || eq?.horimetro_atual || 0));
-  if (isNaN(horFinal)) return;
-  const mecNomes = prompt('Mecânicos executantes:', ex.mecanicos_nomes || usuarioLogado?.nome || '') || '';
-  const agoraISO = new Date().toISOString();
-
-  await gravarDadosOfflineSafe('execucoes_preventiva', 'UPDATE', {
-    status: 'concluida',
-    data_conclusao: agoraISO,
-    horimetro_execucao: horFinal,
-    mecanicos_nomes: mecNomes
-  }, execId);
-
-  if (ex.plano_id) {
-    await gravarDadosOfflineSafe('planos_preventiva', 'UPDATE', {
-      ultimo_horimetro_execucao: horFinal,
-      ultima_data_execucao: agoraISO.slice(0, 10),
-      ultimo_pacote_executado: ex.pacote
-    }, ex.plano_id);
+// ---------- modal genérico ----------
+function _modalPrev(id, html, largo) {
+  let m = document.getElementById(id);
+  if (!m) {
+    m = document.createElement('div'); m.id = id;
+    m.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-start justify-center p-4 overflow-y-auto';
+    document.body.appendChild(m);
   }
-  await carregarPreventivas('painel');
+  m.innerHTML = `<div class="bg-white rounded-2xl p-5 w-full ${largo ? 'max-w-3xl' : 'max-w-md'} space-y-3 my-6">${html}</div>`;
+  m.classList.remove('hidden');
+}
+function _fecharPrev(id) { document.getElementById(id)?.classList.add('hidden'); }
+const _inp = 'mt-1 w-full border rounded-lg p-2 text-sm font-bold';
+
+// ---------- ESTRATÉGIAS ----------
+function renderizarEstrategiasPrev(podeEditar) {
+  return `<div class="space-y-3">
+    ${podeEditar ? `<button onclick="abrirModalEstrategiaPrev()" class="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs">+ Nova Estratégia</button>` : ''}
+    ${cacheEstrategiasPrev.length === 0 ? `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhuma estratégia. Defina o intervalo (horas ou km) e os pacotes.</div>` : ''}
+    ${cacheEstrategiasPrev.map(s => {
+      const pks = cachePacotesPrev.filter(p => p.estrategia_id === s.id).sort((a, b) => a.multiplo - b.multiplo);
+      const usados = cachePlanosPreventiva.filter(p => p.estrategia_id === s.id && p.ativo !== false).length;
+      return `<div class="bg-white rounded-xl border p-4 shadow-sm">
+        <div class="flex flex-wrap justify-between gap-2"><div><span class="font-black">${esc(s.codigo)}</span> — <span class="font-bold">${esc(s.nome)}</span>
+          <div class="text-xs text-slate-600">Base ${s.intervalo_base} ${s.unidade} • abre OS faltando ${s.horizonte} ${s.unidade} • ${usados} equipamento(s)${s.ativa ? '' : ' • INATIVA'}</div></div>
+          ${podeEditar ? `<button onclick="abrirModalEstrategiaPrev('${s.id}')" class="px-3 py-1.5 rounded-lg bg-slate-200 text-xs font-black">✏️ Editar</button>` : ''}</div>
+        <div class="flex flex-wrap gap-1.5 mt-2">${pks.map(p => {
+          const l = cacheListasPrev.find(x => x.id === p.lista_id);
+          return `<span class="px-2 py-1 rounded bg-blue-100 text-blue-900 text-[11px] font-black">${esc(p.nome)} (×${p.multiplo} = ${p.multiplo * s.intervalo_base} ${s.unidade})${l ? ' • ' + esc(l.codigo) : ''}${p.acumulativo ? ' ⊕' : ''}</span>`;
+        }).join('') || '<span class="text-xs text-slate-500">Sem pacotes</span>'}</div></div>`;
+    }).join('')}</div>`;
 }
 
-async function abrirModalConcluirPreventivaDireto(planoId) {
-  const plano = cachePlanosPreventiva.find(p => String(p.id) === String(planoId));
-  if (!plano) return;
-  const eq = cacheEquipamentos.find(e => String(e.id) === String(plano.equipamento_id));
-  const calc = calcularStatusPlanoPreventiva(plano, eq);
-
-  const pacote = prompt(`Pacote executado na ${eq?.tag}:`, calc.proximoPacote);
-  if (!pacote) return;
-  const hor = parseFloat(prompt(`Horímetro/KM na execução:`, eq?.horimetro_atual || calc.proximoHorimetroAlvo));
-  if (isNaN(hor)) return;
-  const dt = prompt(`Data da execução (AAAA-MM-DD):`, new Date().toISOString().slice(0, 10));
-  if (!dt) return;
-
-  await gravarDadosOfflineSafe('execucoes_preventiva', 'INSERT', {
-    plano_id: plano.id,
-    equipamento_id: plano.equipamento_id,
-    pacote: pacote.toUpperCase().trim(),
-    status: 'concluida',
-    parada_obrigatoria: false,
-    data_entrada: new Date(dt + 'T08:00:00').toISOString(),
-    data_conclusao: new Date(dt + 'T12:00:00').toISOString(),
-    horimetro_execucao: hor,
-    mecanicos_nomes: usuarioLogado?.nome || 'PCM',
-    observacoes: 'Baixa direta de preventiva'
-  });
-
-  await gravarDadosOfflineSafe('planos_preventiva', 'UPDATE', {
-    ultimo_horimetro_execucao: hor,
-    ultima_data_execucao: dt,
-    ultimo_pacote_executado: pacote.toUpperCase().trim()
-  }, plano.id);
-  await carregarPreventivas('painel');
-}
-
-function abrirModalPlanoComHistoricoCompleto(equipamentoIdPreSelecionado = '') {
-  if (!podeExecutarAcao('gerenciar_preventivas', true)) return;
-  let modal = document.getElementById('modalPlanoHistoricoCompletoV2');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modalPlanoHistoricoCompletoV2';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
-    document.body.appendChild(modal);
-  }
-
-  modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border my-8">
-      <h3 class="text-lg font-black text-slate-900 border-b pb-3 mb-4">Plano Preventivo + Histórico do Equipamento</h3>
-      <div class="space-y-4 text-xs">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border">
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">1. Equipamento</label>
-            <select id="planoHistEquipId" onchange="carregarDadosExistentesNoModalPlano(this.value)" class="w-full border rounded-lg p-2 font-bold bg-white">
-              <option value="">-- Selecione --</option>
-              ${cacheEquipamentos.map(e => `<option value="${e.id}" ${String(e.id) === String(equipamentoIdPreSelecionado) ? 'selected' : ''}>${esc(e.tag)} - ${esc(e.nome)}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">2. Intervalo Base</label>
-            <select id="planoHistIntervalo" class="w-full border rounded-lg p-2 font-bold bg-white">
-              <option value="250">Ciclo 250h (250 / 500 / 1000 / 2000h)</option>
-              <option value="500">Ciclo 500h (500 / 1000 / 2000h)</option>
-              <option value="10000">Ciclo 10.000 KM</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="border rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-black text-slate-900 uppercase">📜 Preventivas Já Realizadas</h4>
-            <button type="button" onclick="adicionarLinhaHistoricoPreventivaModal()" class="px-3 py-1.5 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">+ Adicionar Linha</button>
-          </div>
-          <div class="max-h-60 overflow-y-auto">
-            <table class="w-full text-left border-collapse">
-              <thead><tr class="bg-slate-100 text-[10px] uppercase"><th class="p-2">Data</th><th class="p-2">Horímetro / KM</th><th class="p-2">Pacote</th><th class="p-2 text-center">X</th></tr></thead>
-              <tbody id="tbodyLinhasHistoricoPreventivaModal" class="divide-y"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div class="mt-5 flex justify-end gap-2">
-        <button onclick="document.getElementById('modalPlanoHistoricoCompletoV2').classList.add('hidden')" class="px-4 py-2 rounded-lg font-bold text-xs bg-slate-200">Cancelar</button>
-        <button onclick="salvarPlanoComHistoricoCompleto()" class="px-5 py-2.5 rounded-lg font-black text-xs bg-amber-500 text-slate-950 shadow">💾 Salvar Plano</button>
-      </div>
+function abrirModalEstrategiaPrev(id = '') {
+  if (!_somenteOnlinePCM()) return;
+  const s = cacheEstrategiasPrev.find(x => x.id === id) || { unidade: 'H', horizonte: 50, ativa: true };
+  const pks = cachePacotesPrev.filter(p => p.estrategia_id === id).sort((a, b) => a.multiplo - b.multiplo);
+  _modalPrev('modalEstrategiaPrev', `
+    <h3 class="font-black">🧩 ${id ? 'Editar' : 'Nova'} Estratégia</h3>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs font-black">Código<input id="esCod" value="${esc(s.codigo || '')}" class="${_inp} uppercase" /></label>
+      <label class="text-xs font-black">Nome<input id="esNome" value="${esc(s.nome || '')}" class="${_inp}" /></label>
+      <label class="text-xs font-black">Medidor<select id="esUn" class="${_inp}"><option value="H" ${s.unidade === 'H' ? 'selected' : ''}>Horas</option><option value="KM" ${s.unidade === 'KM' ? 'selected' : ''}>KM</option></select></label>
+      <label class="text-xs font-black">Intervalo base<input id="esBase" type="number" min="1" value="${s.intervalo_base || ''}" class="${_inp}" /></label>
+      <label class="text-xs font-black">Horizonte (abrir OS faltando)<input id="esHor" type="number" min="0" value="${s.horizonte}" class="${_inp}" /></label>
+      <label class="text-xs font-black">Situação<select id="esAtiva" class="${_inp}"><option value="1" ${s.ativa ? 'selected' : ''}>Ativa</option><option value="0" ${!s.ativa ? 'selected' : ''}>Inativa</option></select></label>
     </div>
-  `;
-  modal.classList.remove('hidden');
-  const sel = document.getElementById('planoHistEquipId');
-  if (sel && typeof ativarBuscaPorPrefixoEmSelect === 'function') ativarBuscaPorPrefixoEmSelect(sel);
-  if (equipamentoIdPreSelecionado) carregarDadosExistentesNoModalPlano(equipamentoIdPreSelecionado);
-  else adicionarLinhaHistoricoPreventivaModal();
+    <div class="text-xs font-black">Pacotes (múltiplos do intervalo base — ex.: ×1 = 250H, ×2 = 500H, ×4 = 1000H)</div>
+    <div id="esPacotes" class="space-y-1.5"></div>
+    <button onclick="addLinhaPacotePrev()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-xs font-black">+ Pacote</button>
+    <div class="flex justify-end gap-2 pt-2"><button onclick="_fecharPrev('modalEstrategiaPrev')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick="salvarEstrategiaPrev('${id}')" class="px-5 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">Salvar</button></div>`, true);
+  (pks.length ? pks : [{ multiplo: 1, nome: '', acumulativo: true }]).forEach(p => addLinhaPacotePrev(p));
 }
 
-function adicionarLinhaHistoricoPreventivaModal(data = '', horimetro = '', pacote = '250H', idExistente = '') {
-  const tbody = document.getElementById('tbodyLinhasHistoricoPreventivaModal');
-  if (!tbody) return;
-  const tr = document.createElement('tr');
-  tr.className = 'linha-hist-prev-modal';
-  tr.dataset.idExistente = idExistente;
-  const pacotes = ['250H', '500H', '1000H', '2000H', '10000KM', '20000KM'];
-  tr.innerHTML = `
-    <td class="p-1.5"><input type="date" value="${data}" class="inp-hist-data w-full border rounded p-1.5 font-bold" /></td>
-    <td class="p-1.5"><input type="number" step="0.1" value="${horimetro}" class="inp-hist-hor w-full border rounded p-1.5 font-bold" /></td>
-    <td class="p-1.5"><select class="inp-hist-pacote w-full border rounded p-1.5 font-bold">${pacotes.map(p => `<option value="${p}" ${String(pacote).toUpperCase() === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
-    <td class="p-1.5 text-center"><button type="button" onclick="this.closest('tr').remove()" class="text-rose-600 font-black">🗑️</button></td>
-  `;
-  tbody.appendChild(tr);
+function addLinhaPacotePrev(p = { multiplo: '', nome: '', acumulativo: true }) {
+  const div = document.createElement('div');
+  div.className = 'linha-pacote-prev grid grid-cols-12 gap-1.5 items-center';
+  div.innerHTML = `<input type="number" min="1" placeholder="×" value="${p.multiplo || ''}" class="pk-mult col-span-2 border rounded p-1.5 text-sm font-bold" />
+    <input placeholder="Nome (ex.: 500H)" value="${esc(p.nome || '')}" class="pk-nome col-span-3 border rounded p-1.5 text-sm font-bold uppercase" />
+    <select class="pk-lista col-span-4 border rounded p-1.5 text-sm font-bold"><option value="">(sem lista)</option>${cacheListasPrev.map(l => `<option value="${l.id}" ${l.id === p.lista_id ? 'selected' : ''}>${esc(l.codigo)} — ${esc(l.nome)}</option>`).join('')}</select>
+    <label class="col-span-2 text-[10px] font-black"><input type="checkbox" class="pk-acum" ${p.acumulativo !== false ? 'checked' : ''} /> inclui menores</label>
+    <button onclick="this.parentElement.remove()" class="col-span-1 text-rose-600 font-black">✕</button>`;
+  document.getElementById('esPacotes').appendChild(div);
 }
 
-function carregarDadosExistentesNoModalPlano(equipamentoId) {
-  const tbody = document.getElementById('tbodyLinhasHistoricoPreventivaModal');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  if (!equipamentoId) return;
-
-  const plano = cachePlanosPreventiva.find(p => String(p.equipamento_id) === String(equipamentoId));
-  if (plano) document.getElementById('planoHistIntervalo').value = String(plano.intervalo_base || 250);
-
-  const hist = cacheExecucoesPreventiva.filter(e => String(e.equipamento_id) === String(equipamentoId) && e.status === 'concluida');
-  if (hist.length > 0) {
-    hist.forEach(h => adicionarLinhaHistoricoPreventivaModal((h.data_conclusao || h.data_entrada || '').slice(0, 10), h.horimetro_execucao, h.pacote, h.id));
+async function salvarEstrategiaPrev(id) {
+  if (!_somenteOnlinePCM()) return;
+  const v = x => document.getElementById(x).value.trim();
+  const base = parseFloat(v('esBase'));
+  if (!v('esCod') || !v('esNome') || !(base > 0)) return alert('Informe código, nome e intervalo base.');
+  const pacotes = [...document.querySelectorAll('.linha-pacote-prev')].map(l => ({
+    multiplo: parseInt(l.querySelector('.pk-mult').value, 10), nome: l.querySelector('.pk-nome').value.trim().toUpperCase(),
+    lista_id: l.querySelector('.pk-lista').value || null, acumulativo: l.querySelector('.pk-acum').checked
+  })).filter(p => p.multiplo > 0 && p.nome);
+  if (!pacotes.length) return alert('Inclua ao menos um pacote.');
+  if (new Set(pacotes.map(p => p.multiplo)).size !== pacotes.length) return alert('Há múltiplos repetidos nos pacotes.');
+  if (!pacotes.some(p => p.multiplo === 1)) return alert('Inclua o pacote ×1 (o ciclo base), senão alguns ciclos ficam sem pacote.');
+  const corpo = { codigo: v('esCod').toUpperCase(), nome: v('esNome'), unidade: v('esUn'), intervalo_base: base, horizonte: parseFloat(v('esHor')) || 0, ativa: v('esAtiva') === '1' };
+  let estId = id;
+  if (id) {
+    const r = await db.from('preventiva_estrategias').update(corpo).eq('id', id);
+    if (r.error) return alert('Erro: ' + r.error.message);
+    await db.from('planos_preventiva').update({ intervalo_base: base }).eq('estrategia_id', id);
+    const d = await db.from('preventiva_pacotes').delete().eq('estrategia_id', id);
+    if (d.error) return alert('Erro: ' + d.error.message);
   } else {
-    adicionarLinhaHistoricoPreventivaModal(new Date().toISOString().slice(0, 10), '', '250H');
+    const r = await db.from('preventiva_estrategias').insert(corpo).select('id').single();
+    if (r.error) return alert('Erro: ' + r.error.message);
+    estId = r.data.id;
   }
+  const rp = await db.from('preventiva_pacotes').insert(pacotes.map(p => ({ ...p, estrategia_id: estId })));
+  if (rp.error) return alert('Erro nos pacotes: ' + rp.error.message);
+  _fecharPrev('modalEstrategiaPrev');
+  await carregarPreventivas('estrategias');
 }
 
-async function salvarPlanoComHistoricoCompleto() {
-  const eqId = document.getElementById('planoHistEquipId').value;
-  const intervalo = parseFloat(document.getElementById('planoHistIntervalo').value) || 250;
-  if (!eqId) return alert('Selecione o equipamento!');
+// ---------- LISTAS DE TAREFAS / PEÇAS ----------
+function renderizarListasPrev(podeEditar) {
+  return `<div class="space-y-3">
+    ${podeEditar ? `<button onclick="abrirModalListaPrev()" class="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs">+ Nova Lista</button>` : ''}
+    ${cacheListasPrev.map(l => {
+      const t = cacheTarefasPrev.filter(x => x.lista_id === l.id), m = cacheMateriaisPrev.filter(x => x.lista_id === l.id);
+      return `<div class="bg-white rounded-xl border p-4 shadow-sm flex flex-wrap justify-between gap-2">
+        <div><span class="font-black">${esc(l.codigo)}</span> — <span class="font-bold">${esc(l.nome)}</span>
+          <div class="text-xs text-slate-600">${t.length} tarefa(s) • ${m.length} peça(s) prevista(s) • local padrão: ${esc(l.local_padrao)}</div></div>
+        ${podeEditar ? `<button onclick="abrirModalListaPrev('${l.id}')" class="px-3 py-1.5 rounded-lg bg-slate-200 text-xs font-black">✏️ Editar</button>` : ''}</div>`;
+    }).join('') || `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhuma lista cadastrada.</div>`}</div>`;
+}
 
-  const linhas = Array.from(document.querySelectorAll('#tbodyLinhasHistoricoPreventivaModal .linha-hist-prev-modal'));
-  const registros = [];
-  for (const tr of linhas) {
-    const dt = tr.querySelector('.inp-hist-data')?.value;
-    const hor = parseFloat(tr.querySelector('.inp-hist-hor')?.value);
-    const pac = tr.querySelector('.inp-hist-pacote')?.value || '250H';
-    if (dt && !isNaN(hor)) registros.push({ dt, hor, pac, idExistente: tr.dataset.idExistente });
+function abrirModalListaPrev(id = '') {
+  if (!_somenteOnlinePCM()) return;
+  const l = cacheListasPrev.find(x => x.id === id) || { local_padrao: 'OFICINA' };
+  const tarefas = cacheTarefasPrev.filter(x => x.lista_id === id).sort((a, b) => a.ordem - b.ordem).map(x => x.descricao).join('\n');
+  _modalPrev('modalListaPrev', `
+    <h3 class="font-black">📋 ${id ? 'Editar' : 'Nova'} Lista de Tarefas</h3>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs font-black">Código<input id="liCod" value="${esc(l.codigo || '')}" class="${_inp} uppercase" /></label>
+      <label class="text-xs font-black">Nome<input id="liNome" value="${esc(l.nome || '')}" class="${_inp}" /></label>
+      <label class="text-xs font-black">Local padrão<select id="liLocal" class="${_inp}">${['OFICINA', 'TRECHO', 'TERCEIRO'].map(x => `<option ${x === l.local_padrao ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    </div>
+    <label class="block text-xs font-black">Tarefas (uma por linha)<textarea id="liTarefas" rows="8" class="${_inp}">${esc(tarefas)}</textarea></label>
+    <div class="text-xs font-black">Peças previstas</div><div id="liMats" class="space-y-1.5"></div>
+    <button onclick="addLinhaMaterialPrev()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-xs font-black">+ Peça</button>
+    <div class="flex justify-end gap-2 pt-2"><button onclick="_fecharPrev('modalListaPrev')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick="salvarListaPrev('${id}')" class="px-5 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">Salvar</button></div>`, true);
+  cacheMateriaisPrev.filter(x => x.lista_id === id).forEach(m => addLinhaMaterialPrev(m));
+}
+
+function addLinhaMaterialPrev(m = {}) {
+  const div = document.createElement('div');
+  div.className = 'linha-mat-prev grid grid-cols-12 gap-1.5 items-center';
+  div.innerHTML = `<select class="mt-peca col-span-8 border rounded p-1.5 text-sm font-bold"><option value="">Selecione a peça</option>${cachePecasPrev.map(p => `<option value="${p.id}" ${p.id === m.peca_id ? 'selected' : ''}>${esc((p.id_interno ? p.id_interno + ' — ' : '') + p.descricao)}</option>`).join('')}</select>
+    <input type="number" min="0.01" step="any" placeholder="Qtd" value="${m.quantidade || ''}" class="mt-qtd col-span-3 border rounded p-1.5 text-sm font-bold" />
+    <button onclick="this.parentElement.remove()" class="col-span-1 text-rose-600 font-black">✕</button>`;
+  document.getElementById('liMats').appendChild(div);
+}
+
+async function salvarListaPrev(id) {
+  if (!_somenteOnlinePCM()) return;
+  const v = x => document.getElementById(x).value.trim();
+  if (!v('liCod') || !v('liNome')) return alert('Informe código e nome.');
+  const tarefas = v('liTarefas').split('\n').map(s => s.trim()).filter(Boolean);
+  const mats = {};
+  document.querySelectorAll('.linha-mat-prev').forEach(l => {
+    const pid = l.querySelector('.mt-peca').value, q = parseFloat(l.querySelector('.mt-qtd').value);
+    if (pid && q > 0) mats[pid] = (mats[pid] || 0) + q;
+  });
+  const corpo = { codigo: v('liCod').toUpperCase(), nome: v('liNome'), local_padrao: v('liLocal') };
+  let lid = id;
+  if (id) {
+    const r = await db.from('preventiva_listas').update(corpo).eq('id', id);
+    if (r.error) return alert('Erro: ' + r.error.message);
+    await db.from('preventiva_lista_tarefas').delete().eq('lista_id', id);
+    await db.from('preventiva_lista_materiais').delete().eq('lista_id', id);
+  } else {
+    const r = await db.from('preventiva_listas').insert(corpo).select('id').single();
+    if (r.error) return alert('Erro: ' + r.error.message);
+    lid = r.data.id;
   }
-
-  let ultimoHor = 0, ultimaData = new Date().toISOString().slice(0, 10), ultimoPacote = '250H';
-  if (registros.length > 0) {
-    const ord = [...registros].sort((a, b) => b.hor - a.hor);
-    ultimoHor = ord[0].hor;
-    ultimaData = ord[0].dt;
-    ultimoPacote = ord[0].pac;
+  if (tarefas.length) {
+    const r = await db.from('preventiva_lista_tarefas').insert(tarefas.map((descricao, i) => ({ lista_id: lid, ordem: i, descricao })));
+    if (r.error) return alert('Erro nas tarefas: ' + r.error.message);
   }
+  const linhasMat = Object.entries(mats).map(([peca_id, quantidade]) => ({ lista_id: lid, peca_id, quantidade }));
+  if (linhasMat.length) {
+    const r = await db.from('preventiva_lista_materiais').insert(linhasMat);
+    if (r.error) return alert('Erro nas peças: ' + r.error.message);
+  }
+  _fecharPrev('modalListaPrev');
+  await carregarPreventivas('listas');
+}
 
-  const planoExistente = cachePlanosPreventiva.find(p => String(p.equipamento_id) === String(eqId));
-  let planoId = planoExistente?.id || null;
-  const payloadPlano = {
-    equipamento_id: eqId,
-    intervalo_base: intervalo,
-    ultimo_horimetro_execucao: ultimoHor,
-    ultima_data_execucao: ultimaData,
-    ultimo_pacote_executado: ultimoPacote
+// ---------- PLANO + HISTÓRICO REAL (pacote, data, contador) ----------
+function abrirModalPlanoPreventiva(equipId = '') {
+  if (!_somenteOnlinePCM()) return;
+  const plano = cachePlanosPreventiva.find(p => String(p.equipamento_id) === String(equipId) && p.ativo !== false);
+  const comPlano = new Set(cachePlanosPreventiva.filter(p => p.ativo !== false).map(p => String(p.equipamento_id)));
+  const equips = cacheEquipamentos.filter(e => e.situacao_ciclo === 'ativo' && (String(e.id) === String(equipId) || !comPlano.has(String(e.id))));
+  _modalPrev('modalPlanoPrev', `
+    <h3 class="font-black">📜 Plano e Histórico de Preventivas</h3>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs font-black">Equipamento<select id="plEq" onchange="trocarEquipPlanoPrev()" class="${_inp}" ${equipId ? 'disabled' : ''}><option value="">Selecione</option>${equips.map(e => `<option value="${e.id}" ${String(e.id) === String(equipId) ? 'selected' : ''}>${esc(e.tag)} — ${esc(e.nome || '')}</option>`).join('')}</select></label>
+      <label class="text-xs font-black">Estratégia<select id="plEst" onchange="atualizarProximoPacotePlanoPrev()" class="${_inp}"><option value="">Selecione</option>${cacheEstrategiasPrev.filter(s => s.ativa || s.id === plano?.estrategia_id).map(s => `<option value="${s.id}" ${s.id === plano?.estrategia_id ? 'selected' : ''}>${esc(s.codigo)} — ${esc(s.nome)} (${s.intervalo_base} ${s.unidade})</option>`).join('')}</select></label>
+      <label class="text-xs font-black col-span-2">Próximo pacote a executar<select id="plProx" class="${_inp}"></select></label>
+    </div>
+    <div class="text-xs font-black">Histórico real já executado (pacote, data e leitura da máquina)</div>
+    <div id="plHist" class="space-y-1.5"></div>
+    <button onclick="addLinhaHistoricoPrev()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-xs font-black">+ Preventiva realizada</button>
+    <div class="flex justify-end gap-2 pt-2"><button onclick="_fecharPrev('modalPlanoPrev')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick="salvarPlanoPrev()" class="px-5 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">Salvar</button></div>`, true);
+  atualizarProximoPacotePlanoPrev(plano);
+  if (equipId) mostrarHistoricoExistentePrev(equipId);
+}
+
+function trocarEquipPlanoPrev() { /* novo plano: sem histórico anterior */ }
+
+function atualizarProximoPacotePlanoPrev(plano) {
+  const estId = document.getElementById('plEst').value;
+  const sel = document.getElementById('plProx');
+  const pks = cachePacotesPrev.filter(p => p.estrategia_id === estId).sort((a, b) => a.multiplo - b.multiplo);
+  const atual = plano && plano.id ? pacoteDoCicloPrev(plano.estrategia_id, (plano.ciclo_atual || 0) + 1) : null;
+  sel.innerHTML = pks.map(p => `<option value="${p.multiplo}" ${atual && p.id === atual.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('') || '<option value="">(escolha a estratégia)</option>';
+}
+
+function addLinhaHistoricoPrev(h = {}, somenteLeitura = false) {
+  const div = document.createElement('div');
+  div.className = 'linha-hist-prev grid grid-cols-12 gap-1.5 items-center';
+  const estId = document.getElementById('plEst').value;
+  const opts = cachePacotesPrev.filter(p => p.estrategia_id === estId).sort((a, b) => a.multiplo - b.multiplo)
+    .map(p => `<option ${p.nome === h.pacote ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+  const dt = h.data_conclusao ? String(h.data_conclusao).slice(0, 10) : '';
+  div.innerHTML = `<select class="hp-pacote col-span-4 border rounded p-1.5 text-sm font-bold" ${somenteLeitura ? 'disabled' : ''}>${opts}</select>
+    <input type="date" value="${dt}" class="hp-data col-span-4 border rounded p-1.5 text-sm font-bold" ${somenteLeitura ? 'disabled' : ''} />
+    <input type="number" step="any" min="0" placeholder="Leitura (H/KM)" value="${h.horimetro_execucao ?? ''}" class="hp-leitura col-span-3 border rounded p-1.5 text-sm font-bold" ${somenteLeitura ? 'disabled' : ''} />
+    ${somenteLeitura ? '' : '<button onclick="this.parentElement.remove()" class="col-span-1 text-rose-600 font-black">✕</button>'}`;
+  if (somenteLeitura) div.dataset.existente = '1';
+  document.getElementById('plHist').appendChild(div);
+}
+
+function mostrarHistoricoExistentePrev(equipId) {
+  cacheExecucoesPreventiva.filter(h => String(h.equipamento_id) === String(equipId))
+    .sort((a, b) => new Date(a.data_conclusao || a.data_entrada) - new Date(b.data_conclusao || b.data_entrada))
+    .forEach(h => addLinhaHistoricoPrev(h, true));
+}
+
+async function salvarPlanoPrev() {
+  if (!_somenteOnlinePCM()) return;
+  const equipId = document.getElementById('plEq').value, estId = document.getElementById('plEst').value;
+  const mult = parseInt(document.getElementById('plProx').value, 10);
+  if (!equipId || !estId || !(mult > 0)) return alert('Selecione equipamento, estratégia e o próximo pacote.');
+  const novas = [...document.querySelectorAll('.linha-hist-prev')].filter(l => !l.dataset.existente).map(l => ({
+    pacote: l.querySelector('.hp-pacote').value, data: l.querySelector('.hp-data').value, leitura: parseFloat(l.querySelector('.hp-leitura').value)
+  }));
+  if (novas.some(n => !n.pacote || !n.data || isNaN(n.leitura) || n.leitura < 0)) return alert('Preencha pacote, data e leitura em todas as linhas do histórico.');
+
+  const existentes = cacheExecucoesPreventiva.filter(h => String(h.equipamento_id) === String(equipId));
+  const todos = [...existentes.map(h => ({ data: String(h.data_conclusao || h.data_entrada).slice(0, 10), leitura: Number(h.horimetro_execucao), pacote: h.pacote })), ...novas];
+  const ultimo = todos.sort((a, b) => a.leitura - b.leitura || a.data.localeCompare(b.data)).pop();
+
+  const corpo = {
+    equipamento_id: equipId, estrategia_id: estId, ativo: true, ciclo_atual: mult - 1, intervalo_base: cacheEstrategiasPrev.find(s => s.id === estId)?.intervalo_base || 0,
+    ultimo_horimetro_execucao: ultimo ? ultimo.leitura : (cacheEquipamentos.find(e => String(e.id) === String(equipId))?.horimetro_atual || 0),
+    ultima_data_execucao: ultimo ? ultimo.data : null, ultimo_pacote_executado: ultimo ? ultimo.pacote : null
   };
-
-  if (planoId) await gravarDadosOfflineSafe('planos_preventiva', 'UPDATE', payloadPlano, planoId);
-  else {
-    const resIns = await gravarDadosOfflineSafe('planos_preventiva', 'INSERT', payloadPlano);
-    planoId = resIns.data?.id || null;
+  const plano = cachePlanosPreventiva.find(p => String(p.equipamento_id) === String(equipId) && p.ativo !== false);
+  let planoId = plano?.id;
+  if (planoId) {
+    const r = await db.from('planos_preventiva').update(corpo).eq('id', planoId);
+    if (r.error) return alert('Erro: ' + r.error.message);
+  } else {
+    const r = await db.from('planos_preventiva').insert(corpo).select('id').single();
+    if (r.error) return alert('Erro: ' + r.error.message);
+    planoId = r.data.id;
   }
-
-  for (const item of registros) {
-    if (!item.idExistente) {
-      await gravarDadosOfflineSafe('execucoes_preventiva', 'INSERT', {
-        plano_id: planoId,
-        equipamento_id: eqId,
-        pacote: item.pac,
-        status: 'concluida',
-        parada_obrigatoria: false,
-        data_entrada: new Date(item.dt + 'T08:00:00').toISOString(),
-        data_conclusao: new Date(item.dt + 'T12:00:00').toISOString(),
-        horimetro_execucao: item.hor,
-        observacoes: 'Histórico registrado no plano'
-      });
-    }
+  if (novas.length) {
+    const r = await db.from('execucoes_preventiva').insert(novas.map(n => ({
+      plano_id: planoId, equipamento_id: equipId, pacote: n.pacote, status: 'concluida', parada_obrigatoria: true,
+      data_entrada: n.data + 'T08:00:00', data_conclusao: n.data + 'T17:00:00', horimetro_execucao: n.leitura,
+      observacoes: 'Histórico lançado pelo PCM', origem: 'historico'
+    })));
+    if (r.error) return alert('Erro no histórico: ' + r.error.message);
   }
-
-  document.getElementById('modalPlanoHistoricoCompletoV2')?.classList.add('hidden');
+  _fecharPrev('modalPlanoPrev');
   await carregarPreventivas('painel');
 }
 
+// ---------- histórico + CSV ----------
 function renderizarTabelaHistoricoProprioPreventivas(termoBusca = '') {
-  let lista = cacheExecucoesPreventiva.map(ex => ({
-    ...ex,
-    equipamento: cacheEquipamentos.find(e => String(e.id) === String(ex.equipamento_id))
-  }));
+  let lista = cacheExecucoesPreventiva.map(ex => ({ ...ex, equipamento: cacheEquipamentos.find(e => String(e.id) === String(ex.equipamento_id)) }));
   if (typeof filtrarListaPorObraAtiva === 'function') lista = filtrarListaPorObraAtiva(lista);
-  if (termoBusca) lista = lista.filter(item => bateComPrefixoEquipamento(item.equipamento?.tag || '', termoBusca));
-
-  if (lista.length === 0) return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum registro encontrado.</div>`;
-  return `
-    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
-      <table class="w-full text-left border-collapse text-xs">
-        <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Data</th><th class="p-3">Prefixo</th><th class="p-3">Equipamento</th><th class="p-3">Pacote</th><th class="p-3">Horímetro / KM</th><th class="p-3">Equipe / Obs</th></tr></thead>
-        <tbody class="divide-y divide-slate-200">
-          ${lista.map(h => {
-            const dt = h.data_conclusao || h.data_entrada;
-            return `<tr><td class="p-3 font-bold">${dt ? new Date(dt).toLocaleDateString('pt-BR') : '-'}</td><td class="p-3 font-black text-amber-700">${esc(h.equipamento?.tag || '-')}</td><td class="p-3 font-semibold">${esc(h.equipamento?.nome || '-')}</td><td class="p-3 font-black text-blue-900">${esc(h.pacote)}</td><td class="p-3 font-black">${h.horimetro_execucao}</td><td class="p-3">${esc(h.mecanicos_nomes || '')} ${esc(h.observacoes || '')}</td></tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+  if (termoBusca) lista = lista.filter(i => bateComPrefixoEquipamento(i.equipamento?.tag || '', termoBusca));
+  if (!lista.length) return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum registro encontrado.</div>`;
+  return `<div class="space-y-2"><button onclick="exportarHistoricoProprioPreventivasCSV()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-amber-300 text-xs font-black">⬇️ CSV</button>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm"><table class="w-full text-left border-collapse text-xs">
+    <thead><tr class="bg-slate-900 text-amber-400 uppercase text-[11px]"><th class="p-3">Data</th><th class="p-3">Prefixo</th><th class="p-3">Equipamento</th><th class="p-3">Pacote</th><th class="p-3">Leitura</th><th class="p-3">Origem / Obs</th></tr></thead>
+    <tbody class="divide-y divide-slate-200">${lista.map(h => {
+      const dt = h.data_conclusao || h.data_entrada;
+      return `<tr><td class="p-3 font-bold">${dt ? new Date(dt).toLocaleDateString('pt-BR') : '-'}</td><td class="p-3 font-black text-amber-700">${esc(h.equipamento?.tag || '-')}</td><td class="p-3 font-semibold">${esc(h.equipamento?.nome || '-')}</td><td class="p-3 font-black text-blue-900">${esc(h.pacote || '')}</td><td class="p-3 font-black">${esc(String(h.horimetro_execucao ?? ''))}</td><td class="p-3">${h.origem === 'historico' ? '📝 histórico ' : '🔧 OS '}${esc(h.mecanicos_nomes || '')} ${esc(h.observacoes || '')}</td></tr>`;
+    }).join('')}</tbody></table></div></div>`;
 }
 
 function exportarHistoricoProprioPreventivasCSV() {
-  const cab = ['DATA_EXECUCAO', 'PREFIXO', 'EQUIPAMENTO', 'PACOTE_PREVENTIVA', 'HORIMETRO_KM', 'STATUS', 'EQUIPE', 'OBSERVACOES'];
+  const cab = ['DATA_EXECUCAO', 'PREFIXO', 'EQUIPAMENTO', 'PACOTE_PREVENTIVA', 'LEITURA', 'STATUS', 'EQUIPE', 'OBSERVACOES'];
   const linhas = cacheExecucoesPreventiva.map(h => {
     const eq = cacheEquipamentos.find(e => String(e.id) === String(h.equipamento_id));
     const dt = h.data_conclusao || h.data_entrada;
-    return [
-      dt ? new Date(dt).toLocaleDateString('pt-BR') : '', eq?.tag || '', (eq?.nome || '').replace(/;/g, ','),
-      h.pacote || '', String(h.horimetro_execucao || 0).replace('.', ','), h.status || '',
-      (h.mecanicos_nomes || '').replace(/;/g, ','), (h.observacoes || '').replace(/;/g, ',')
-    ].map(csvCelula).join(';');
+    return [dt ? new Date(dt).toLocaleDateString('pt-BR') : '', eq?.tag || '', (eq?.nome || '').replace(/;/g, ','), h.pacote || '',
+      String(h.horimetro_execucao || 0).replace('.', ','), h.status || '', (h.mecanicos_nomes || '').replace(/;/g, ','), (h.observacoes || '').replace(/;/g, ',')].map(csvCelula).join(';');
   });
-  const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `VILASA_PREVENTIVAS_${new Date().toISOString().slice(0, 10)}.csv`;

@@ -636,6 +636,14 @@ async function abrirModalExecucaoOSComChips(osId) {
           </div>
         </div>
 
+        ${Array.isArray(os.checklist) && os.checklist.length ? `
+        <div>
+          <label class="block font-black uppercase text-slate-700 mb-1">✅ Checklist da Preventiva ${esc(os.pacote || '')}</label>
+          <div id="containerChecklistPrevV2" class="bg-slate-50 p-3 rounded-xl border space-y-1.5">
+            ${os.checklist.map((t, i) => `<label class="flex items-start gap-2 font-bold text-slate-800"><input type="checkbox" class="chk-prev-v2 mt-0.5" data-i="${i}" ${t.ok ? 'checked' : ''} /><span>${esc(t.t)}</span></label>`).join('')}
+          </div>
+        </div>` : ''}
+
         <div>
           <label class="block font-black uppercase text-slate-600 mb-1">Serviço Executado</label>
           <textarea id="execV2Acao" rows="3" placeholder="Descreva o serviço executado..." class="w-full border rounded-lg p-2.5 font-semibold uppercase">${esc(os.servico_executado || '')}</textarea>
@@ -702,6 +710,15 @@ async function salvarExecucaoOSComChips(osId) {
     return alert('Confirme o Horário de Início e o Horário de Fim da manutenção!');
   }
 
+  let checklistNovo = null;
+  if (Array.isArray(os.checklist) && os.checklist.length) {
+    const marcados = new Set([...document.querySelectorAll('.chk-prev-v2:checked')].map(c => Number(c.dataset.i)));
+    checklistNovo = os.checklist.map((t, i) => ({ ...t, ok: marcados.has(i) }));
+    const faltam = checklistNovo.filter(t => !t.ok).length;
+    if (statusSel === 'concluida' && faltam > 0 &&
+      !confirm(`Faltam ${faltam} item(ns) do checklist sem marcar. Fechar a preventiva mesmo assim?`)) return;
+  }
+
   const payload = {
     status: statusSel === 'concluida' ? 'aguardando_pcm' : statusSel,
     servico_executado: servico,
@@ -709,6 +726,7 @@ async function salvarExecucaoOSComChips(osId) {
     aberta_em: dtIni ? new Date(dtIni).toISOString() : os.aberta_em,
     concluida_em: null
   };
+  if (checklistNovo) payload.checklist = checklistNovo;
 
   if (!isNaN(horSaida)) {
     const eqOS = (cacheEquipamentos || []).find(e => String(e.id) === String(os.equipamento_id)) || os.equipamentos;
