@@ -178,17 +178,19 @@ function gerarLinhasHtmlTabelaFrota(lista, podeGerenciar) {
         <td class="p-2.5 font-extrabold text-slate-900">${esc(e.nome || '-')}</td>
         <td class="p-2.5 font-bold text-slate-700">${esc(e.marca || '-')}</td>
         <td class="p-2.5 font-bold text-slate-700">${esc(e.modelo || '-')}</td>
-        <td class="p-2.5 font-bold text-slate-700 text-center">${e.ano_fabricacao || '-'}</td>
+        <td class="p-2.5 font-bold text-slate-700 text-center">${esc(String(e.ano_fabricacao || '-'))}</td>
         <td class="p-2.5 font-semibold text-slate-700">${esc(e.numero_serie || '-')}</td>
         <td class="p-2.5 font-black text-amber-800">${esc(e.placa || '-')}</td>
         <td class="p-2.5">${propBadge}</td>
         <td class="p-2.5 font-bold text-slate-700 whitespace-nowrap">📍 ${esc(nomeObra)}</td>
-        <td class="p-2.5 font-black text-slate-900 whitespace-nowrap">${e.horimetro_atual || 0} ${esc(e.unidade_medida || 'H')}</td>
+        <td class="p-2.5 font-black text-slate-900 whitespace-nowrap">${e.horimetro_atual || 0} ${esc(e.unidade_medida || 'H')}${e.km_atual != null && e.unidade_medida !== 'KM' ? `<div class="text-[10px] text-slate-500">${esc(String(e.km_atual))} KM</div>` : ''}</td>
         <td class="p-2.5 text-right space-x-1 whitespace-nowrap">
           <button onclick="abrirEtiquetaQRIndividual('${e.id}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"><i class="fa-solid fa-qrcode"></i> QR</button>
           ${podeGerenciar ? `
             <button onclick="abrirModalTransferirObraEquipamento('${e.id}')" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold">🔄 Obra</button>
             <button onclick="abrirModalCicloVidaDesmobilizacao('${e.id}')" class="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold">⚙️ Status</button>
+            <button onclick="abrirModalEditarEquipamento('${e.id}')" class="px-2 py-1 rounded bg-slate-100 text-slate-900 font-bold">✏️ Editar</button>
+            <button onclick="abrirModalCorrigirLeitura('${e.id}')" class="px-2 py-1 rounded bg-red-100 text-red-900 font-bold">🛠️ Leitura</button>
           ` : ''}
         </td>
       </tr>
@@ -238,6 +240,7 @@ function renderizarPainelFrota() {
               + Cadastrar Equipamento
             </button>
           ` : ''}
+          ${podeGerenciar ? `<button onclick="abrirModalObraEmLote()" class="px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-black text-xs shadow">📍 Atribuir obra aos selecionados</button>` : ''}
           <button onclick="imprimirQRCodesSelecionados()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-black text-xs shadow">
             <i class="fa-solid fa-qrcode mr-1"></i> Imprimir QR Codes Selecionados
           </button>
@@ -304,6 +307,7 @@ function alternarSelecaoTodosQR(masterChk) {
 
 function abrirModalCadastroEquipamentoV2() {
   if (!podeExecutarAcao('gerenciar_frota', true)) return;
+  if (!navigator.onLine) return alert('Cadastro de equipamento exige internet. Faça pelo PCM quando estiver online.');
   let modal = document.getElementById('modalNovoEquipV2');
   if (!modal) {
     modal = document.createElement('div');
@@ -389,6 +393,9 @@ async function salvarNovoEquipamentoV2() {
   const tag = document.getElementById('eqV2Tag').value.trim().toUpperCase();
   const nome = document.getElementById('eqV2Nome').value.trim().toUpperCase();
   if (!tag || !nome) return alert('Informe Prefixo e Descrição!');
+  if (!navigator.onLine) return alert('Equipamento só pode ser cadastrado com internet (somente PCM). Tente novamente quando estiver online.');
+  const chave = t => String(t).toUpperCase().replace(/[\s-]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+  if (cacheEquipamentos.some(e => chave(e.tag) === chave(tag))) return alert('Já existe um equipamento com esse prefixo (' + tag + ').');
 
   await gravarDadosOfflineSafe('equipamentos', 'INSERT', {
     tag,
@@ -464,8 +471,11 @@ async function abrirModalTransferirObraEquipamento(equipId) {
   await carregarFrota(filtroSituacaoFrota);
 }
 
+// QR impresso no escritório sempre aponta para produção, mesmo se gerado a partir de teste/preview
+const URL_BASE_QR_PRODUCAO = 'https://vilasa-manut.vercel.app/';
+
 function gerarUrlQRCodeOfflineReady(eq) {
-  const base = window.location.origin + window.location.pathname.replace(/index\.html$/, '') + 'qr.html';
+  const base = URL_BASE_QR_PRODUCAO + 'qr.html';
   const params = new URLSearchParams({ id: eq.id, tag: eq.tag || '', nome: eq.nome || '', un: eq.unidade_medida || 'H' });
   return `${base}?${params.toString()}`;
 }
@@ -493,7 +503,7 @@ function imprimirJanelaEtiquetasQR(listaEquipamentos) {
       <div style="border:3px solid #0f172a; border-radius:14px; padding:14px; width:240px; text-align:center; font-family:sans-serif; page-break-inside:avoid;">
         <div style="background:#f59e0b; color:#0f172a; font-weight:900; font-size:20px; padding:4px 8px; border-radius:8px;">${esc(eq.tag)}</div>
         <div style="font-size:11px; font-weight:700; margin:6px 0;">${esc(eq.nome || '')}</div>
-        <div style="font-size:9px; font-weight:600; color:#475569;">${eq.ano_fabricacao ? `Ano: ${eq.ano_fabricacao} | ` : ''}Série: ${esc(eq.numero_serie || 'N/I')} ${eq.placa ? `| Placa: ${esc(eq.placa)}` : ''}</div>
+        <div style="font-size:9px; font-weight:600; color:#475569;">${eq.ano_fabricacao ? `Ano: ${esc(String(eq.ano_fabricacao))} | ` : ''}Série: ${esc(eq.numero_serie || 'N/I')} ${eq.placa ? `| Placa: ${esc(eq.placa)}` : ''}</div>
         <img src="${imgApi}" style="width:160px; height:160px; margin:4px auto;" />
         <div style="font-size:10px; font-weight:800;">LEITURA DE HORÍMETRO / OS</div>
       </div>
@@ -520,4 +530,103 @@ function exportarRelatorioFrotaCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = `VILASA_FROTA_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
+}
+
+
+// ===== Fase Frota: edição, obra em lote, correção manual de leitura =====
+function _modalFrota(id, html) {
+  let m = document.getElementById(id);
+  if (!m) {
+    m = document.createElement('div');
+    m.id = id;
+    m.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `<div class="bg-white rounded-2xl p-5 w-full max-w-md space-y-3">${html}</div>`;
+  m.classList.remove('hidden');
+}
+function _fecharModalFrota(id) { document.getElementById(id)?.classList.add('hidden'); }
+
+function abrirModalEditarEquipamento(equipId) {
+  if (!podeExecutarAcao('gerenciar_frota', true)) return;
+  const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
+  if (!eq) return;
+  const campo = (id, rot, v) => `<label class="block text-xs font-black text-slate-700">${rot}<input id="${id}" value="${esc(String(v ?? ''))}" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold uppercase" /></label>`;
+  _modalFrota('modalEditarEquipV2', `
+    <h3 class="font-black text-slate-900">✏️ Editar ${esc(eq.tag)}</h3>
+    ${campo('edNome', 'Descrição', eq.nome)}${campo('edMarca', 'Marca', eq.marca)}${campo('edModelo', 'Modelo', eq.modelo)}
+    ${campo('edAno', 'Ano', eq.ano_fabricacao)}${campo('edSerie', 'Nº de série', eq.numero_serie)}${campo('edPlaca', 'Placa', eq.placa)}
+    <label class="block text-xs font-black text-slate-700">Medidor principal
+      <select id="edUn" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold"><option value="H" ${eq.unidade_medida !== 'KM' ? 'selected' : ''}>Horas</option><option value="KM" ${eq.unidade_medida === 'KM' ? 'selected' : ''}>KM</option></select></label>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="_fecharModalFrota('modalEditarEquipV2')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick="salvarEdicaoEquipamento('${eq.id}')" class="px-5 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">Salvar</button>
+    </div>`);
+}
+
+async function salvarEdicaoEquipamento(equipId) {
+  const v = id => document.getElementById(id).value.trim().toUpperCase();
+  const nome = v('edNome');
+  if (!nome) return alert('Informe a descrição!');
+  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', {
+    nome, marca: v('edMarca'), modelo: v('edModelo'), ano_fabricacao: v('edAno'),
+    numero_serie: v('edSerie'), placa: v('edPlaca'), unidade_medida: v('edUn')
+  }, equipId);
+  _fecharModalFrota('modalEditarEquipV2');
+  await carregarFrota(filtroSituacaoFrota);
+}
+
+function abrirModalObraEmLote() {
+  if (!podeExecutarAcao('gerenciar_frota', true)) return;
+  const ids = [...document.querySelectorAll('.chk-qr-equipamento:checked')].map(c => c.value);
+  if (!ids.length) return alert('Marque os equipamentos na primeira coluna da tabela.');
+  _modalFrota('modalObraLoteV2', `
+    <h3 class="font-black text-slate-900">📍 Atribuir obra a ${ids.length} equipamento(s)</h3>
+    <select id="obraLoteSel" class="w-full border rounded-lg p-2 text-sm font-bold">${cacheObras.map(o => `<option value="${o.id}">${esc(o.codigo)} — ${esc(o.nome)}</option>`).join('')}</select>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="_fecharModalFrota('modalObraLoteV2')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick='confirmarObraEmLote(${JSON.stringify(ids)})' class="px-5 py-2 rounded-lg bg-blue-700 text-white font-black text-xs">Aplicar</button>
+    </div>`);
+}
+
+async function confirmarObraEmLote(ids) {
+  const obraId = document.getElementById('obraLoteSel').value;
+  for (const id of ids) await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { obra_id: obraId }, id);
+  _fecharModalFrota('modalObraLoteV2');
+  await carregarFrota(filtroSituacaoFrota);
+}
+
+function abrirModalCorrigirLeitura(equipId) {
+  const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
+  if (!eq) return;
+  if (!podeExecutarAcao('gerenciar_frota', true)) return;
+  if (!navigator.onLine) return alert('Correção de leitura exige internet.');
+  const un = eq.unidade_medida === 'KM' ? 'KM' : 'H';
+  _modalFrota('modalCorrigirLeituraV2', `
+    <h3 class="font-black text-slate-900">🛠️ Corrigir leitura — ${esc(eq.tag)}</h3>
+    <p class="text-xs font-bold text-slate-600">Atual: ${esc(String(eq.horimetro_atual ?? 0))} ${un}${eq.km_atual != null && un !== 'KM' ? ' | ' + esc(String(eq.km_atual)) + ' KM' : ''}. A correção ignora os limites de salto e fica registrada no histórico.</p>
+    <label class="block text-xs font-black text-slate-700">Medidor
+      <select id="corMed" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold"><option value="${un}">${un === 'KM' ? 'KM' : 'Horímetro (H)'}</option>${un === 'KM' ? '<option value="H">Horímetro (H)</option>' : '<option value="KM">KM</option>'}</select></label>
+    <label class="block text-xs font-black text-slate-700">Leitura correta<input id="corVal" type="number" step="0.1" min="0" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold" /></label>
+    <label class="block text-xs font-black text-slate-700">Motivo (obrigatório)<input id="corMotivo" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold" placeholder="Ex.: digitado errado na planilha" /></label>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="_fecharModalFrota('modalCorrigirLeituraV2')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
+      <button onclick="confirmarCorrecaoLeitura('${eq.id}')" class="px-5 py-2 rounded-lg bg-red-700 text-white font-black text-xs">Corrigir</button>
+    </div>`);
+}
+
+async function confirmarCorrecaoLeitura(equipId) {
+  const leitura = parseFloat(document.getElementById('corVal').value);
+  const motivo = document.getElementById('corMotivo').value.trim();
+  const medidor = document.getElementById('corMed').value;
+  if (isNaN(leitura) || leitura < 0) return alert('Informe uma leitura válida.');
+  if (!motivo) return alert('Informe o motivo da correção.');
+  if (!navigator.onLine) return alert('Sem internet. Tente novamente online.');
+  const { error } = await db.rpc('corrigir_leitura', {
+    p_id: (crypto.randomUUID ? crypto.randomUUID() : null), p_equipamento: equipId,
+    p_medidor: medidor, p_leitura: leitura, p_motivo: motivo
+  });
+  if (error) return alert('Não foi possível corrigir: ' + error.message);
+  _fecharModalFrota('modalCorrigirLeituraV2');
+  await carregarFrota(filtroSituacaoFrota);
 }
