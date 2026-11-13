@@ -48,26 +48,26 @@ const MATRIZ_PERMISSOES_CARGOS = {
   },
   pcm: {
     label: 'Analista de PCM',
-    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
-    acoes: ['abrir_os', 'executar_os', 'classificar_rep_pcm', 'gerenciar_frota', 'gerenciar_preventivas', 'exportar_relatorios']
+    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'diesel'],
+    acoes: ['abrir_os', 'executar_os', 'classificar_rep_pcm', 'gerenciar_frota', 'gerenciar_preventivas', 'gerenciar_diesel', 'exportar_relatorios']
   },
   gestor: {
     label: 'Gestor / Diretoria',
-    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
+    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'diesel'],
     acoes: ['exportar_relatorios']
   },
   engenheiro: {
     label: 'Engenheiro de Manutenção',
-    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis'],
+    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'diesel'],
     acoes: [
       'abrir_os', 'executar_os', 'classificar_rep_pcm', 'gerenciar_frota',
-      'gerenciar_preventivas', 'gerenciar_catalogo_estoque', 'lancar_nf_entrada',
+      'gerenciar_preventivas', 'gerenciar_diesel', 'gerenciar_catalogo_estoque', 'lancar_nf_entrada',
       'dar_baixa_estoque', 'lancar_horimetro_qr', 'exportar_relatorios'
     ]
   },
   admin: {
     label: 'Administrador Master',
-    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'],
+    abas_visiveis: ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'diesel', 'admin'],
     acoes: ['*']
   }
 };
@@ -321,11 +321,11 @@ async function inicializarSistemaPosLogin() {
   if (elCargo) elCargo.innerText = `${usuarioLogado.matricula || ''} • ${nomesCargos}`;
 
   await carregarObrasEMontarSeletorTopo();
-  ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].forEach(aba => {
+  ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].forEach(aba => {
     document.getElementById(`nav-${aba}`)?.classList.toggle('hidden', !podeVerAba(aba));
   });
 
-  const primeiraAba = ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].find(a => podeVerAba(a));
+  const primeiraAba = ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].find(a => podeVerAba(a));
   if (primeiraAba) navegarPara(primeiraAba);
 }
 
@@ -421,13 +421,14 @@ function navegarPara(modulo) {
     frota: 'Controle de Frota & Mobilização',
     preventivas: 'Planos Preventivos SAP PM & Histórico',
     estoque: 'Almoxarifado Central & Notas Fiscais',
+    diesel: 'Controle de Diesel',
     kpis: 'Indicadores Executivos de Engenharia (KPIs)',
     admin: 'Governança & Administração'
   };
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
   if (elTit) elTit.innerText = `Relatórios: ${nomesAbas[modulo] || modulo.toUpperCase()}`;
 
-  ['os', 'frota', 'preventivas', 'estoque', 'kpis', 'admin'].forEach(m => {
+  ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].forEach(m => {
     document.getElementById(`sec-${m}`)?.classList.add('hidden');
     const btn = document.getElementById(`nav-${m}`);
     if (btn) {
@@ -447,6 +448,7 @@ function navegarPara(modulo) {
   if (modulo === 'frota' && typeof carregarFrota === 'function') carregarFrota();
   if (modulo === 'preventivas' && typeof carregarPreventivas === 'function') carregarPreventivas();
   if (modulo === 'estoque' && typeof carregarEstoque === 'function') carregarEstoque();
+  if (modulo === 'diesel' && typeof carregarDiesel === 'function') carregarDiesel();
   if (modulo === 'kpis' && typeof calcularKPIs === 'function') calcularKPIs();
   if (modulo === 'admin' && typeof carregarUsuariosAdmin === 'function') carregarUsuariosAdmin();
 }
@@ -507,6 +509,7 @@ async function acionarExportacaoUniversalCSV() {
   if (abaAtivaGlobal === 'frota' && typeof exportarRelatorioFrotaCSV === 'function') return exportarRelatorioFrotaCSV();
   if (abaAtivaGlobal === 'preventivas' && typeof exportarHistoricoProprioPreventivasCSV === 'function') return exportarHistoricoProprioPreventivasCSV();
   if (abaAtivaGlobal === 'estoque' && typeof exportarInventarioAlmoxCSV === 'function') return exportarInventarioAlmoxCSV();
+  if (abaAtivaGlobal === 'diesel' && typeof exportarRelatorioDieselCSV === 'function') return exportarRelatorioDieselCSV();
   if (abaAtivaGlobal === 'kpis' && typeof exportarRelatorioKPIsCSV === 'function') return exportarRelatorioKPIsCSV();
 
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);

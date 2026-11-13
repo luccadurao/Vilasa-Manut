@@ -85,6 +85,10 @@
             <i class="fa-solid fa-boxes-stacked w-4 text-center"></i>
             <span>Almoxarifado</span>
           </button>
+          <button id="nav-diesel" onclick="navegarPara('diesel')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-gas-pump w-4 text-center"></i>
+            <span>Diesel</span>
+          </button>
           <button id="nav-kpis" onclick="navegarPara('kpis')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
             <i class="fa-solid fa-chart-line w-4 text-center"></i>
             <span>Indicadores (KPIs)</span>
@@ -151,6 +155,7 @@
       <section id="sec-estoque" class="hidden"></section>
 
       <!-- SEÇÃO 5: INDICADORES (KPIS) -->
+      <section id="sec-diesel" class="hidden"></section>
       <section id="sec-kpis" class="hidden"></section>
 
       <!-- SEÇÃO 6: ADMINISTRAÇÃO -->
@@ -168,6 +173,8 @@
   <script src="frota.js"></script>
   <script src="estoque.js"></script>
   <script src="kpis.js"></script>
+  <script src="vendor/xlsx.mini.min.js"></script>
+  <script src="diesel.js"></script>
   <script src="admin.js"></script>
   <script>
     // Instala o "modo offline": guarda o site no celular para abrir sem internet.
