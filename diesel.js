@@ -319,20 +319,28 @@ async function dieselRenderEstoque(corpo) {
   const cards = dieselTanques.filter(t => t.ativo).map(t => {
     const dias = estq.filter(e => e.tanque_id === t.id);
     const u = dias[dias.length - 1];
-    const entr = carr.filter(c => c.tanque_id === t.id && c.fonte === 'cta');
-    const litros = entr.reduce((s, c) => s + Number(c.litros), 0), custo = entr.reduce((s, c) => s + Number(c.custo_total || 0), 0);
-    const abast = dias.reduce((s, e) => s + Number(e.abastecido || 0), 0);
-    const disp = dias.reduce((s, e) => s + Number(e.dispersao || 0), 0);
+    const compras = carr.filter(c => c.tanque_id === t.id && c.fonte === 'cta');
+    const litrosNF = compras.reduce((s, c) => s + Number(c.litros), 0), custo = compras.reduce((s, c) => s + Number(c.custo_total || 0), 0);
+    const soma = k => dias.reduce((s, e) => s + Number(e[k] || 0), 0);
+    // Mesma conta do relatório diário do CTA: inicial + carregamentos (compras e recebido de tanque) - transferências enviadas - abastecido.
+    const inicial = dias.length ? Number(dias[0].estoque_inicial || 0) : 0;
+    const entradas = soma('carregamentos'), transf = soma('transferencias'), abast = soma('abastecido'), disp = soma('dispersao');
+    const conta = inicial + entradas - transf - abast;
+    const dif = u ? Number(u.final_fisico || 0) - conta : 0;
     return `<div class="bg-white rounded-2xl border border-slate-200 p-4">
-      <div class="flex justify-between items-start"><div><p class="text-sm font-black text-slate-800">${dieselEsc(t.codigo)}</p><p class="text-[11px] text-slate-500">${t.tipo === 'COMBOIO' ? 'Comboio' : 'Tanque fixo'}${u ? ' • posição de ' + dieselFmtData(u.data) : ''}</p></div></div>
+      <p class="text-sm font-black text-slate-800">${dieselEsc(t.codigo)}</p><p class="text-[11px] text-slate-500">${t.tipo === 'COMBOIO' ? 'Comboio' : 'Tanque fixo'}${u ? ' • posição de ' + dieselFmtData(u.data) : ''}</p>
       <p class="mt-2 text-2xl font-black text-slate-900">${u ? dieselFmtL(u.final_fisico) : '—'} <span class="text-xs font-bold text-slate-500">L físico</span></p>
       <p class="text-[11px] text-slate-500">Teórico ${u ? dieselFmtL(u.final_teorico) : '—'} L</p>
-      <div class="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-        <div><p class="text-slate-500">Entradas</p><p class="font-black">${dieselFmtL(litros)} L</p></div>
-        <div><p class="text-slate-500">Saídas</p><p class="font-black">${dieselFmtL(abast)} L</p></div>
-        <div><p class="text-slate-500">Dispersão</p><p class="font-black ${Math.abs(disp) > Math.max(100, abast * 0.01) ? 'text-red-600' : ''}">${dieselFmtL(disp)} L</p></div>
+      <div class="mt-2 text-[11px] space-y-0.5">
+        <div class="flex justify-between"><span class="text-slate-500">Estoque no início do período</span><b>${dieselFmtL(inicial)} L</b></div>
+        <div class="flex justify-between"><span class="text-slate-500">+ Entradas (compras${t.tipo === 'COMBOIO' ? ' e recebido dos tanques' : ''})</span><b>${dieselFmtL(entradas)} L</b></div>
+        <div class="flex justify-between"><span class="text-slate-500">− Transferidos para comboios</span><b>${dieselFmtL(transf)} L</b></div>
+        <div class="flex justify-between"><span class="text-slate-500">− Abastecido em equipamentos</span><b>${dieselFmtL(abast)} L</b></div>
+        <div class="flex justify-between border-t border-slate-100 pt-0.5"><span class="text-slate-500">= Estoque calculado</span><b>${dieselFmtL(conta)} L</b></div>
+        <div class="flex justify-between"><span class="text-slate-500">Dispersão (físico × teórico)</span><b class="${Math.abs(disp) > Math.max(100, abast * 0.01) ? 'text-red-600' : ''}">${dieselFmtL(disp)} L</b></div>
+        ${Math.abs(dif) > 50 ? `<p class="text-amber-700">Diferença de ${dieselFmtL(dif)} L entre o calculado e o físico: ${dias.length && dias[0].data > ini ? 'o relatório do tanque começa só em ' + dieselFmtData(dias[0].data) : 'confira o relatório do CTA'}.</p>` : ''}
       </div>
-      ${custo ? `<p class="mt-1 text-[11px] text-slate-500">Compras: R$ ${dieselFmt1(custo)} • R$ ${dieselFmt1(custo / litros)}/L</p>` : ''}
+      ${litrosNF ? `<p class="mt-1 text-[11px] text-slate-500">Compras com NF no período: ${dieselFmtL(litrosNF)} L • R$ ${dieselFmt1(custo)} • R$ ${dieselFmt1(custo / litrosNF)}/L</p>` : ''}
     </div>`;
   }).join('');
   const linhas = estq.slice().reverse().slice(0, 120).map(e => [
