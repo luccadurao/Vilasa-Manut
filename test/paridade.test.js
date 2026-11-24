@@ -136,6 +136,12 @@ test('o menu montado na página segue o cargo, sem pedir login', async () => {
   for (const nome of ['carregarOrdensServico', 'carregarFrota', 'carregarPreventivas', 'carregarEstoque', 'carregarDiesel', 'calcularKPIs', 'carregarUsuariosAdmin']) {
     sandbox[nome] = () => {};
   }
+  sandbox.Vilasa.modulos.garantirCarregados = async () => ({
+    carregados: [],
+    bloqueados: [],
+    avisos: [],
+    arquivos: []
+  });
 
   for (const [cargo, esperado] of Object.entries(CARGOS)) {
     vm.runInContext(
