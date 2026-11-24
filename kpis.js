@@ -80,15 +80,17 @@ async function calcularKPIs() {
   const isoFim = new Date(filtroKpiDataFim + 'T23:59:59').toISOString();
   const isoLeituraIni = new Date(new Date(filtroKpiDataInicio + 'T00:00:00').getTime() - 45 * 86400000).toISOString();
 
+  const periodoKpi = filtroKpiDataInicio + ':' + filtroKpiDataFim;
   const [resEq, resOS, resPrevExec, resPlanos, resPecas, resMovs, resLeituras] = await Promise.all([
-    lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag')),
-    // só as OS que tocam o período (evita o corte de 1000 linhas do banco)
-    lerDadosComFallbackOffline('kpi_os', () => paginarKPI('ordens_servico', q => q.lte('aberta_em', isoFim).or(`concluida_em.is.null,concluida_em.gte.${isoIni}`))),
-    lerDadosComFallbackOffline('execucoes_preventiva', () => db.from('execucoes_preventiva').select('*')),
-    lerDadosComFallbackOffline('planos_preventiva', () => db.from('planos_preventiva').select('*')),
-    lerDadosComFallbackOffline('pecas_estoque', () => paginarKPI('pecas_estoque', q => q)),
-    lerDadosComFallbackOffline('kpi_movs', () => paginarKPI('movimentacoes_almoxarifado', q => q.gte('registrado_em', isoIni).lte('registrado_em', isoFim).in('tipo_movimento', ['SAIDA_ESTOQUE', 'SAIDA_DIRETA_NF_MAQUINA', 'NOTA_APLICADA', 'DEVOLUCAO']))),
-    lerDadosComFallbackOffline('kpi_leituras', () => paginarKPI('diario_horimetro', q => q.gte('registrado_em', isoLeituraIni).lte('registrado_em', isoFim).or('medidor.eq.H,medidor.is.null')))
+    lerDadosComFallbackOffline('equipamentos', () => db.from('equipamentos').select('*').order('tag'), { modulo: 'nucleo' }),
+    // só as OS que tocam o período (evita o corte de 1000 linhas do banco).
+    // O período entra na chave: o cache antigo de Indicadores ignorava a janela.
+    lerDadosComFallbackOffline('kpi_os', () => paginarKPI('ordens_servico', q => q.lte('aberta_em', isoFim).or(`concluida_em.is.null,concluida_em.gte.${isoIni}`)), { modulo: 'painel', periodo: periodoKpi }),
+    lerDadosComFallbackOffline('execucoes_preventiva', () => db.from('execucoes_preventiva').select('*'), { modulo: 'preventivas' }),
+    lerDadosComFallbackOffline('planos_preventiva', () => db.from('planos_preventiva').select('*'), { modulo: 'preventivas' }),
+    lerDadosComFallbackOffline('pecas_estoque', () => paginarKPI('pecas_estoque', q => q), { modulo: 'estoque' }),
+    lerDadosComFallbackOffline('kpi_movs', () => paginarKPI('movimentacoes_almoxarifado', q => q.gte('registrado_em', isoIni).lte('registrado_em', isoFim).in('tipo_movimento', ['SAIDA_ESTOQUE', 'SAIDA_DIRETA_NF_MAQUINA', 'NOTA_APLICADA', 'DEVOLUCAO'])), { modulo: 'painel', periodo: periodoKpi }),
+    lerDadosComFallbackOffline('kpi_leituras', () => paginarKPI('diario_horimetro', q => q.gte('registrado_em', isoLeituraIni).lte('registrado_em', isoFim).or('medidor.eq.H,medidor.is.null')), { modulo: 'painel', periodo: periodoKpi })
   ]);
 
   let equipamentos = resEq.data || [];

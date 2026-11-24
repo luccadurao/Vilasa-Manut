@@ -454,12 +454,16 @@
     const empresaIdBruto = empresa && empresa.id != null && empresa.id !== ''
       ? empresa.id
       : origem.empresa_id;
+    const versaoMinima = origem.versao_minima_app != null && origem.versao_minima_app !== ''
+      ? String(origem.versao_minima_app)
+      : null;
     return {
       perfil,
       empresa,
       empresa_id: empresaIdBruto != null && empresaIdBruto !== '' ? String(empresaIdBruto) : null,
       modulos: Array.isArray(origem.modulos) ? origem.modulos : null,
       permissoes: Array.isArray(origem.permissoes) ? origem.permissoes.map((/** @type {unknown} */ id) => String(id)) : null,
+      versao_minima_app: versaoMinima,
       flags: copiarFlags(origem.flags),
       gerado_em: typeof origem.gerado_em === 'string' ? origem.gerado_em : new Date().toISOString()
     };
@@ -486,6 +490,7 @@
     }
     if (Array.isArray(sessao.modulos)) usuario.modulos = sessao.modulos;
     if (Array.isArray(sessao.permissoes)) usuario.permissoes = sessao.permissoes;
+    if (sessao.versao_minima_app) usuario.versao_minima_app = sessao.versao_minima_app;
     return usuario;
   }
 

@@ -347,7 +347,7 @@ function abrirModalCicloVidaDesmobilizacao(equipId) {
 async function confirmarMudancaCicloVidaEquip(equipId) {
   const propriedade = document.getElementById('cicloPropSelect').value;
   const situacao_ciclo = document.getElementById('cicloSituacaoSelect').value;
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { propriedade, situacao_ciclo }, equipId);
+  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { propriedade, situacao_ciclo }, equipId, { modulo: 'frota' });
   document.getElementById('modalCicloVidaEquipV2')?.classList.add('hidden');
   await carregarFrota(situacao_ciclo);
 }
@@ -457,7 +457,7 @@ function abrirModalObraEmLote() {
 
 async function confirmarObraEmLote(ids) {
   const obraId = document.getElementById('obraLoteSel').value;
-  for (const id of ids) await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { obra_id: obraId }, id);
+  for (const id of ids) await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { obra_id: obraId }, id, { modulo: 'frota' });
   _fecharModalFrota('modalObraLoteV2');
   await carregarFrota(filtroSituacaoFrota);
 }

@@ -559,7 +559,7 @@ async function confirmarAberturaSolicitacaoOS() {
   });
 
   // Atualiza também o horímetro atual da máquina na tabela equipamentos
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo, horimetro_atualizado_em: new Date().toISOString() }, eqId);
+  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horNovo, horimetro_atualizado_em: new Date().toISOString() }, eqId, { modulo: 'frota' });
   eqObj.horimetro_atual = horNovo;
   eqObj.horimetro_atualizado_em = new Date().toISOString();
 
@@ -739,7 +739,7 @@ async function salvarExecucaoOSComChips(osId) {
     payload.horimetro_os = horSaida;
     if (subiu) {
       const agoraIso = new Date().toISOString();
-      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida, horimetro_atualizado_em: agoraIso }, os.equipamento_id);
+      await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horSaida, horimetro_atualizado_em: agoraIso }, os.equipamento_id, { modulo: 'frota' });
       eqOS.horimetro_atual = horSaida;
       eqOS.horimetro_atualizado_em = agoraIso;
     }
@@ -1040,7 +1040,7 @@ async function salvarLancamentoCompletoPCM(osId = '') {
     if (momento >= baseMs && momento <= Date.now()) {
       if (checarSaltoHorimetro(eqObj, horimetro, momento)) {
         const quando = new Date(momento).toISOString();
-        await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horimetro, horimetro_atualizado_em: quando }, eqId);
+        await gravarDadosOfflineSafe('equipamentos', 'UPDATE', { horimetro_atual: horimetro, horimetro_atualizado_em: quando }, eqId, { modulo: 'frota' });
         eqObj.horimetro_atual = horimetro;
         eqObj.horimetro_atualizado_em = quando;
       }

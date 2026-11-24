@@ -8,6 +8,10 @@
 -- empresa, qr_equipamento só por id, e o bloqueio VM403.
 -- Com uma segunda empresa de teste (código OUTRA, mesma matrícula e mesma tag),
 -- confere que o login e a tag se separam. Sem essa empresa, essa parte é pulada.
+--
+-- Depois da 0004, public.obras é view. As checagens de tabela (NOT NULL, FK,
+-- índice, default e unicidade do código) passam a olhar public.obras_base.
+-- A view continua precisando expor empresa_id.
 -- =============================================================================
 
 DO $$
@@ -31,12 +35,36 @@ DECLARE
   v_id uuid;
   v_qr jsonb;
   v_rpc text;
+  v_tabela text;
+  v_nome_empresa text;
+  v_kind "char";
 BEGIN
   FOREACH t IN ARRAY v_tabelas LOOP
-    IF to_regclass('public.' || t) IS NULL THEN
-      RAISE EXCEPTION 'Tabela ausente na conferência: %', t;
+    v_tabela := t;
+    IF t = 'obras' THEN
+      SELECT c.relkind INTO v_kind
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = 'obras';
+      IF v_kind = 'v' THEN
+        IF to_regclass('public.obras_base') IS NULL THEN
+          RAISE EXCEPTION 'public.obras é view e obras_base não existe';
+        END IF;
+        v_tabela := 'obras_base';
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'obras' AND column_name = 'empresa_id'
+        ) THEN
+          RAISE EXCEPTION 'a view obras não expõe empresa_id';
+        END IF;
+      ELSIF v_kind IS DISTINCT FROM 'r' THEN
+        RAISE EXCEPTION 'public.obras não é tabela nem view';
+      END IF;
     END IF;
-    EXECUTE format('SELECT count(*) FROM public.%I WHERE empresa_id IS NULL', t) INTO v_nulos;
+    IF to_regclass('public.' || v_tabela) IS NULL THEN
+      RAISE EXCEPTION 'Tabela ausente na conferência: %', v_tabela;
+    END IF;
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE empresa_id IS NULL', v_tabela) INTO v_nulos;
     IF v_nulos <> 0 THEN
       RAISE EXCEPTION 'Backfill incompleto em %: % linha(s) sem empresa', t, v_nulos;
     END IF;
@@ -45,27 +73,29 @@ BEGIN
       FROM pg_attribute a
       JOIN pg_class c ON c.oid = a.attrelid
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relname = t AND a.attname = 'empresa_id' AND a.attnotnull
+      WHERE n.nspname = 'public' AND c.relname = v_tabela AND a.attname = 'empresa_id' AND a.attnotnull
     ) THEN
-      RAISE EXCEPTION '% .empresa_id não está NOT NULL', t;
+      RAISE EXCEPTION '% .empresa_id não está NOT NULL', v_tabela;
     END IF;
+    -- O rename obras -> obras_base (0004) conserva o nome da FK e do índice.
+    v_nome_empresa := CASE WHEN v_tabela = 'obras_base' THEN 'obras' ELSE v_tabela END;
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint
-      WHERE conrelid = ('public.' || t)::regclass
+      WHERE conrelid = ('public.' || v_tabela)::regclass
         AND contype = 'f'
-        AND conname = t || '_empresa_id_fkey'
+        AND conname = v_nome_empresa || '_empresa_id_fkey'
     ) THEN
-      RAISE EXCEPTION '% sem FK de empresa_id', t;
+      RAISE EXCEPTION '% sem FK de empresa_id', v_tabela;
     END IF;
-    IF to_regclass('public.' || t || '_empresa_id_idx') IS NULL THEN
-      RAISE EXCEPTION '% sem índice de empresa_id', t;
+    IF to_regclass('public.' || v_nome_empresa || '_empresa_id_idx') IS NULL THEN
+      RAISE EXCEPTION '% sem índice de empresa_id', v_tabela;
     END IF;
     SELECT pg_get_expr(d.adbin, d.adrelid) INTO v_def
     FROM pg_attrdef d
     JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
-    WHERE d.adrelid = ('public.' || t)::regclass AND a.attname = 'empresa_id';
+    WHERE d.adrelid = ('public.' || v_tabela)::regclass AND a.attname = 'empresa_id';
     IF v_def IS NULL OR position('empresa_atual' in v_def) = 0 THEN
-      RAISE EXCEPTION '% .empresa_id sem default app.empresa_atual()', t;
+      RAISE EXCEPTION '% .empresa_id sem default app.empresa_atual()', v_tabela;
     END IF;
   END LOOP;
 
@@ -87,7 +117,18 @@ BEGIN
       AND replace(pg_get_constraintdef(oid), ' ', '') = 'UNIQUE(empresa_id,matricula)'
   ) OR NOT EXISTS (
     SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.obras'::regclass AND contype = 'u'
+    WHERE conrelid = coalesce(
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relname = 'obras' AND c.relkind = 'v'
+        ) THEN to_regclass('public.obras_base')
+        ELSE to_regclass('public.obras')
+      END,
+      to_regclass('public.obras')
+    ) AND contype = 'u'
       AND replace(pg_get_constraintdef(oid), ' ', '') = 'UNIQUE(empresa_id,codigo)'
   ) OR NOT EXISTS (
     SELECT 1 FROM pg_constraint
