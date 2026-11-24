@@ -99,6 +99,14 @@
 
   <script src="config.js"></script>
   <script src="offline_sync.js"></script>
+  <script src="nucleo/nucleo.js"></script>
+  <script src="modulos/os/manifesto.js"></script>
+  <script src="modulos/frota/manifesto.js"></script>
+  <script src="modulos/preventivas/manifesto.js"></script>
+  <script src="modulos/estoque/manifesto.js"></script>
+  <script src="modulos/diesel/manifesto.js"></script>
+  <script src="modulos/painel/manifesto.js"></script>
+  <script src="modulos/admin/manifesto.js"></script>
   <script>
     // ========================================================================
     // PORTAL QR - REGRAS DE ACESSO
@@ -357,6 +365,13 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
     }
+
+    // Ponto de extensão do QR. Quem vê "Abrir OS" continua em podeAbrirOSNoQR(),
+    // para as etiquetas e os cargos atuais desta página não mudarem.
+    window.acoesQrDoRegistro = function () {
+      if (!window.Vilasa || !Vilasa.extensoes) return [];
+      return Vilasa.extensoes.qr();
+    };
   </script>
 </body>
 </html>

@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "description": "Só para o CI e para quem for desenvolver. O site não instala isto e não tem build.",
+  "scripts": {
+    "types": "tsc --noEmit -p ../tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

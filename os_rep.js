@@ -44,11 +44,13 @@ const LISTA_CLASSIFICACAO_FALHA = [
 
 function usuarioPodeAbrirOS(user = usuarioLogado) {
   if (!user) return false;
+  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.abrir', user);
   return obterCargosUsuario(user).some(c => ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'].includes(c));
 }
 
 function usuarioPodeClassificarPCM(user = usuarioLogado) {
   if (!user) return false;
+  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.classificar_rep', user);
   return obterCargosUsuario(user).some(c => ['pcm', 'engenheiro', 'admin'].includes(c));
 }
 
@@ -1047,4 +1049,111 @@ async function salvarLancamentoCompletoPCM(osId = '') {
 
   document.getElementById('modalLancamentoCompletoPCMV2')?.classList.add('hidden');
   await carregarOrdensServico(payload.concluida_em ? 'concluidas' : 'ativas');
+}
+
+// Relatórios desta tela. O núcleo chama o nome declarado no manifesto.
+async function exportarOrdensServicoCSV() {
+  const todasOS = typeof buscarTudoSemLimite === 'function'
+    ? await buscarTudoSemLimite('ordens_servico', 'aberta_em', false, '*, equipamentos(tag, nome, marca)')
+    : cacheOrdens || [];
+
+  let lista = filtrarListaPorObraAtiva(todasOS);
+  const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
+  if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
+
+  const cab = [
+    'NUMERO_OS', 'PREFIXO', 'EQUIPAMENTO', 'MARCA', 'STATUS', 'MOTIVO_REP',
+    'CLASSIFICACAO_FALHA', 'LOCAL_MANUTENCAO', 'DESCRICAO_PROBLEMA',
+    'SERVICO_EXECUTADO', 'MECANICO_NOME', 'HORIMETRO_OS', 'DATA_INICIO', 'DATA_FIM', 'DIAS_PARADOS'
+  ];
+
+  const linhas = lista.map(o => {
+    const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
+    const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
+    return [
+      o.numero_os || '',
+      o.equipamentos?.tag || '',
+      (o.equipamentos?.nome || '').replace(/;/g, ','),
+      (o.equipamentos?.marca || '').replace(/;/g, ','),
+      o.status || '',
+      o.motivo_rep || 'CORRETIVA',
+      (o.classificacao_falha || '').replace(/;/g, ','),
+      o.local_manutencao_pcm || 'OFICINA',
+      (o.descricao_problema || '').replace(/[\r\n;]+/g, ' '),
+      (o.servico_executado || '').replace(/[\r\n;]+/g, ' '),
+      (o.mecanico_nome || '').replace(/;/g, ','),
+      String(o.horimetro_os || '').replace('.', ','),
+      o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '',
+      o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'EM ABERTO',
+      dias
+    ].map(csvCelula).join(';');
+  });
+
+  const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `VILASA_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+}
+
+function coletarRelatorioOrdensServico(modo = 'enxuto_rep') {
+  const obraNome = obterNomeObraAtiva();
+  const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
+  let lista = filtrarListaPorObraAtiva(cacheOrdens || []);
+  if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
+
+  const abertas = lista.filter(o => !o.concluida_em && !['concluida', 'aguardando_pcm'].includes(o.status));
+
+  if (modo === 'enxuto_rep') {
+    return {
+      titulo: 'QUADRO DE EQUIPAMENTOS PARADOS EM MANUTENÇÃO (REP)',
+      subtitulo: `Obra: ${obraNome} | Posição Atualizada: ${new Date().toLocaleString('pt-BR')}`,
+      kpisResumo: [
+        { label: 'Máquinas Paradas Agora', valor: abertas.length },
+        { label: 'Aguardando Peça', valor: abertas.filter(o => o.status === 'pausada_peca').length },
+        { label: 'Em Execução / Fila', valor: abertas.filter(o => o.status !== 'pausada_peca').length },
+        { label: 'Média Dias Parados', valor: abertas.length > 0 ? (abertas.reduce((acc, o) => acc + Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000)), 0) / abertas.length).toFixed(1) + ' d' : '0 d' }
+      ],
+      colunas: ['PREFIXO', 'EQUIPAMENTO / MARCA', 'SISTEMA (FALHA)', 'DESCRIÇÃO DO PROBLEMA', 'ANDAMENTO / STATUS', 'DIAS PARADOS'],
+      linhas: abertas.map(o => {
+        const dias = Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000));
+        const statusCurto = o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : (o.servico_executado || 'EM MANUTENÇÃO');
+        return [
+          o.equipamentos?.tag || '-',
+          `${o.equipamentos?.nome || '-'}${o.equipamentos?.marca ? ` (${o.equipamentos.marca})` : ''}`,
+          o.classificacao_falha || 'EM ANÁLISE',
+          o.descricao_problema || '-',
+          statusCurto,
+          `${dias} dia(s)`
+        ];
+      })
+    };
+  }
+
+  return {
+    titulo: 'Relatório Geral Completo de Ordens de Serviço (Abertas & Concluídas)',
+    subtitulo: `Obra: ${obraNome} | Filtro Prefixo: ${termo || 'TODOS'}`,
+    kpisResumo: [
+      { label: 'Total Listado', valor: lista.length },
+      { label: 'Em Manutenção Agora', valor: abertas.length },
+      { label: 'Triagem PCM', valor: lista.filter(o => o.status === 'aguardando_pcm').length },
+      { label: 'Concluídas', valor: lista.filter(o => Boolean(o.concluida_em) || o.status === 'concluida').length }
+    ],
+    colunas: ['Nº OS', 'Prefixo / Máquina', 'Motivo / Sistema', 'Local', 'Problema', 'Serviço Executado', 'Início / Fim', 'Dias', 'Equipe'],
+    linhas: lista.map(o => {
+      const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
+      const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
+      return [
+        `#${o.numero_os || '-'}`,
+        `${o.equipamentos?.tag || '-'} - ${o.equipamentos?.nome || ''}`,
+        `${o.motivo_rep || 'CORRETIVA'} / ${o.classificacao_falha || '-'}`,
+        o.local_manutencao_pcm || 'OFICINA',
+        o.descricao_problema || '-',
+        o.servico_executado || '-',
+        `${o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-'} → ${o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'ABERTA'}`,
+        `${dias}d`,
+        o.mecanico_nome || '-'
+      ];
+    })
+  };
 }
