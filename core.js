@@ -135,8 +135,45 @@ function csvCelula(v) {
 // 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
 // Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
 // continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
-const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v2';
+const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v3';
+const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
 const COLUNAS_PERFIL_SEGURAS = 'id, matricula, nome, cargos_lista, obras_permitidas, ativo';
+
+function sessaoVilasa() {
+  return window.Vilasa && Vilasa.sessao ? Vilasa.sessao : null;
+}
+
+function guardarPerfilNaSessao(perfil) {
+  const api = sessaoVilasa();
+  if (!api) {
+    usuarioLogado = perfil;
+    localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
+    return;
+  }
+  const sessao = api.gravar(localStorage, perfil);
+  usuarioLogado = sessao ? api.usuarioDe(sessao) : perfil;
+}
+
+function lerPerfilDaSessao() {
+  const api = sessaoVilasa();
+  if (!api) {
+    try {
+      const bruto = localStorage.getItem(CHAVE_SESSAO_LOCAL) || localStorage.getItem(CHAVE_SESSAO_ANTERIOR);
+      if (!bruto) return null;
+      const dado = JSON.parse(bruto);
+      return dado && dado.perfil ? dado.perfil : dado;
+    } catch (e) {
+      return null;
+    }
+  }
+  return api.usuarioDe(api.ler(localStorage));
+}
+
+function apagarSessaoLocal(limparObra) {
+  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+  localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
+  if (limparObra) localStorage.removeItem('vilasa_obra_ativa_v2');
+}
 
 function erroDeRedeAuth(err) {
   if (!err) return false;
@@ -183,8 +220,7 @@ async function realizarLogin(event) {
       return alert('Seu cadastro está inativo ou incompleto. Procure o administrador.');
     }
 
-    usuarioLogado = perfil;
-    localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
+    guardarPerfilNaSessao(perfil);
     await inicializarSistemaPosLogin();
   } catch (e) {
     console.error(e);
@@ -198,8 +234,7 @@ async function encerrarSessao() {
     if (pendentes > 0 && !confirm('Há ' + pendentes + ' registro(s) ainda NÃO enviados neste celular. Eles ficam guardados e são enviados quando alguém entrar com sinal. Sair mesmo assim?')) return;
   } catch (e) { /* segue */ }
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
-  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
-  localStorage.removeItem('vilasa_obra_ativa_v2');
+  apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
@@ -207,8 +242,7 @@ async function encerrarSessao() {
 
 async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
-  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
-  localStorage.removeItem('vilasa_obra_ativa_v2');
+  apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
@@ -220,11 +254,9 @@ async function restaurarSessaoSalva() {
     document.getElementById('telaLogin')?.classList.remove('hidden');
     document.getElementById('appPrincipal')?.classList.add('hidden');
   };
-  const raw = localStorage.getItem(CHAVE_SESSAO_LOCAL);
-  if (!raw) return mostrarLogin();
+  const cache = lerPerfilDaSessao();
+  if (!cache?.id) return mostrarLogin();
   try {
-    const cache = JSON.parse(raw);
-    if (!cache?.id) return mostrarLogin();
     usuarioLogado = cache; // sem sinal: confia no perfil guardado (campo sem sinal NÃO desloga)
 
     if (navigator.onLine && obterClienteSupabase()) {
@@ -234,7 +266,7 @@ async function restaurarSessaoSalva() {
         if (!sessao && !erroDeRedeAuth(eSess)) {
           // Servidor respondeu e não há mais login válido (senha trocada, usuário removido...). Pede novo login.
           // A fila de registros pendentes NÃO é apagada.
-          localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+          apagarSessaoLocal(false);
           try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
           usuarioLogado = null;
           return mostrarLogin();
@@ -243,8 +275,7 @@ async function restaurarSessaoSalva() {
           const r = await db.rpc('meu_perfil');
           if (!r.error) {
             if (r.data && r.data.ativo !== false) {
-              usuarioLogado = r.data;
-              localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(r.data));
+              guardarPerfilNaSessao(r.data);
             } else {
               return encerrarSessaoSemPerguntar();
             }
@@ -339,7 +370,7 @@ function mostrarAvisoModulosBloqueados(carga) {
 async function inicializarSistemaPosLogin() {
   let carga = null;
   if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
-    carga = await Vilasa.modulos.garantirCarregados();
+    carga = await Vilasa.modulos.garantirCarregados(usuarioLogado);
   }
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
@@ -355,7 +386,8 @@ async function inicializarSistemaPosLogin() {
 
   await carregarObrasEMontarSeletorTopo();
   if (window.Vilasa && Vilasa.modulos && Vilasa.telas) {
-    Vilasa.modulos.resolverEGuardar({ todos: true });
+    const contrato = window.Vilasa.sessao ? Vilasa.sessao.contratoDe(usuarioLogado) : { todos: true };
+    Vilasa.modulos.resolverEGuardar(contrato);
     const menu = document.getElementById('menuLateralModulos');
     if (menu) Vilasa.telas.montarMenu(menu);
     const painel = document.querySelector('#appPrincipal main');
@@ -758,9 +790,5 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
-    try { await Vilasa.modulos.garantirCarregados(); }
-    catch (e) { console.warn('Módulos:', e); }
-  }
   await restaurarSessaoSalva();
 });

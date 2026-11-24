@@ -116,7 +116,7 @@
  * @property {(contrato: ContratoModulos | string[], manifestos: Manifesto[]) => ResultadoResolucao} resolver
  * @property {(contrato: ContratoModulos | string[]) => ResultadoResolucao} resolverEGuardar
  * @property {(resolucao: ResultadoResolucao, manifestos: Manifesto[], io: { carregarScript: (src: string, tipo: TipoScriptModulo) => Promise<void> }) => Promise<ResultadoCarga>} carregar
- * @property {() => Promise<ResultadoCarga>} garantirCarregados
+ * @property {(usuario?: any) => Promise<ResultadoCarga>} garantirCarregados
  * @property {() => ResultadoResolucao | null} ultimaResolucao
  * @property {() => ResultadoCarga | null} ultimaCarga
  */
@@ -181,9 +181,38 @@
  */
 
 /**
+ * @typedef {Object} SessaoGuardada
+ * @property {{ id: string, matricula?: string, nome?: string, cargos_lista?: any, obras_permitidas?: any, ativo?: boolean }} perfil
+ * @property {any} empresa
+ * @property {any[] | null} modulos
+ * @property {string[] | null} permissoes
+ * @property {Record<string, any>} flags
+ * @property {string} gerado_em
+ */
+
+/**
+ * @typedef {Object} ArmazemSessao
+ * @property {(chave: string) => string | null} getItem
+ * @property {(chave: string, valor: string) => void} setItem
+ * @property {(chave: string) => void} removeItem
+ */
+
+/**
+ * @typedef {Object} ApiSessao
+ * @property {string} CHAVE
+ * @property {string} CHAVE_ANTERIOR
+ * @property {(entrada: any) => SessaoGuardada | null} embrulhar
+ * @property {(storage: ArmazemSessao, entrada: any) => SessaoGuardada | null} gravar
+ * @property {(storage: ArmazemSessao) => SessaoGuardada | null} ler
+ * @property {(sessao: SessaoGuardada | null) => any} usuarioDe
+ * @property {(usuario?: any) => ContratoModulos} contratoDe
+ */
+
+/**
  * @typedef {Object} ApiNucleo
  * @property {ApiModulos} modulos
  * @property {ApiPermissoes} permissoes
+ * @property {ApiSessao} sessao
  * @property {ApiEventos} eventos
  * @property {ApiExtensoes} extensoes
  * @property {ApiTelas} telas

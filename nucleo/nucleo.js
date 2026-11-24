@@ -386,16 +386,168 @@
   }
 
   /**
+   * Lista vinda do meu_perfil. Null significa banco antigo: vale a matriz dos manifestos.
+   * @param {any} pessoa
+   * @returns {string[] | null}
+   */
+  function permissoesDeclaradas(pessoa) {
+    if (!pessoa || !Object.prototype.hasOwnProperty.call(pessoa, 'permissoes')) return null;
+    if (!Array.isArray(pessoa.permissoes)) return null;
+    return pessoa.permissoes.map((/** @type {unknown} */ id) => String(id));
+  }
+
+  /**
    * @param {string} permissao
    * @param {any} [usuario]
    * @param {import('./tipos.js').Manifesto[]} [manifestos]
    */
   function pode(permissao, usuario, manifestos) {
     const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
+    const declaradas = permissoesDeclaradas(pessoa);
+    if (declaradas) return declaradas.includes(String(permissao));
     const cargos = cargosDe(pessoa);
     if (!cargos.length) return false;
     if (cargos.includes('admin')) return true;
     return efetivas(cargos, manifestos).includes(permissao);
+  }
+
+  const CHAVE_SESSAO = 'vilasa_sessao_v3';
+  const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
+
+  /**
+   * @param {any} entrada
+   * @returns {import('./tipos.js').SessaoGuardada['perfil'] | null}
+   */
+  function copiarPerfil(entrada) {
+    if (!entrada || entrada.id == null || entrada.id === '') return null;
+    return {
+      id: String(entrada.id),
+      matricula: entrada.matricula,
+      nome: entrada.nome,
+      cargos_lista: entrada.cargos_lista,
+      obras_permitidas: entrada.obras_permitidas,
+      ativo: entrada.ativo
+    };
+  }
+
+  /**
+   * @param {any} entrada
+   * @returns {Record<string, any>}
+   */
+  function copiarFlags(entrada) {
+    if (!entrada || typeof entrada !== 'object' || Array.isArray(entrada)) return {};
+    return entrada;
+  }
+
+  /**
+   * Aceita o jsonb do meu_perfil (campos no topo) ou uma sessão v3 já embrulhada.
+   * @param {any} entrada
+   * @returns {import('./tipos.js').SessaoGuardada | null}
+   */
+  function embrulharSessao(entrada) {
+    if (!entrada || typeof entrada !== 'object') return null;
+    const brutoPerfil = entrada.perfil && typeof entrada.perfil === 'object' ? entrada.perfil : entrada;
+    const perfil = copiarPerfil(brutoPerfil);
+    if (!perfil) return null;
+    const origem = entrada.perfil && typeof entrada.perfil === 'object' ? entrada : entrada;
+    return {
+      perfil,
+      empresa: origem.empresa && typeof origem.empresa === 'object' ? origem.empresa : null,
+      modulos: Array.isArray(origem.modulos) ? origem.modulos : null,
+      permissoes: Array.isArray(origem.permissoes) ? origem.permissoes.map((/** @type {unknown} */ id) => String(id)) : null,
+      flags: copiarFlags(origem.flags),
+      gerado_em: typeof origem.gerado_em === 'string' ? origem.gerado_em : new Date().toISOString()
+    };
+  }
+
+  /**
+   * @param {import('./tipos.js').SessaoGuardada | null} sessao
+   */
+  function usuarioDeSessao(sessao) {
+    if (!sessao || !sessao.perfil) return null;
+    /** @type {any} */
+    const usuario = {
+      id: sessao.perfil.id,
+      matricula: sessao.perfil.matricula,
+      nome: sessao.perfil.nome,
+      cargos_lista: sessao.perfil.cargos_lista,
+      obras_permitidas: sessao.perfil.obras_permitidas,
+      ativo: sessao.perfil.ativo
+    };
+    if (sessao.empresa) usuario.empresa = sessao.empresa;
+    if (Array.isArray(sessao.modulos)) usuario.modulos = sessao.modulos;
+    if (Array.isArray(sessao.permissoes)) usuario.permissoes = sessao.permissoes;
+    return usuario;
+  }
+
+  /**
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @param {string} chave
+   * @returns {import('./tipos.js').SessaoGuardada | null}
+   */
+  function lerChaveSessao(storage, chave) {
+    const texto = storage.getItem(chave);
+    if (!texto) return null;
+    try {
+      return embrulharSessao(JSON.parse(texto));
+    } catch (erro) {
+      return null;
+    }
+  }
+
+  /**
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @param {any} entrada
+   * @returns {import('./tipos.js').SessaoGuardada | null}
+   */
+  function gravarSessao(storage, entrada) {
+    const sessao = embrulharSessao(entrada);
+    if (!sessao) return null;
+    storage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
+    storage.removeItem(CHAVE_SESSAO_ANTERIOR);
+    return sessao;
+  }
+
+  /**
+   * Lê a v3. Se só houver a v2, copia para a v3 e apaga a chave antiga.
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @returns {import('./tipos.js').SessaoGuardada | null}
+   */
+  function lerSessao(storage) {
+    const atual = lerChaveSessao(storage, CHAVE_SESSAO);
+    if (atual) {
+      storage.removeItem(CHAVE_SESSAO_ANTERIOR);
+      return atual;
+    }
+    const antiga = lerChaveSessao(storage, CHAVE_SESSAO_ANTERIOR);
+    if (!antiga) return null;
+    storage.setItem(CHAVE_SESSAO, JSON.stringify(antiga));
+    storage.removeItem(CHAVE_SESSAO_ANTERIOR);
+    return antiga;
+  }
+
+  /**
+   * Sem módulos nem permissões no perfil, o contrato continua "todos ativos".
+   * @param {any} [usuario]
+   * @returns {import('./tipos.js').ContratoModulos}
+   */
+  function contratoDe(usuario) {
+    const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
+    const temModulos = !!(pessoa && Array.isArray(pessoa.modulos));
+    const temPermissoes = !!(pessoa && Array.isArray(pessoa.permissoes));
+    if (!temModulos && !temPermissoes) return { todos: true };
+    /** @type {import('./tipos.js').ContratoModulos} */
+    const contrato = {};
+    if (temModulos) {
+      contrato.ativos = pessoa.modulos.map((/** @type {any} */ item) => {
+        if (typeof item === 'string') return item;
+        return item && item.id ? String(item.id) : '';
+      }).filter(Boolean);
+    } else {
+      contrato.todos = true;
+    }
+    if (temPermissoes) contrato.permissoes = pessoa.permissoes.map((/** @type {unknown} */ id) => String(id));
+    return contrato;
   }
 
   /**
@@ -902,10 +1054,15 @@
   /**
    * @returns {Promise<import('./tipos.js').ResultadoCarga>}
    */
-  function garantirCarregados() {
+  /**
+   * @param {any} [usuario]
+   * @returns {Promise<import('./tipos.js').ResultadoCarga>}
+   */
+  function garantirCarregados(usuario) {
     if (!cargaPromise) {
+      const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
       cargaPromise = (async () => {
-        const resolucao = resolverEGuardar({ todos: true });
+        const resolucao = resolverEGuardar(contratoDe(pessoa));
         const resultado = await carregar(resolucao, registros.slice(), {
           carregarScript: carregarScriptNoDocumento
         });
@@ -970,6 +1127,15 @@
       podeVerTela,
       efetivas,
       matrizTraduzida
+    },
+    sessao: {
+      CHAVE: CHAVE_SESSAO,
+      CHAVE_ANTERIOR: CHAVE_SESSAO_ANTERIOR,
+      embrulhar: embrulharSessao,
+      gravar: gravarSessao,
+      ler: lerSessao,
+      usuarioDe: usuarioDeSessao,
+      contratoDe
     },
     eventos: { emitir, ouvir },
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
