@@ -305,7 +305,7 @@ async function excluirItemAlmoxDireto(id, btnEl) {
 
 function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
   if (listaPecas.length === 0) {
-    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum item encontrado. Use o Botão 1, a Planilha Rápida ou o Importador no Admin.</div>`;
+    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum item encontrado. Use o Botão 1 ou a Planilha Rápida.</div>`;
   }
 
   return `
