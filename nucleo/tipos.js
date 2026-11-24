@@ -184,6 +184,7 @@
  * @typedef {Object} SessaoGuardada
  * @property {{ id: string, matricula?: string, nome?: string, cargos_lista?: any, obras_permitidas?: any, ativo?: boolean }} perfil
  * @property {any} empresa
+ * @property {string | null} empresa_id
  * @property {any[] | null} modulos
  * @property {string[] | null} permissoes
  * @property {Record<string, any>} flags
@@ -201,6 +202,12 @@
  * @typedef {Object} ApiSessao
  * @property {string} CHAVE
  * @property {string} CHAVE_ANTERIOR
+ * @property {string} CHAVE_EMPRESA
+ * @property {string} CODIGO_EMPRESA_PADRAO
+ * @property {(texto: unknown) => string} codigoEmpresa
+ * @property {(storage: ArmazemSessao) => string | null} lerEmpresaLembrada
+ * @property {(storage: ArmazemSessao, codigo: unknown) => void} lembrarEmpresa
+ * @property {(storage: ArmazemSessao, trocando?: boolean) => { lembrada: string | null, mostrarCampo: boolean, mostrarLembrada: boolean, codigo: string }} estadoLoginEmpresa
  * @property {(entrada: any) => SessaoGuardada | null} embrulhar
  * @property {(storage: ArmazemSessao, entrada: any) => SessaoGuardada | null} gravar
  * @property {(storage: ArmazemSessao) => SessaoGuardada | null} ler
@@ -217,7 +224,7 @@
  * @property {ApiExtensoes} extensoes
  * @property {ApiTelas} telas
  * @property {(nome: string, moduloId?: string) => Function | null} resolverFuncao
- * @property {{ URL_BASE: string, urlCanonica: (id: string) => string }} qr
+ * @property {{ URL_BASE: string, urlCanonica: (id: string) => string, lerUrl: (search: string) => { id: string, etiquetaAntiga: boolean, mensagem: string, tag: string, nome: string, un: string } }} qr
  */
 
 export {};

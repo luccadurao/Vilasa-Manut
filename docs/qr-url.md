@@ -1,6 +1,6 @@
 # URL do QR
 
-Decisão desta etapa: cada máquina continua com o próprio QR. A leitura identifica a máquina sozinha. Abrir OS e lançar horímetro não pedem para escolher nem para digitar a máquina. O `id` (uuid de `equipamentos`) substitui a tag como identificador.
+A leitura identifica a máquina sozinha. Abrir OS e lançar horímetro não pedem para escolher nem para digitar a máquina. A partir desta etapa o identificador é só o `id` (uuid de `equipamentos`). A busca por tag deixa de ser aceita.
 
 ## Formato canônico
 
@@ -14,48 +14,42 @@ Exemplo:
 https://vilasa-manut.vercel.app/qr.html?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f
 ```
 
-O host é o de produção (`URL_BASE_QR_PRODUCAO` em `frota.js`). Uma etiqueta gerada a partir de um preview continua apontando para esse endereço. Quem lê o QR abre `qr.html` e o `id` basta para achar a máquina.
+O host é o de produção (`URL_BASE_QR_PRODUCAO` em `frota.js`). Uma etiqueta gerada a partir de um preview continua apontando para esse endereço.
 
-## O que as etiquetas impressas hoje carregam
+## O que o gerador imprime
 
-O gerador atual, `gerarUrlQRCodeOfflineReady`, já usa `id`. Ele acrescenta três campos só para a etiqueta mostrar a máquina antes da resposta do servidor:
+`gerarUrlQRCodeOfflineReady` inclui `id` desde que `frota.js` existe. A etiqueta também leva `tag`, `nome` e `un` só para o papel mostrar a máquina antes da resposta do servidor:
 
 ```
 https://vilasa-manut.vercel.app/qr.html?id=<uuid>&tag=<tag>&nome=<nome>&un=<H|KM>
 ```
 
-Exemplo real do `URLSearchParams` que a folha usa hoje:
+`tag`, `nome` e `un` não escolhem a máquina. `qr.html` chama `qr_equipamento` só com `p_id`.
 
-```
-https://vilasa-manut.vercel.app/qr.html?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05&nome=P%C3%81+CARREGADEIRA&un=H
-```
+## Etiqueta sem id
 
-`tag`, `nome` e `un` não escolhem a máquina quando o `id` está presente. `qr.html` manda `p_id` para a RPC `qr_equipamento` e deixa `p_tag` nulo. Esta etapa não muda esse gerador: uma etiqueta nova sai igual a uma etiqueta já colada na máquina.
+Sem `id` na URL, o portal mostra **Etiqueta antiga: peça a reimpressão** e esconde o formulário. Não há campo para digitar a tag, o nome ou qualquer outro código da máquina. A RPC também ignora `p_tag`: se o `id` não vier, a resposta é vazia.
 
-## Etiqueta antiga, só com tag
+## Desde quando a etiqueta leva id
 
-Uma URL antiga sem `id`, no formato `qr.html?tag=<tag>`, continua abrindo. `qr.html` lê a tag e chama `qr_equipamento` com `p_tag`. Isso vale enquanto a tag for única na empresa 1.
+O gerador de `frota.js` nunca publicou uma URL só com tag. O `id` está na função desde o primeiro commit do arquivo:
 
-Sem `id` e sem sinal, o celular não tem como gravar a OS nem a leitura: a tela pede para reimprimir a etiqueta. Com sinal, a RPC devolve o `id` e o lançamento segue.
+- commit `811c677e8c8f22bfdbef7cc0471521e9f5d40b96`
+- data `2026-10-25 15:54:18 UTC` (`12:54` em America/Sao_Paulo)
+- mensagem `Create frota.js`
 
-Nenhuma etiqueta que já está na máquina deixa de funcionar por causa desta etapa. O `qr.html` não mudou a regra de quem abre OS nem a forma de ler `id` e `tag`.
+Antes desse commit o gerador não era o `frota.js`. Em `app.js` (`39d962d`, 2026-10-23) e em `index.html` (`ac51614`, 2026-10-21) a etiqueta usava `qr.html?token=<qr_token>`. O `qr.html` daquela época (`093df6f`, 2026-10-21, e `90c9412`, 2026-10-22) também abria `?tag=`, e a tela deixava digitar um código. Nenhum commit deste repositório grava um gerador que imprima `qr.html?tag=` sem `id`.
 
-## Como gerar a folha hoje
+Para cruzar com o cadastro em produção: máquina cuja etiqueta foi impressa por este `frota.js` em ou depois de 25/10/2026 12:54 (horário de Brasília) já saiu com `id`. Etiqueta anterior a isso, se ainda estiver na máquina, é a antiga (token ou tag) e pede reimpressão.
+
+## Como imprimir só um subconjunto
 
 1. Entrar no Vilasa e abrir **Frota & QR Codes**.
-2. Marcar os equipamentos na primeira coluna da tabela.
-3. Imprimir os QR selecionados (`imprimirQRCodesSelecionados`). Também dá para abrir a etiqueta de uma máquina só (`abrirEtiquetaQRIndividual`).
-4. O navegador pede permissão de pop-up. A folha usa a imagem de `api.qrserver.com` e chama a impressão.
+2. Deixar na tela só as máquinas que interessam. A lista respeita a obra ativa do cabeçalho e a situação (`Ativos`, `Pátio`, `Desmobilizados`, `Vendidos` ou `Todos`).
+3. Apertar mais com a busca rápida de prefixo ou com o filtro de coluna (clique no título). As colunas filtráveis são tag, nome, marca, modelo, ano, série, placa, propriedade, obra e horímetro.
+4. Marcar a caixa da primeira coluna nas linhas que devem sair na folha. O botão **Imprimir QR Codes Selecionados** usa só essas linhas. Uma máquina só também sai pelo botão **QR** da própria linha.
+5. O navegador pede permissão de pop-up. A folha usa a imagem de `api.qrserver.com`.
 
-Quem imprime precisa do cargo que já gerencia a frota. O desenho da etiqueta (tag, nome, ano, série, placa e o texto "LEITURA DE HORÍMETRO / OS") permanece o mesmo.
+Não há coluna de data de cadastro. `equipamentos` não tem `criado_em` nem outra data de inclusão, então a tela não filtra por "cadastrada a partir de tal dia". O **Ano** é o ano de fabricação digitado no cadastro, não a data em que a máquina entrou no sistema. Para reimprimir o que foi cadastrado antes do `id` na URL, o cruzamento é fora da tela: a data de cadastro na produção, comparada com 25/10/2026 12:54 (horário de Brasília).
 
-## O que muda na etapa 6
-
-A etapa 6 troca o miolo do portal, não o endereço canônico:
-
-- `qr.html` passa a carregar `nucleo/qr.js`. As ações vêm dos manifestos: Frota contribui "Lançar leitura" (`exige_login: false`) e Ordens contribui "Abrir OS" (`exige_login: true`, permissão `os.abrir`). O almoxarife não tem `os.abrir`.
-- O `INSERT` direto em `ordens_servico` vira a RPC `os_abrir_pelo_qr`.
-- A busca da máquina fica pelo `id`. A tag sozinha só continua valendo para a empresa 1 enquanto existir etiqueta antiga sem `id`.
-- A fila offline passa a guardar a empresa e o módulo. A leitura anônima de horímetro continua sem login; a empresa sai do ativo no servidor.
-
-A troca da imagem do QR (hoje `api.qrserver.com`) por uma biblioteca local fica para uma fase seguinte, para a folha imprimir sem internet. O formato `qr.html?id=<uuid>` não muda nessa troca.
+Quem imprime precisa do cargo que já gerencia a frota para cadastrar e transferir. Imprimir os QR marcados está na barra da própria tela.

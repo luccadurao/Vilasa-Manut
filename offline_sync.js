@@ -249,17 +249,47 @@ window.aplicarPendentesNaLista = aplicarPendentesNaLista;
 
 // ---------- gravação --------------------------------------------------------
 
+function empresaIdDaSessao() {
+  try {
+    if (window.Vilasa && Vilasa.sessao) {
+      const sessao = Vilasa.sessao.ler(localStorage);
+      if (sessao && sessao.empresa_id) return String(sessao.empresa_id);
+      if (sessao && sessao.empresa && sessao.empresa.id) return String(sessao.empresa.id);
+    }
+  } catch (e) { /* sessão ilegível: o item segue sem empresa */ }
+  try {
+    if (window.equipAtualQR && window.equipAtualQR.empresa_id) return String(window.equipAtualQR.empresa_id);
+  } catch (e) { /* portal QR ainda sem máquina */ }
+  return null;
+}
+
+// INSERT/UPDATE grava a empresa no payload. RPC não: os argumentos da função não mudam.
+function payloadComEmpresa(operacao, payload) {
+  if (!payload || typeof payload !== 'object' || operacao === 'RPC') return payload;
+  const empresaId = payload.empresa_id || empresaIdDaSessao();
+  if (!empresaId) {
+    if (!Object.prototype.hasOwnProperty.call(payload, 'empresa_id')) return payload;
+    const semEmpresa = { ...payload };
+    delete semEmpresa.empresa_id;
+    return semEmpresa;
+  }
+  if (payload.empresa_id) return payload;
+  return { ...payload, empresa_id: empresaId };
+}
+
 function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null) {
+  const payloadItem = payloadComEmpresa(operacao, payload);
   const item = {
     id_temp: novoUuid(),
     tabela,
     operacao,
-    payload,
+    payload: payloadItem,
     idRegistro,
+    empresa_id: empresaIdDaSessao() || (payloadItem && payloadItem.empresa_id) || null,
     criado_em: new Date().toISOString(),
     tentativas: 0
   };
-  if (operacao === 'INSERT' && payload && !payload.id) item.payload = { ...payload, id: novoUuid() };
+  if (operacao === 'INSERT' && payloadItem && !payloadItem.id) item.payload = { ...payloadItem, id: novoUuid() };
 
   const fila = lerFilaOffline();
   fila.push(item);
@@ -272,6 +302,7 @@ async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = nu
   if (typeof obterClienteSupabase === 'function') obterClienteSupabase();
 
   // Todo INSERT nasce com id próprio (permite editar offline e evita duplicar no reenvio).
+  payload = payloadComEmpresa(operacao, payload);
   if (operacao === 'INSERT' && payload && !payload.id) payload = { ...payload, id: novoUuid() };
 
   const haPendentes = lerFilaOffline().length > 0;

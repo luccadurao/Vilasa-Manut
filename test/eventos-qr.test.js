@@ -34,6 +34,24 @@ test('evento local é síncrono e também acorda o ouvinte do manifesto', () => 
   assert.deepEqual(recebidos[2], { id: 8 });
 });
 
+test('sem id a etiqueta é antiga e não vira busca por tag', () => {
+  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const antiga = Vilasa.qr.lerUrl('?tag=CB-05&nome=PA');
+  assert.equal(antiga.etiquetaAntiga, true);
+  assert.equal(antiga.id, '');
+  assert.equal(antiga.mensagem, 'Etiqueta antiga: peça a reimpressão');
+  const comId = Vilasa.qr.lerUrl('?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05');
+  assert.equal(comId.etiquetaAntiga, false);
+  assert.equal(comId.id, '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f');
+  assert.equal(comId.tag, 'CB-05');
+  const html = fs.readFileSync(path.join(raiz, 'qr.html'), 'utf8');
+  assert.match(html, /Etiqueta antiga: peça a reimpressão/);
+  assert.match(html, /p_id: equipAtualQR\.id/);
+  assert.equal(html.includes('p_tag'), false);
+  assert.equal(html.includes('Digite a tag'), false);
+  assert.equal(html.includes('digitar a máquina'), false);
+});
+
 test('a URL canônica do QR identifica a máquina só pelo id', () => {
   const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
   const id = '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f';
