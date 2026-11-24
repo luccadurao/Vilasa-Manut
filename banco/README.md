@@ -4,7 +4,9 @@ Não há runner de migrações. Os arquivos SQL são aplicados à mão, na ordem
 
 ## Scripts históricos (`banco/0*.sql`)
 
-`01_preparacao.sql` até `11_diesel_grants.sql` são o histórico manual. O efeito deles, do jeito que ficou na produção, já está dentro de `migracoes/0000_base_producao_2026-11-24.sql`. Não rode essa série de novo em um banco montado pela pasta `migracoes/`.
+`01_preparacao.sql`, `01b`, `01c`, `02_ativar_rls.sql` e `04_almoxarifado.sql` até `11_diesel_grants.sql` são o histórico manual. O efeito deles, do jeito que ficou na produção, já está dentro de `migracoes/0000_base_producao_2026-11-24.sql`. Não rode essa série de novo em um banco montado pela pasta `migracoes/`.
+
+`banco/03_reverter_rls.sql` foi removido no PR #4 porque reabria o acesso anônimo. Detalhe na seção "Script removido".
 
 ## Daqui em diante
 
@@ -33,8 +35,10 @@ A produção ("Painel de Manutenção") já está neste ponto:
 
 Não rode a `0001` de novo na produção. O comentário no topo desse arquivo ainda diz que ele não foi aplicado: o texto foi escrito antes das 18:07 e o arquivo foi versionado sem alteração.
 
-## Não rode de novo
+## Script removido
 
-`banco/03_reverter_rls.sql` desliga o RLS das tabelas centrais e faz `GRANT ALL` para `anon` e `authenticated`. Rodar de novo reabre o acesso anônimo com a chave pública do site.
+`banco/03_reverter_rls.sql` foi removido no PR #4 porque reabria o acesso anônimo: desligava o RLS das tabelas centrais e fazia `GRANT ALL` para `anon` e `authenticated`.
 
-`banco/migracoes/reverter/0001_seguranca_minima_reverter.sql` desfaz a correção e volta ao estado inseguro de antes das 18:07. Só use se a reversão for decidida de propósito.
+## Reversão da correção
+
+`banco/migracoes/reverter/0001_seguranca_minima_reverter.sql` desfaz a `0001` e volta ao estado inseguro de antes das 18:07. Só use se a reversão for decidida de propósito.

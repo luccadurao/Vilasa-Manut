@@ -66,7 +66,7 @@ Privilégios padrão do `postgres` no `public` (produção, reproduzidos): tabel
 | public.preventiva_pacotes | 169 | **ligado** | 2 | anon: sem SELECT/INSERT/UPDATE/DELETE; authenticated: sem SELECT/INSERT/UPDATE/DELETE |
 | public.servicos_almoxarifado | sem estatística (-1) | desligado | 0 | anon: CRUD; authenticated: CRUD |
 
-**Resumo do RLS em produção:** 13 tabelas com RLS **ligado** (admin_auditoria, os 4 do diesel, equipamentos_historico, notas_fora_do_custo, os_pecas_previstas, as 5 de preventiva_*) e **16 desligado**, incluindo todas as centrais: equipamentos, ordens_servico, perfis_usuarios, obras, pecas_estoque, movimentacoes_almoxarifado, itens_os_estoque, diario_horimetro, planos_preventiva, execucoes_preventiva, apontamentos_os, configuracoes_sistema, lotes_estoque, servicos_almoxarifado + 2 backups em `app`. Nenhuma tabela usa FORCE RLS. É o estado esperado após `banco/03_reverter_rls.sql` (as 34 policies de `02_ativar_rls.sql` não existem na produção).
+**Resumo do RLS em produção:** 13 tabelas com RLS **ligado** (admin_auditoria, os 4 do diesel, equipamentos_historico, notas_fora_do_custo, os_pecas_previstas, as 5 de preventiva_*) e **16 desligado**, incluindo todas as centrais: equipamentos, ordens_servico, perfis_usuarios, obras, pecas_estoque, movimentacoes_almoxarifado, itens_os_estoque, diario_horimetro, planos_preventiva, execucoes_preventiva, apontamentos_os, configuracoes_sistema, lotes_estoque, servicos_almoxarifado + 2 backups em `app`. Nenhuma tabela usa FORCE RLS. É o estado deixado pelo desligamento do RLS nas tabelas centrais (as 34 policies de `02_ativar_rls.sql` não existem na produção). O script que fazia isso, `banco/03_reverter_rls.sql`, foi removido no PR #4 porque reabria o acesso anônimo.
 
 ### Pontos de atenção (achados só por metadado, não testados no app)
 1. **`perfis_usuarios` sem RLS e com SELECT/INSERT/UPDATE/DELETE para `anon`**, e a tabela tem a coluna `senha_acesso` (NOT NULL). Qualquer pessoa com a chave pública do site consegue ler e alterar a tabela de usuários pela API REST. O mesmo vale (CRUD para anon) para as demais tabelas centrais com RLS desligado.
@@ -119,9 +119,10 @@ Usuários do Auth, perfis e qualquer outro dado **não** foram copiados.
 - Índices na produção sem origem no repo: `idx_itens_status`, `idx_lotes_fifo`, `idx_servicos_equip`, `ix_movalm_carga`. Os três primeiros provavelmente vêm do esquema original.
 
 **No repo, mas não na produção (esperado):**
-- `02_ativar_rls.sql`: funções `app.acesso_global`, `app.guard_equipamentos`, trigger `trg_guard_equipamentos` e 34 policies (eq_*, os_*, perfis_*, obras_*, itens_*, etc.) não existem. RLS desligado nas 14 tabelas. Isso confirma que `03_reverter_rls.sql` foi a última coisa aplicada nesse grupo.
+- `02_ativar_rls.sql`: funções `app.acesso_global`, `app.guard_equipamentos`, trigger `trg_guard_equipamentos` e 34 policies (eq_*, os_*, perfis_*, obras_*, itens_*, etc.) não existem. RLS desligado nas 14 tabelas. Isso confirma que a reversão do RLS foi a última coisa aplicada nesse grupo.
 - `app.limite_salto_efetivo` foi criada em 01b e removida em 01c. Coerente.
-- `03_reverter_rls.sql` dá `GRANT ALL ... TO anon, authenticated` em todas as tabelas: é a origem do CRUD para anon nas tabelas centrais.
+
+O `GRANT ALL ... TO anon, authenticated` em todas as tabelas, origem do CRUD para anon nas tabelas centrais, vinha de `banco/03_reverter_rls.sql`. Esse arquivo foi removido no PR #4 porque reabria o acesso anônimo. Na comparação com `origin/main` @ `8d408b6` ele ainda estava no repo e fora da produção.
 
 **Policies com texto diferente do arquivo:** `eqhist_select`, `osprev_sel` e `preventiva_*_sel` aparecem no repo com `using (true)`; na produção estão com `app.perfil_ativo()`, por causa de `08_leituras_so_perfil_ativo.sql`. Coerente.
 
