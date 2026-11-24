@@ -222,6 +222,9 @@ END $$;
 CREATE INDEX IF NOT EXISTS permissoes_modulo_idx ON public.permissoes (modulo_id);
 CREATE INDEX IF NOT EXISTS empresa_modulos_historico_empresa_idx
   ON public.empresa_modulos_historico (empresa_id, em DESC);
+-- FKs que não são prefixo da chave primária (advisor do Supabase).
+CREATE INDEX IF NOT EXISTS cargo_permissoes_permissao_idx ON public.cargo_permissoes (permissao_id);
+CREATE INDEX IF NOT EXISTS empresa_modulos_modulo_idx ON public.empresa_modulos (modulo_id);
 
 -- ---------------------------------------------------------------------------
 -- Funções. search_path vazio e SECURITY DEFINER, como o restante de app.*.
@@ -464,7 +467,8 @@ CREATE CONSTRAINT TRIGGER empresa_modulos_validar
 
 -- ---------------------------------------------------------------------------
 -- RLS e grants. Leitura do próprio contexto. anon fica sem nada.
--- migracoes_aplicadas não tem policy: só o dono da tabela lê.
+-- migracoes_aplicadas tem policy que nega anon e authenticated (USING false)
+-- e também fica sem GRANT. Só o dono da tabela lê.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.modulos ENABLE ROW LEVEL SECURITY;
@@ -529,6 +533,12 @@ DROP POLICY IF EXISTS plataforma_usuarios_sel_proprio ON public.plataforma_usuar
 CREATE POLICY plataforma_usuarios_sel_proprio ON public.plataforma_usuarios
   AS PERMISSIVE FOR SELECT TO authenticated
   USING (auth_user_id = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS migracoes_aplicadas_nega ON public.migracoes_aplicadas;
+CREATE POLICY migracoes_aplicadas_nega ON public.migracoes_aplicadas
+  AS PERMISSIVE FOR ALL TO anon, authenticated
+  USING (false)
+  WITH CHECK (false);
 
 REVOKE ALL ON TABLE
   public.empresas,

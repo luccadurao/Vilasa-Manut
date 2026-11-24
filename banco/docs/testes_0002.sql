@@ -227,6 +227,24 @@ BEGIN
   ) <> 8 THEN
     RAISE EXCEPTION 'A empresa 1 precisa dos 8 módulos ativos (núcleo + 7 manifestos)';
   END IF;
+
+  IF to_regclass('public.cargo_permissoes_permissao_idx') IS NULL
+     OR to_regclass('public.empresa_modulos_modulo_idx') IS NULL THEN
+    RAISE EXCEPTION 'Faltam os índices das FKs cargo_permissoes(permissao_id) e empresa_modulos(modulo_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policy p
+    JOIN pg_class c ON c.oid = p.polrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname = 'migracoes_aplicadas'
+      AND p.polname = 'migracoes_aplicadas_nega'
+      AND pg_get_expr(p.polqual, p.polrelid) = 'false'
+  ) THEN
+    RAISE EXCEPTION 'migracoes_aplicadas precisa da policy que nega com USING (false)';
+  END IF;
 END $$;
 
 SELECT 'testes_0002 ok' AS resultado;

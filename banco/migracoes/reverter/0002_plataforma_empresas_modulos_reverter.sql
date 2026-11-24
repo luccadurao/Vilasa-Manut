@@ -39,7 +39,8 @@ BEGIN
       ('public.permissoes', 'permissoes_sel_contexto'),
       ('public.cargos', 'cargos_sel_contexto'),
       ('public.cargo_permissoes', 'cargo_permissoes_sel_contexto'),
-      ('public.plataforma_usuarios', 'plataforma_usuarios_sel_proprio')
+      ('public.plataforma_usuarios', 'plataforma_usuarios_sel_proprio'),
+      ('public.migracoes_aplicadas', 'migracoes_aplicadas_nega')
     ) AS t(relacao, policy)
   LOOP
     IF to_regclass(r.relacao) IS NOT NULL THEN
@@ -47,6 +48,9 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+DROP INDEX IF EXISTS public.cargo_permissoes_permissao_idx;
+DROP INDEX IF EXISTS public.empresa_modulos_modulo_idx;
 
 DROP TABLE IF EXISTS public.cargo_permissoes;
 DROP TABLE IF EXISTS public.empresa_modulos_historico;
