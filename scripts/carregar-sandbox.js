@@ -22,6 +22,7 @@ function carregarVilasa(raiz, opcoes = {}) {
   }
 
   rodar('nucleo/nucleo.js');
+  rodar('nucleo/ativos.js');
   if (opcoes.manifestos !== false) {
     const pasta = path.join(raiz, 'modulos');
     const nomes = fs.readdirSync(pasta, { withFileTypes: true })

@@ -305,116 +305,9 @@ function alternarSelecaoTodosQR(masterChk) {
   checks.forEach(chk => { chk.checked = masterChk.checked; });
 }
 
-function abrirModalCadastroEquipamentoV2() {
-  if (!podeExecutarAcao('gerenciar_frota', true)) return;
-  if (!navigator.onLine) return alert('Cadastro de equipamento exige internet. Faça pelo PCM quando estiver online.');
-  let modal = document.getElementById('modalNovoEquipV2');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modalNovoEquipV2';
-    modal.className = 'fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto';
-    document.body.appendChild(modal);
-  }
-  modal.innerHTML = `
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border my-8 max-h-[90vh] overflow-y-auto">
-      <h3 class="text-lg font-black text-slate-900 border-b pb-2 mb-4">Cadastrar Equipamento na Frota</h3>
-      <div class="space-y-3 text-xs">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Prefixo (TAG)</label>
-            <input id="eqV2Tag" type="text" placeholder="Ex: EH-45" class="w-full border rounded-lg p-2 font-black uppercase" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Propriedade</label>
-            <select id="eqV2Prop" class="w-full border rounded-lg p-2 font-bold">
-              <option value="proprio">🏢 Próprio</option>
-              <option value="alugado">🤝 Alugado</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block font-black uppercase text-slate-700 mb-1">Descrição</label>
-          <input id="eqV2Nome" type="text" placeholder="Ex: ESCAVADEIRA HIDRÁULICA" class="w-full border rounded-lg p-2 font-bold uppercase" />
-        </div>
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Marca</label>
-            <input id="eqV2Marca" type="text" placeholder="Marca" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Modelo</label>
-            <input id="eqV2Modelo" type="text" placeholder="Modelo" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Ano Fab.</label>
-            <input id="eqV2Ano" type="text" placeholder="Ex: 2023" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Número de Série</label>
-            <input id="eqV2Serie" type="text" placeholder="Nº de Série" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Placa (Opcional)</label>
-            <input id="eqV2Placa" type="text" placeholder="Ex: ABC-1234" class="w-full border rounded-lg p-2 font-bold uppercase" />
-          </div>
-        </div>
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Unidade</label>
-            <select id="eqV2Unidade" class="w-full border rounded-lg p-2 font-bold">
-              <option value="H">Horas (H)</option>
-              <option value="KM">KM</option>
-            </select>
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Horímetro</label>
-            <input id="eqV2Horimetro" type="number" step="0.1" value="0" class="w-full border rounded-lg p-2 font-bold" />
-          </div>
-          <div>
-            <label class="block font-black uppercase text-slate-700 mb-1">Obra</label>
-            <select id="eqV2Obra" class="w-full border rounded-lg p-2 font-bold">
-              ${cacheObras.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>${esc(o.codigo)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="mt-5 flex justify-end gap-2">
-        <button onclick="document.getElementById('modalNovoEquipV2').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
-        <button onclick="salvarNovoEquipamentoV2()" class="px-5 py-2 rounded-lg bg-amber-500 font-black text-xs text-slate-950 shadow">Salvar Ativo</button>
-      </div>
-    </div>
-  `;
-  modal.classList.remove('hidden');
-}
-
-async function salvarNovoEquipamentoV2() {
-  const tag = document.getElementById('eqV2Tag').value.trim().toUpperCase();
-  const nome = document.getElementById('eqV2Nome').value.trim().toUpperCase();
-  if (!tag || !nome) return alert('Informe Prefixo e Descrição!');
-  if (!navigator.onLine) return alert('Equipamento só pode ser cadastrado com internet (somente PCM). Tente novamente quando estiver online.');
-  const chave = t => String(t).toUpperCase().replace(/[\s-]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
-  if (cacheEquipamentos.some(e => chave(e.tag) === chave(tag))) return alert('Já existe um equipamento com esse prefixo (' + tag + ').');
-
-  await gravarDadosOfflineSafe('equipamentos', 'INSERT', {
-    tag,
-    nome,
-    marca: document.getElementById('eqV2Marca').value.trim().toUpperCase(),
-    modelo: document.getElementById('eqV2Modelo').value.trim().toUpperCase(),
-    ano_fabricacao: document.getElementById('eqV2Ano').value.trim(),
-    numero_serie: document.getElementById('eqV2Serie').value.trim().toUpperCase(),
-    placa: document.getElementById('eqV2Placa').value.trim().toUpperCase(),
-    propriedade: document.getElementById('eqV2Prop').value,
-    situacao_ciclo: 'ativo',
-    unidade_medida: document.getElementById('eqV2Unidade').value,
-    horimetro_atual: parseFloat(document.getElementById('eqV2Horimetro').value) || 0,
-    obra_id: document.getElementById('eqV2Obra').value || null
-  });
-
-  document.getElementById('modalNovoEquipV2')?.classList.add('hidden');
-  await carregarFrota('ativo');
-}
+// Cadastro e edição do ativo: nucleo/ativos.js (abrirModalCadastroEquipamentoV2,
+// salvarNovoEquipamentoV2, abrirModalEditarEquipamento, salvarEdicaoEquipamento).
+// Aqui ficam ciclo de vida, transferência, leitura e QR.
 
 function abrirModalCicloVidaDesmobilizacao(equipId) {
   const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
@@ -548,35 +441,6 @@ function _modalFrota(id, html) {
   m.classList.remove('hidden');
 }
 function _fecharModalFrota(id) { document.getElementById(id)?.classList.add('hidden'); }
-
-function abrirModalEditarEquipamento(equipId) {
-  if (!podeExecutarAcao('gerenciar_frota', true)) return;
-  const eq = cacheEquipamentos.find(e => String(e.id) === String(equipId));
-  if (!eq) return;
-  const campo = (id, rot, v) => `<label class="block text-xs font-black text-slate-700">${rot}<input id="${id}" value="${esc(String(v ?? ''))}" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold uppercase" /></label>`;
-  _modalFrota('modalEditarEquipV2', `
-    <h3 class="font-black text-slate-900">✏️ Editar ${esc(eq.tag)}</h3>
-    ${campo('edNome', 'Descrição', eq.nome)}${campo('edMarca', 'Marca', eq.marca)}${campo('edModelo', 'Modelo', eq.modelo)}
-    ${campo('edAno', 'Ano', eq.ano_fabricacao)}${campo('edSerie', 'Nº de série', eq.numero_serie)}${campo('edPlaca', 'Placa', eq.placa)}
-    <label class="block text-xs font-black text-slate-700">Medidor principal
-      <select id="edUn" class="mt-1 w-full border rounded-lg p-2 text-sm font-bold"><option value="H" ${eq.unidade_medida !== 'KM' ? 'selected' : ''}>Horas</option><option value="KM" ${eq.unidade_medida === 'KM' ? 'selected' : ''}>KM</option></select></label>
-    <div class="flex justify-end gap-2 pt-2">
-      <button onclick="_fecharModalFrota('modalEditarEquipV2')" class="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs">Cancelar</button>
-      <button onclick="salvarEdicaoEquipamento('${eq.id}')" class="px-5 py-2 rounded-lg bg-slate-900 text-amber-400 font-black text-xs">Salvar</button>
-    </div>`);
-}
-
-async function salvarEdicaoEquipamento(equipId) {
-  const v = id => document.getElementById(id).value.trim().toUpperCase();
-  const nome = v('edNome');
-  if (!nome) return alert('Informe a descrição!');
-  await gravarDadosOfflineSafe('equipamentos', 'UPDATE', {
-    nome, marca: v('edMarca'), modelo: v('edModelo'), ano_fabricacao: v('edAno'),
-    numero_serie: v('edSerie'), placa: v('edPlaca'), unidade_medida: v('edUn')
-  }, equipId);
-  _fecharModalFrota('modalEditarEquipV2');
-  await carregarFrota(filtroSituacaoFrota);
-}
 
 function abrirModalObraEmLote() {
   if (!podeExecutarAcao('gerenciar_frota', true)) return;

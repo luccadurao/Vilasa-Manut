@@ -216,6 +216,21 @@
  */
 
 /**
+ * @typedef {Object} TextosLocal
+ * @property {string} nivel1
+ * @property {string} nivel2
+ * @property {string} plural
+ * @property {string} etiqueta
+ * @property {string} consolidado
+ * @property {string} selecionada
+ * @property {(codigo?: string | null, nome?: string | null) => string} unica
+ */
+
+/**
+ * @typedef {((chave: string, termos?: Record<string, string> | null) => string) & { textos: (termos?: Record<string, string> | null) => TextosLocal, padrao: Record<string, string> }} TermoFn
+ */
+
+/**
  * @typedef {Object} ApiNucleo
  * @property {ApiModulos} modulos
  * @property {ApiPermissoes} permissoes
@@ -225,6 +240,7 @@
  * @property {ApiTelas} telas
  * @property {(nome: string, moduloId?: string) => Function | null} resolverFuncao
  * @property {{ URL_BASE: string, urlCanonica: (id: string) => string, lerUrl: (search: string) => { id: string, etiquetaAntiga: boolean, mensagem: string, tag: string, nome: string, un: string } }} qr
+ * @property {TermoFn} termo
  */
 
 export {};
