@@ -55,7 +55,7 @@
    */
   function resolverFuncao(nome, moduloId) {
     if (!nome) return null;
-    const grupos = root.VilasaMod;
+    const grupos = root.PlataformaMod;
     if (moduloId && grupos && grupos[moduloId] && typeof grupos[moduloId][nome] === 'function') {
       return grupos[moduloId][nome];
     }
@@ -1322,5 +1322,7 @@
     termo
   };
 
+  root.Plataforma = api;
+  // Apelido antigo. Some quando nenhum script chamar mais por Vilasa.
   root.Vilasa = api;
 })(/** @type {any} */ (typeof globalThis !== 'undefined' ? globalThis : window));

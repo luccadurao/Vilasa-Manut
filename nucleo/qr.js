@@ -55,7 +55,7 @@
    * @param {string} search
    */
   function leituraDaUrl(search) {
-    const api = root.Vilasa && root.Vilasa.qr && root.Vilasa.qr.lerUrl;
+    const api = root.Plataforma && root.Plataforma.qr && root.Plataforma.qr.lerUrl;
     if (typeof api === 'function') return api(search);
     return { id: '', etiquetaAntiga: true, mensagem: 'Etiqueta antiga: peça a reimpressão', tag: '', nome: '', un: '' };
   }
@@ -78,7 +78,7 @@
     };
   }
 
-  const api = root.Vilasa;
+  const api = root.Plataforma;
   if (!api || !api.qr) return;
   api.qr.acoesParaContexto = acoesParaContexto;
   api.qr.leituraDaUrl = leituraDaUrl;

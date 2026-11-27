@@ -4,50 +4,50 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
 test('o termo padrão da empresa 1 continua Obra e o seletor não muda o texto', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
-  assert.equal(Vilasa.termo('local.nivel1'), 'Obra');
-  assert.equal(Vilasa.termo('local.nivel2'), 'Frente');
-  assert.equal(Vilasa.termo('ativo'), 'Equipamento');
-  assert.equal(Vilasa.termo('ativo.plural'), 'Equipamentos');
-  const textos = Vilasa.termo.textos({});
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  assert.equal(Plataforma.termo('local.nivel1'), 'Obra');
+  assert.equal(Plataforma.termo('local.nivel2'), 'Frente');
+  assert.equal(Plataforma.termo('ativo'), 'Equipamento');
+  assert.equal(Plataforma.termo('ativo.plural'), 'Equipamentos');
+  const textos = Plataforma.termo.textos({});
   assert.equal(textos.etiqueta, 'Frente / Obra Ativa:');
   assert.equal(textos.consolidado, 'TODAS AS OBRAS (CONSOLIDADO)');
   assert.equal(textos.selecionada, 'Obra Selecionada');
   assert.equal(textos.unica('OB-01', 'PÁTIO'), 'Obra: OB-01 - PÁTIO');
   assert.equal(textos.unica('', ''), 'Obra: Matriz Geral');
-  const planta = Vilasa.termo.textos({
+  const planta = Plataforma.termo.textos({
     'local.nivel1': 'Planta',
     'local.nivel2': 'Setor',
     'local.nivel1.plural': 'Plantas'
   });
   assert.equal(planta.etiqueta, 'Setor / Planta Ativa:');
   assert.equal(planta.consolidado, 'TODAS AS PLANTAS (CONSOLIDADO)');
-  assert.equal(Vilasa.termo('local.nivel1', { 'local.nivel1': '  Planta  ' }), 'Planta');
+  assert.equal(Plataforma.termo('local.nivel1', { 'local.nivel1': '  Planta  ' }), 'Planta');
 });
 
 test('o termo da sessão vence o padrão', () => {
-  const { Vilasa, sandbox } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
   sandbox.usuarioLogado = {
     empresa: { termos: { 'local.nivel1': 'Contrato', 'ativo': 'Máquina' } }
   };
-  assert.equal(Vilasa.termo('local.nivel1'), 'Contrato');
-  assert.equal(Vilasa.termo('ativo'), 'Máquina');
-  assert.equal(Vilasa.termo('local.nivel2'), 'Frente');
-  assert.equal(Vilasa.termo.textos().etiqueta, 'Frente / Contrato Ativa:');
+  assert.equal(Plataforma.termo('local.nivel1'), 'Contrato');
+  assert.equal(Plataforma.termo('ativo'), 'Máquina');
+  assert.equal(Plataforma.termo('local.nivel2'), 'Frente');
+  assert.equal(Plataforma.termo.textos().etiqueta, 'Frente / Contrato Ativa:');
 });
 
 test('o cadastro do núcleo grava local e tipo sem pedir a máquina no QR', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const tipos = [
     { id: 'tipo-h', codigo: 'MAQUINA_PESADA' },
     { id: 'tipo-km', codigo: 'VEICULO' }
   ];
-  const novo = Vilasa.ativos.payloadNovo({
+  const novo = Plataforma.ativos.payloadNovo({
     tag: 'EH-45',
     nome: 'ESCAVADEIRA',
     unidade_medida: 'H',
@@ -59,14 +59,14 @@ test('o cadastro do núcleo grava local e tipo sem pedir a máquina no QR', () =
   assert.equal(novo.tipo_ativo_id, 'tipo-h');
   assert.equal(JSON.stringify(novo.atributos), '{}');
   assert.equal(novo.situacao_ciclo, 'ativo');
-  const km = Vilasa.ativos.payloadNovo({
+  const km = Plataforma.ativos.payloadNovo({
     tag: 'CA-1',
     nome: 'CAMINHAO',
     unidade_medida: 'KM',
     obra_id: 'obra-1'
   }, { tipos, colunasNovas: true });
   assert.equal(km.tipo_ativo_id, 'tipo-km');
-  const antigo = Vilasa.ativos.payloadNovo({
+  const antigo = Plataforma.ativos.payloadNovo({
     tag: 'EH-45',
     nome: 'ESCAVADEIRA',
     unidade_medida: 'H',
@@ -74,7 +74,7 @@ test('o cadastro do núcleo grava local e tipo sem pedir a máquina no QR', () =
   }, { colunasNovas: false });
   assert.equal(Object.prototype.hasOwnProperty.call(antigo, 'local_id'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(antigo, 'tipo_ativo_id'), false);
-  const edicao = Vilasa.ativos.payloadEdicao({
+  const edicao = Plataforma.ativos.payloadEdicao({
     nome: 'ESCAVADEIRA',
     unidade_medida: 'KM'
   }, { tipos, colunasNovas: true });

@@ -149,7 +149,7 @@
 
     function lerSessaoLocal() {
       try {
-        if (window.Vilasa && Vilasa.sessao) return Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(localStorage));
+        if (window.Plataforma && Plataforma.sessao) return Plataforma.sessao.usuarioDe(Plataforma.sessao.ler(localStorage));
         return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
       } catch (e) { return null; }
     }
@@ -163,20 +163,20 @@
     }
 
     function acoesQrNaTela() {
-      const todas = (window.Vilasa && Vilasa.extensoes) ? Vilasa.extensoes.qr() : [];
+      const todas = (window.Plataforma && Plataforma.extensoes) ? Plataforma.extensoes.qr() : [];
       const sessao = lerSessaoLocal();
       const daMaquina = idsDeModulos(equipAtualQR.modulos_ativos);
       const daSessao = idsDeModulos(sessao && sessao.modulos);
       let modulos = null;
       if (daMaquina && daSessao) modulos = daMaquina.filter(id => daSessao.includes(id));
       else modulos = daMaquina || daSessao;
-      if (window.Vilasa && Vilasa.qr && typeof Vilasa.qr.acoesParaContexto === 'function') {
-        return Vilasa.qr.acoesParaContexto({
+      if (window.Plataforma && Plataforma.qr && typeof Plataforma.qr.acoesParaContexto === 'function') {
+        return Plataforma.qr.acoesParaContexto({
           acoes: todas,
           modulosAtivos: modulos,
           logado: !!(sessao && sessao.id),
           permissoes: sessao && Array.isArray(sessao.permissoes) ? sessao.permissoes : null,
-          pode: (permissao) => !!(Vilasa.permissoes && Vilasa.permissoes.pode(permissao, sessao))
+          pode: (permissao) => !!(Plataforma.permissoes && Plataforma.permissoes.pode(permissao, sessao))
         });
       }
       return [];
@@ -295,8 +295,8 @@
     }
 
     async function carregarEquipamentoDoQR() {
-      const leitura = window.Vilasa && Vilasa.qr
-        ? Vilasa.qr.lerUrl(window.location.search)
+      const leitura = window.Plataforma && Plataforma.qr
+        ? Plataforma.qr.lerUrl(window.location.search)
         : { id: '', etiquetaAntiga: true };
       if (!leitura || leitura.etiquetaAntiga || !leitura.id) {
         mostrarEtiquetaAntiga();
@@ -393,8 +393,8 @@
 
       enviandoQR = true;
       try {
-        const payloadOs = (window.Vilasa && Vilasa.qr && Vilasa.qr.payloadAbrirOs)
-          ? Vilasa.qr.payloadAbrirOs({
+        const payloadOs = (window.Plataforma && Plataforma.qr && Plataforma.qr.payloadAbrirOs)
+          ? Plataforma.qr.payloadAbrirOs({
             equipamentoId: equipAtualQR.id,
             problema,
             localizacao,
@@ -470,8 +470,8 @@
     // Ponto de extensão do QR. Quem vê "Abrir OS" continua em podeAbrirOSNoQR(),
     // para as etiquetas e os cargos atuais desta página não mudarem.
     window.acoesQrDoRegistro = function () {
-      if (!window.Vilasa || !Vilasa.extensoes) return [];
-      return Vilasa.extensoes.qr();
+      if (!window.Plataforma || !Plataforma.extensoes) return [];
+      return Plataforma.extensoes.qr();
     };
   </script>
 </body>

@@ -146,12 +146,12 @@
   }
 
   function termoAtivo() {
-    const fn = root.Vilasa && root.Vilasa.termo;
+    const fn = root.Plataforma && root.Plataforma.termo;
     return typeof fn === 'function' ? fn('ativo') : 'Equipamento';
   }
 
   function termoLocal() {
-    const fn = root.Vilasa && root.Vilasa.termo;
+    const fn = root.Plataforma && root.Plataforma.termo;
     return typeof fn === 'function' ? fn('local.nivel1') : 'Obra';
   }
 
@@ -330,8 +330,8 @@
   root.abrirModalEditarEquipamento = abrirEdicao;
   root.salvarEdicaoEquipamento = salvarEdicao;
 
-  if (root.Vilasa) {
-    root.Vilasa.ativos = {
+  if (root.Plataforma) {
+    root.Plataforma.ativos = {
       codigoDoTipo,
       payloadNovo,
       payloadEdicao,

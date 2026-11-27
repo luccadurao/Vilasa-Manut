@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 const EMPRESA = '00000000-0000-0000-0000-000000000001';
@@ -33,7 +33,7 @@ function memoria(inicial) {
  * @param {{ versao?: string }} [opcoes]
  */
 function carregarFila(inicial, opcoes) {
-  const { sandbox, contexto } = carregarVilasa(raiz, { manifestos: false });
+  const { sandbox, contexto } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria(inicial);
   sandbox.localStorage = store;
   sandbox.VILASA_VERSAO_APP = (opcoes && opcoes.versao) || 'v25';
@@ -58,7 +58,7 @@ function carregarFila(inicial, opcoes) {
 }
 
 function sessao(sandbox, extra) {
-  sandbox.Vilasa.sessao.gravar(sandbox.localStorage, Object.assign({
+  sandbox.Plataforma.sessao.gravar(sandbox.localStorage, Object.assign({
     id: '9',
     nome: 'Ana',
     ativo: true,

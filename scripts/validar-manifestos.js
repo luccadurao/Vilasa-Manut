@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { carregarVilasa } = require('./carregar-sandbox');
+const { carregarPlataforma } = require('./carregar-sandbox');
 
 const CATEGORIAS = new Set(['manutencao', 'producao', 'suprimentos', 'pessoas', 'plataforma']);
 const ESTAGIOS = new Set(['beta', 'estavel', 'descontinuado']);
@@ -349,7 +349,7 @@ function validarCatalogoSql(sql, manifestos, matriz) {
   }
 
   if (!blocoInsert(sql, 'empresas').includes(`'${EMPRESA_1}', 'VILASA', 'Vilasa'`)) {
-    erros.push('Catálogo SQL: a empresa 1 não é a Vilasa.');
+    erros.push('Catálogo SQL: a empresa 1 do seed da 0002 não é a VILASA.');
   }
   return erros;
 }
@@ -396,17 +396,17 @@ function validarCatalogo(raiz) {
   const teste = path.join(raiz, 'banco', 'docs', 'testes_0002.sql');
   if (!fs.existsSync(arquivo)) return ['Catálogo SQL ausente: banco/migracoes/0002_plataforma_empresas_modulos.sql.'];
   if (!fs.existsSync(teste)) return ['Falta banco/docs/testes_0002.sql.'];
-  const { Vilasa } = carregarVilasa(raiz);
-  const matriz = Vilasa.permissoes.matrizTraduzida();
-  return validarCatalogoSql(fs.readFileSync(arquivo, 'utf8'), Vilasa.modulos.lista(), matriz)
+  const { Plataforma } = carregarPlataforma(raiz);
+  const matriz = Plataforma.permissoes.matrizTraduzida();
+  return validarCatalogoSql(fs.readFileSync(arquivo, 'utf8'), Plataforma.modulos.lista(), matriz)
     .concat(validarMatrizDoTeste(fs.readFileSync(teste, 'utf8'), matriz));
 }
 
 function validarRepositorio(raiz) {
-  const { Vilasa } = carregarVilasa(raiz);
-  return validarRegistros(Vilasa.modulos.lista(), {
+  const { Plataforma } = carregarPlataforma(raiz);
+  return validarRegistros(Plataforma.modulos.lista(), {
     existe: (rel) => fs.existsSync(path.join(raiz, rel)),
-    resolver: Vilasa.modulos.resolver
+    resolver: Plataforma.modulos.resolver
   }).concat(validarCatalogo(raiz));
 }
 

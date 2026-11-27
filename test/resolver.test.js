@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 function igual(atual, esperado) {
   assert.equal(JSON.stringify(atual), JSON.stringify(esperado));
@@ -28,9 +28,9 @@ function base(id, extra = {}) {
 }
 
 test('resolve todos os módulos atuais sem bloqueio, na ordem das telas', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const lista = Vilasa.modulos.lista();
-  const resultado = Vilasa.modulos.resolver({ todos: true }, lista);
+  const { Plataforma } = carregarPlataforma(raiz);
+  const lista = Plataforma.modulos.lista();
+  const resultado = Plataforma.modulos.resolver({ todos: true }, lista);
   igual(resultado.bloqueados, []);
   igual(resultado.avisos, []);
   igual(resultado.ordem, ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'painel', 'admin']);
@@ -38,23 +38,23 @@ test('resolve todos os módulos atuais sem bloqueio, na ordem das telas', () => 
 });
 
 test('módulo obrigatório entra mesmo fora do contrato', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const resultado = Vilasa.modulos.resolver({ ativos: ['os'] }, Vilasa.modulos.lista());
+  const { Plataforma } = carregarPlataforma(raiz);
+  const resultado = Plataforma.modulos.resolver({ ativos: ['os'] }, Plataforma.modulos.lista());
   igual(resultado.ordem, ['os', 'admin']);
   igual(resultado.bloqueados, []);
 });
 
 test('id sem manifesto vira aviso e não derruba o resto', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const resultado = Vilasa.modulos.resolver({ ativos: ['fantasma'] }, Vilasa.modulos.lista());
+  const { Plataforma } = carregarPlataforma(raiz);
+  const resultado = Plataforma.modulos.resolver({ ativos: ['fantasma'] }, Plataforma.modulos.lista());
   assert.equal(resultado.ordem.includes('fantasma'), false);
   assert.equal(resultado.ordem.includes('admin'), true);
   assert.ok(resultado.avisos.some((aviso) => aviso.includes('fantasma')));
 });
 
 test('dependência ausente bloqueia o módulo e quem precisa dele', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
-  const resultado = Vilasa.modulos.resolver(['a', 'b'], [
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  const resultado = Plataforma.modulos.resolver(['a', 'b'], [
     base('a'),
     base('b', { depende: { a: '^1.0.0', c: '^1.0.0' }, ordem: 20 })
   ]);
@@ -65,8 +65,8 @@ test('dependência ausente bloqueia o módulo e quem precisa dele', () => {
 });
 
 test('faixa de versão incompatível bloqueia sem derrubar os outros', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
-  const resultado = Vilasa.modulos.resolver(['a', 'b'], [
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  const resultado = Plataforma.modulos.resolver(['a', 'b'], [
     base('a', { versao: '2.0.0' }),
     base('b', { depende: { a: '^1.0.0' }, ordem: 20 })
   ]);
@@ -76,8 +76,8 @@ test('faixa de versão incompatível bloqueia sem derrubar os outros', () => {
 });
 
 test('ciclo deixa os módulos do ciclo bloqueados', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
-  const resultado = Vilasa.modulos.resolver(['a', 'b', 'c'], [
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  const resultado = Plataforma.modulos.resolver(['a', 'b', 'c'], [
     base('a', { depende: { b: '^1.0.0' }, ordem: 10 }),
     base('b', { depende: { a: '^1.0.0' }, ordem: 20 }),
     base('c', { ordem: 30 })
@@ -88,21 +88,21 @@ test('ciclo deixa os módulos do ciclo bloqueados', () => {
 });
 
 test('filtra pelo usuário e puxa só a dependência obrigatória', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const lista = Vilasa.modulos.lista();
-  const preventivas = Vilasa.modulos.resolver(
+  const { Plataforma } = carregarPlataforma(raiz);
+  const lista = Plataforma.modulos.lista();
+  const preventivas = Plataforma.modulos.resolver(
     { todos: true, permissoes: ['preventivas.ver'] },
     lista
   );
   igual(preventivas.ordem, ['os', 'frota', 'preventivas']);
 
-  const painel = Vilasa.modulos.resolver(
+  const painel = Plataforma.modulos.resolver(
     { todos: true, permissoes: ['painel.ver'] },
     lista
   );
   igual(painel.ordem, ['os', 'painel']);
 
-  const estoque = Vilasa.modulos.resolver(
+  const estoque = Plataforma.modulos.resolver(
     { todos: true, permissoes: ['estoque.ver'] },
     lista
   );
@@ -110,9 +110,9 @@ test('filtra pelo usuário e puxa só a dependência obrigatória', () => {
 });
 
 test('o resolver não altera a lista recebida', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const lista = Vilasa.modulos.lista();
+  const { Plataforma } = carregarPlataforma(raiz);
+  const lista = Plataforma.modulos.lista();
   const antes = lista.map((item) => item.id).join(',');
-  Vilasa.modulos.resolver({ todos: true }, lista);
+  Plataforma.modulos.resolver({ todos: true }, lista);
   assert.equal(lista.map((item) => item.id).join(','), antes);
 });

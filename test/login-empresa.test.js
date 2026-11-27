@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
@@ -25,35 +25,35 @@ function memoria(inicial) {
 }
 
 test('o primeiro acesso mostra a empresa e o vazio vale VILASA', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria();
-  const estado = Vilasa.sessao.estadoLoginEmpresa(store, false);
+  const estado = Plataforma.sessao.estadoLoginEmpresa(store, false);
   assert.equal(estado.lembrada, null);
   assert.equal(estado.mostrarCampo, true);
   assert.equal(estado.mostrarLembrada, false);
-  assert.equal(Vilasa.sessao.codigoEmpresa(''), 'VILASA');
-  assert.equal(Vilasa.sessao.codigoEmpresa('  outra '), 'OUTRA');
+  assert.equal(Plataforma.sessao.codigoEmpresa(''), 'VILASA');
+  assert.equal(Plataforma.sessao.codigoEmpresa('  outra '), 'OUTRA');
 });
 
 test('depois do primeiro acesso a empresa fica lembrada e a troca reabre o campo', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria();
-  Vilasa.sessao.lembrarEmpresa(store, 'vilasa');
-  const quieto = Vilasa.sessao.estadoLoginEmpresa(store, false);
+  Plataforma.sessao.lembrarEmpresa(store, 'vilasa');
+  const quieto = Plataforma.sessao.estadoLoginEmpresa(store, false);
   assert.equal(quieto.mostrarCampo, false);
   assert.equal(quieto.mostrarLembrada, true);
   assert.equal(quieto.codigo, 'VILASA');
-  assert.equal(store.getItem(Vilasa.sessao.CHAVE_EMPRESA), 'VILASA');
-  const trocando = Vilasa.sessao.estadoLoginEmpresa(store, true);
+  assert.equal(store.getItem(Plataforma.sessao.CHAVE_EMPRESA), 'VILASA');
+  const trocando = Plataforma.sessao.estadoLoginEmpresa(store, true);
   assert.equal(trocando.mostrarCampo, true);
   assert.equal(trocando.mostrarLembrada, false);
   assert.equal(trocando.codigo, 'VILASA');
 });
 
 test('a sessão guarda empresa_id a partir do perfil', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria();
-  const sessao = Vilasa.sessao.gravar(store, {
+  const sessao = Plataforma.sessao.gravar(store, {
     id: '9',
     matricula: '9',
     nome: 'Ana',
@@ -67,7 +67,7 @@ test('a sessão guarda empresa_id a partir do perfil', () => {
     }
   });
   assert.equal(sessao && sessao.empresa_id, '00000000-0000-0000-0000-000000000001');
-  const usuario = Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(store));
+  const usuario = Plataforma.sessao.usuarioDe(Plataforma.sessao.ler(store));
   assert.equal(usuario.empresa_id, '00000000-0000-0000-0000-000000000001');
   assert.equal(usuario.empresa.codigo, 'VILASA');
 });
@@ -83,9 +83,9 @@ test('a tela de login manda a empresa no resolver_login e lembra o código', () 
 });
 
 test('a fila nova guarda empresa_id e o INSERT leva a empresa no payload', () => {
-  const { sandbox, contexto } = carregarVilasa(raiz, { manifestos: false });
+  const { sandbox, contexto } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria();
-  sandbox.Vilasa.sessao.gravar(store, {
+  sandbox.Plataforma.sessao.gravar(store, {
     id: '9',
     nome: 'Ana',
     ativo: true,

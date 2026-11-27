@@ -5,24 +5,24 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
 function carregarQr() {
-  const carregado = carregarVilasa(raiz);
+  const carregado = carregarPlataforma(raiz);
   vm.runInContext(
     fs.readFileSync(path.join(raiz, 'nucleo/qr.js'), 'utf8'),
     carregado.contexto,
     { filename: 'nucleo/qr.js' }
   );
-  return carregado.Vilasa;
+  return carregado.Plataforma;
 }
 
 test('as ações do QR saem dos módulos ativos e o almoxarife não abre OS', () => {
-  const Vilasa = carregarQr();
-  const acoes = Vilasa.extensoes.qr();
-  const ativas = Vilasa.qr.acoesParaContexto({
+  const Plataforma = carregarQr();
+  const acoes = Plataforma.extensoes.qr();
+  const ativas = Plataforma.qr.acoesParaContexto({
     acoes,
     modulosAtivos: ['os', 'frota'],
     logado: true,
@@ -30,7 +30,7 @@ test('as ações do QR saem dos módulos ativos e o almoxarife não abre OS', ()
   });
   assert.deepEqual([...ativas.map((acao) => acao.id)].sort(), ['abrir_os', 'lancar_leitura']);
 
-  const semOs = Vilasa.qr.acoesParaContexto({
+  const semOs = Plataforma.qr.acoesParaContexto({
     acoes,
     modulosAtivos: ['frota'],
     logado: true,
@@ -38,7 +38,7 @@ test('as ações do QR saem dos módulos ativos e o almoxarife não abre OS', ()
   });
   assert.deepEqual([...semOs.map((acao) => acao.id)], ['lancar_leitura']);
 
-  const almox = Vilasa.qr.acoesParaContexto({
+  const almox = Plataforma.qr.acoesParaContexto({
     acoes,
     modulosAtivos: ['os', 'frota'],
     logado: true,
@@ -47,7 +47,7 @@ test('as ações do QR saem dos módulos ativos e o almoxarife não abre OS', ()
   assert.equal(almox.some((acao) => acao.id === 'abrir_os'), false);
   assert.equal(almox.some((acao) => acao.id === 'lancar_leitura'), true);
 
-  const anonimo = Vilasa.qr.acoesParaContexto({
+  const anonimo = Plataforma.qr.acoesParaContexto({
     acoes,
     modulosAtivos: ['frota', 'os'],
     logado: false,
@@ -57,8 +57,8 @@ test('as ações do QR saem dos módulos ativos e o almoxarife não abre OS', ()
 });
 
 test('abrir OS pelo QR manda só o id e a página usa a RPC', () => {
-  const Vilasa = carregarQr();
-  const payload = Vilasa.qr.payloadAbrirOs({
+  const Plataforma = carregarQr();
+  const payload = Plataforma.qr.payloadAbrirOs({
     equipamentoId: '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f',
     problema: 'VAZAMENTO',
     localizacao: 'FRENTE 2',
@@ -71,10 +71,10 @@ test('abrir OS pelo QR manda só o id e a página usa a RPC', () => {
   assert.equal(Object.prototype.hasOwnProperty.call(payload, 'p_tag'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(payload, 'tag'), false);
   assert.equal(JSON.stringify(payload).includes('escolha'), false);
-  const leitura = Vilasa.qr.leituraDaUrl('?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05');
+  const leitura = Plataforma.qr.leituraDaUrl('?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05');
   assert.equal(leitura.etiquetaAntiga, false);
   assert.equal(leitura.id, '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f');
-  const antiga = Vilasa.qr.leituraDaUrl('?tag=CB-05');
+  const antiga = Plataforma.qr.leituraDaUrl('?tag=CB-05');
   assert.equal(antiga.etiquetaAntiga, true);
 
   const html = fs.readFileSync(path.join(raiz, 'qr.html'), 'utf8');

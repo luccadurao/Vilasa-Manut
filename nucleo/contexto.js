@@ -12,7 +12,7 @@
 // Aqui cada nome antigo vira uma propriedade de `window` com get/set, guardada
 // num lugar só. O código antigo continua escrevendo `usuarioLogado = x` e
 // lendo `cacheObras` como antes; o núcleo passa a ler o mesmo valor por
-// `Vilasa.contexto`. Carregue logo depois de nucleo/nucleo.js e antes do core.js.
+// `Plataforma.contexto`. Carregue logo depois de nucleo/nucleo.js e antes do core.js.
 // ============================================================================
 
 /**
@@ -44,7 +44,7 @@
    * @param {any} anterior
    */
   function avisar(nome, anterior) {
-    const eventos = root.Vilasa && root.Vilasa.eventos;
+    const eventos = root.Plataforma && root.Plataforma.eventos;
     if (!eventos || typeof eventos.emitir !== 'function') return;
     eventos.emitir('nucleo.contexto_mudou', { campo: nome, anterior, atual: estado[nome] });
   }
@@ -96,5 +96,5 @@
     campos: () => Object.keys(INICIAIS)
   };
 
-  if (root.Vilasa) root.Vilasa.contexto = contexto;
+  if (root.Plataforma) root.Plataforma.contexto = contexto;
 })(/** @type {any} */ (typeof globalThis !== 'undefined' ? globalThis : window));

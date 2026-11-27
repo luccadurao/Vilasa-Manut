@@ -44,13 +44,13 @@ const LISTA_CLASSIFICACAO_FALHA = [
 
 function usuarioPodeAbrirOS(user = usuarioLogado) {
   if (!user) return false;
-  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.abrir', user);
+  if (window.Plataforma && Plataforma.permissoes) return Plataforma.permissoes.pode('os.abrir', user);
   return obterCargosUsuario(user).some(c => ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'].includes(c));
 }
 
 function usuarioPodeClassificarPCM(user = usuarioLogado) {
   if (!user) return false;
-  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.classificar_rep', user);
+  if (window.Plataforma && Plataforma.permissoes) return Plataforma.permissoes.pode('os.classificar_rep', user);
   return obterCargosUsuario(user).some(c => ['pcm', 'engenheiro', 'admin'].includes(c));
 }
 

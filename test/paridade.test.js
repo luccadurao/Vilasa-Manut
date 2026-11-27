@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
@@ -98,31 +98,31 @@ const BOTOES_RELATORIO = [
 ];
 
 test('cada cargo vê as mesmas abas, ações e relatórios de hoje', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const matriz = Vilasa.permissoes.matrizTraduzida();
+  const { Plataforma } = carregarPlataforma(raiz);
+  const matriz = Plataforma.permissoes.matrizTraduzida();
   for (const [cargo, esperado] of Object.entries(CARGOS)) {
     igual(matriz[cargo].abas, esperado.abas, cargo);
     igual(matriz[cargo].acoes, esperado.acoes, cargo);
   }
   const usuario = (cargo) => ({ cargos_lista: [cargo] });
   for (const [cargo, esperado] of Object.entries(CARGOS)) {
-    assert.equal(Vilasa.permissoes.pode('os.abrir', usuario(cargo)), esperado.abrirOs, `${cargo} abrir`);
-    assert.equal(Vilasa.permissoes.podeAcaoLegada('executar_os', usuario(cargo)), esperado.executar, `${cargo} executar`);
-    assert.equal(Vilasa.permissoes.podeAcaoLegada('classificar_rep_pcm', usuario(cargo)), esperado.triagem, `${cargo} triagem`);
-    assert.equal(Vilasa.permissoes.podeAcaoLegada('exportar_relatorios', usuario(cargo)), esperado.relatorios, `${cargo} relatorios`);
+    assert.equal(Plataforma.permissoes.pode('os.abrir', usuario(cargo)), esperado.abrirOs, `${cargo} abrir`);
+    assert.equal(Plataforma.permissoes.podeAcaoLegada('executar_os', usuario(cargo)), esperado.executar, `${cargo} executar`);
+    assert.equal(Plataforma.permissoes.podeAcaoLegada('classificar_rep_pcm', usuario(cargo)), esperado.triagem, `${cargo} triagem`);
+    assert.equal(Plataforma.permissoes.podeAcaoLegada('exportar_relatorios', usuario(cargo)), esperado.relatorios, `${cargo} relatorios`);
   }
 });
 
 test('a barra de relatórios é a mesma em todas as telas', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  for (const tela of Vilasa.telas.ordenadas()) {
-    const rotulos = Vilasa.extensoes.relatoriosDaTela(tela.id).map((rel) => rel.rotulo);
+  const { Plataforma } = carregarPlataforma(raiz);
+  for (const tela of Plataforma.telas.ordenadas()) {
+    const rotulos = Plataforma.extensoes.relatoriosDaTela(tela.id).map((rel) => rel.rotulo);
     igual(rotulos, BOTOES_RELATORIO, tela.id);
   }
 });
 
 test('o menu montado na página segue o cargo, sem pedir login', async () => {
-  const { sandbox, contexto } = carregarVilasa(raiz);
+  const { sandbox, contexto } = carregarPlataforma(raiz);
   const doc = criarDocumento();
   sandbox.document = doc;
   sandbox.navigator = { onLine: false };
@@ -136,7 +136,7 @@ test('o menu montado na página segue o cargo, sem pedir login', async () => {
   for (const nome of ['carregarOrdensServico', 'carregarFrota', 'carregarPreventivas', 'carregarEstoque', 'carregarDiesel', 'calcularKPIs', 'carregarUsuariosAdmin']) {
     sandbox[nome] = () => {};
   }
-  sandbox.Vilasa.modulos.garantirCarregados = async () => ({
+  sandbox.Plataforma.modulos.garantirCarregados = async () => ({
     carregados: [],
     bloqueados: [],
     avisos: [],

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
@@ -31,15 +31,15 @@ function base(id, extra = {}) {
 }
 
 test('carrega os scripts na ordem topológica e não repete vendor', async () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const manifestos = [
     base('a', { vendor: ['vendor/compartilhado.js'], ordem: 10 }),
     base('b', { depende: { a: '^1.0.0' }, vendor: ['vendor/compartilhado.js'], ordem: 20 })
   ];
-  const resolucao = Vilasa.modulos.resolver(['a', 'b'], manifestos);
+  const resolucao = Plataforma.modulos.resolver(['a', 'b'], manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src) => { chamadas.push(src); }
   });
   igual(chamadas, ['vendor/compartilhado.js', 'a.js', 'b.js']);
@@ -48,12 +48,12 @@ test('carrega os scripts na ordem topológica e não repete vendor', async () =>
 });
 
 test('os módulos atuais pedem os scripts na ordem das dependências', async () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const manifestos = Vilasa.modulos.lista();
-  const resolucao = Vilasa.modulos.resolver({ todos: true }, manifestos);
+  const { Plataforma } = carregarPlataforma(raiz);
+  const manifestos = Plataforma.modulos.lista();
+  const resolucao = Plataforma.modulos.resolver({ todos: true }, manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src, tipo) => {
       assert.equal(tipo, 'classico');
       chamadas.push(src);
@@ -67,16 +67,16 @@ test('os módulos atuais pedem os scripts na ordem das dependências', async () 
 });
 
 test('ciclo não pede o script dos módulos do ciclo', async () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const manifestos = [
     base('a', { depende: { b: '^1.0.0' }, ordem: 10 }),
     base('b', { depende: { a: '^1.0.0' }, ordem: 20 }),
     base('c', { ordem: 30 })
   ];
-  const resolucao = Vilasa.modulos.resolver(['a', 'b', 'c'], manifestos);
+  const resolucao = Plataforma.modulos.resolver(['a', 'b', 'c'], manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src) => { chamadas.push(src); }
   });
   igual(chamadas, ['c.js']);
@@ -86,15 +86,15 @@ test('ciclo não pede o script dos módulos do ciclo', async () => {
 });
 
 test('dependência ausente não pede o script de quem ficou bloqueado', async () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const manifestos = [
     base('a'),
     base('b', { depende: { a: '^1.0.0', c: '^1.0.0' }, ordem: 20 })
   ];
-  const resolucao = Vilasa.modulos.resolver(['a', 'b'], manifestos);
+  const resolucao = Plataforma.modulos.resolver(['a', 'b'], manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src) => { chamadas.push(src); }
   });
   igual(chamadas, ['a.js']);
@@ -105,16 +105,16 @@ test('dependência ausente não pede o script de quem ficou bloqueado', async ()
 });
 
 test('falha de script bloqueia o módulo e quem depende dele, sem derrubar o resto', async () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
   const manifestos = [
     base('a', { ordem: 10 }),
     base('b', { depende: { a: '^1.0.0' }, ordem: 20 }),
     base('c', { ordem: 30 })
   ];
-  const resolucao = Vilasa.modulos.resolver(['a', 'b', 'c'], manifestos);
+  const resolucao = Plataforma.modulos.resolver(['a', 'b', 'c'], manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src) => {
       chamadas.push(src);
       if (src === 'a.js') throw new Error('a.js');
@@ -129,8 +129,8 @@ test('falha de script bloqueia o módulo e quem depende dele, sem derrubar o res
 });
 
 test('falha no iniciar bloqueia o módulo e o dependente', async () => {
-  const { Vilasa, sandbox } = carregarVilasa(raiz, { manifestos: false });
-  sandbox.VilasaMod = {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
+  sandbox.PlataformaMod = {
     a: {
       iniciar() { throw new Error('boot-a'); }
     }
@@ -139,10 +139,10 @@ test('falha no iniciar bloqueia o módulo e o dependente', async () => {
     base('a', { ordem: 10 }),
     base('b', { depende: { a: '^1.0.0' }, ordem: 20 })
   ];
-  const resolucao = Vilasa.modulos.resolver(['a', 'b'], manifestos);
+  const resolucao = Plataforma.modulos.resolver(['a', 'b'], manifestos);
   /** @type {string[]} */
   const chamadas = [];
-  const carga = await Vilasa.modulos.carregar(resolucao, manifestos, {
+  const carga = await Plataforma.modulos.carregar(resolucao, manifestos, {
     carregarScript: async (src) => { chamadas.push(src); }
   });
   igual(chamadas, ['a.js']);

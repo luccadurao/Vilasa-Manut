@@ -123,8 +123,8 @@ function moduloDaTabela(tabela) {
 
 function sessaoOfflineAtual() {
   try {
-    if (typeof window !== 'undefined' && window.Vilasa && Vilasa.sessao && typeof localStorage !== 'undefined') {
-      return Vilasa.sessao.ler(localStorage);
+    if (typeof window !== 'undefined' && window.Plataforma && Plataforma.sessao && typeof localStorage !== 'undefined') {
+      return Plataforma.sessao.ler(localStorage);
     }
   } catch (e) { /* sessão ilegível */ }
   return null;
@@ -135,7 +135,7 @@ function contextoDaSessao() {
   const usuarioMemoria = typeof usuarioLogado !== 'undefined' && usuarioLogado ? usuarioLogado : null;
   let usuario = usuarioMemoria;
   try {
-    if (!usuario && sessao && window.Vilasa && Vilasa.sessao) usuario = Vilasa.sessao.usuarioDe(sessao);
+    if (!usuario && sessao && window.Plataforma && Plataforma.sessao) usuario = Plataforma.sessao.usuarioDe(sessao);
   } catch (e) { usuario = usuarioMemoria; }
   const fonte = usuario || {};
   const modulosBrutos = fonte.modulos || (sessao && sessao.modulos) || null;
@@ -573,8 +573,8 @@ window.aplicarPendentesNaLista = aplicarPendentesNaLista;
 
 function empresaIdDaSessao() {
   try {
-    if (window.Vilasa && Vilasa.sessao) {
-      const sessao = Vilasa.sessao.ler(localStorage);
+    if (window.Plataforma && Plataforma.sessao) {
+      const sessao = Plataforma.sessao.ler(localStorage);
       if (sessao && sessao.empresa_id) return String(sessao.empresa_id);
       if (sessao && sessao.empresa && sessao.empresa.id) return String(sessao.empresa.id);
     }
