@@ -81,6 +81,9 @@ function podeVerAba(abaId, user = usuarioLogado) {
   if (!user) return false;
   const cargos = obterCargosUsuario(user);
   if (cargos.includes('admin')) return true;
+  if (window.Vilasa && Vilasa.permissoes && typeof Vilasa.permissoes.podeVerTela === 'function') {
+    return Vilasa.permissoes.podeVerTela(abaId, user);
+  }
   if (abaId === 'admin') return false;
   return cargos.some(cargo => MATRIZ_PERMISSOES_CARGOS[cargo]?.abas_visiveis.includes(abaId));
 }
@@ -94,10 +97,15 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
     return false;
   }
 
-  const resultado = cargos.some(cargo => {
-    const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
-    return cfg && (cfg.acoes.includes('*') || cfg.acoes.includes(acao));
-  });
+  let resultado = false;
+  if (window.Vilasa && Vilasa.permissoes && typeof Vilasa.permissoes.podeAcaoLegada === 'function') {
+    resultado = Vilasa.permissoes.podeAcaoLegada(acao, usuarioLogado);
+  } else {
+    resultado = cargos.some(cargo => {
+      const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
+      return cfg && (cfg.acoes.includes('*') || cfg.acoes.includes(acao));
+    });
+  }
 
   if (!resultado && exibirAlerta) {
     alert('Seu perfil não possui permissão para executar esta ação.');
@@ -122,8 +130,80 @@ function csvCelula(v) {
 // 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
 // Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
 // continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
-const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v2';
+const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v3';
+const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
 const COLUNAS_PERFIL_SEGURAS = 'id, matricula, nome, cargos_lista, obras_permitidas, ativo';
+
+function sessaoVilasa() {
+  return window.Vilasa && Vilasa.sessao ? Vilasa.sessao : null;
+}
+
+function guardarPerfilNaSessao(perfil) {
+  const api = sessaoVilasa();
+  if (!api) {
+    usuarioLogado = perfil;
+    localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
+    return;
+  }
+  const sessao = api.gravar(localStorage, perfil);
+  usuarioLogado = sessao ? api.usuarioDe(sessao) : perfil;
+}
+
+function lerPerfilDaSessao() {
+  const api = sessaoVilasa();
+  if (!api) {
+    try {
+      const bruto = localStorage.getItem(CHAVE_SESSAO_LOCAL) || localStorage.getItem(CHAVE_SESSAO_ANTERIOR);
+      if (!bruto) return null;
+      const dado = JSON.parse(bruto);
+      return dado && dado.perfil ? dado.perfil : dado;
+    } catch (e) {
+      return null;
+    }
+  }
+  return api.usuarioDe(api.ler(localStorage));
+}
+
+function apagarSessaoLocal(limparObra) {
+  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+  localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
+  if (limparObra) localStorage.removeItem('vilasa_obra_ativa_v2');
+}
+
+let trocaEmpresaAberta = false;
+
+function prepararCampoEmpresa(trocando) {
+  trocaEmpresaAberta = !!trocando;
+  const api = sessaoVilasa();
+  const estado = api && api.estadoLoginEmpresa
+    ? api.estadoLoginEmpresa(localStorage, trocaEmpresaAberta)
+    : { lembrada: null, mostrarCampo: true, mostrarLembrada: false, codigo: '' };
+  document.getElementById('loginEmpresaCampo')?.classList.toggle('hidden', !estado.mostrarCampo);
+  document.getElementById('loginEmpresaLembrada')?.classList.toggle('hidden', !estado.mostrarLembrada);
+  const rotulo = document.getElementById('loginEmpresaCodigo');
+  if (rotulo) rotulo.textContent = estado.codigo || '';
+  const input = document.getElementById('loginEmpresa');
+  if (input && estado.mostrarCampo && !input.value && estado.codigo) input.value = estado.codigo;
+}
+
+function abrirTrocaEmpresa() {
+  const input = document.getElementById('loginEmpresa');
+  if (input) input.value = '';
+  prepararCampoEmpresa(true);
+  input?.focus();
+}
+
+function codigoEmpresaDoLogin() {
+  const api = sessaoVilasa();
+  const campo = document.getElementById('loginEmpresaCampo');
+  const visivel = !campo || !campo.classList.contains('hidden');
+  const texto = visivel
+    ? (document.getElementById('loginEmpresa')?.value || '')
+    : ((api && api.lerEmpresaLembrada && api.lerEmpresaLembrada(localStorage)) || '');
+  if (api && api.codigoEmpresa) return api.codigoEmpresa(texto);
+  const limpo = String(texto || '').trim().toUpperCase();
+  return limpo || 'VILASA';
+}
 
 function erroDeRedeAuth(err) {
   if (!err) return false;
@@ -138,13 +218,14 @@ async function realizarLogin(event) {
 
   const loginDigitado = (document.getElementById('loginMatricula')?.value || '').trim();
   const senhaDigitada = (document.getElementById('loginSenha')?.value || '').trim();
+  const codigoEmpresa = codigoEmpresaDoLogin();
   if (!loginDigitado || !senhaDigitada) return alert('Informe usuário e senha!');
   if (!navigator.onLine) {
     return alert('📵 Sem sinal. O primeiro acesso neste aparelho precisa de internet. Depois dele o sistema funciona sem sinal.');
   }
 
   try {
-    const rEmail = await clienteDB.rpc('resolver_login', { p_texto: loginDigitado });
+    const rEmail = await clienteDB.rpc('resolver_login', { p_texto: loginDigitado, p_empresa: codigoEmpresa });
     if (rEmail.error) {
       return alert(erroDeRedeAuth(rEmail.error)
         ? 'Sem conexão com o servidor. Tente de novo com sinal.'
@@ -170,8 +251,10 @@ async function realizarLogin(event) {
       return alert('Seu cadastro está inativo ou incompleto. Procure o administrador.');
     }
 
-    usuarioLogado = perfil;
-    localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
+    const apiSessao = sessaoVilasa();
+    if (apiSessao && apiSessao.lembrarEmpresa) apiSessao.lembrarEmpresa(localStorage, codigoEmpresa);
+    else localStorage.setItem('vilasa_empresa_codigo', codigoEmpresa);
+    guardarPerfilNaSessao(perfil);
     await inicializarSistemaPosLogin();
   } catch (e) {
     console.error(e);
@@ -185,8 +268,7 @@ async function encerrarSessao() {
     if (pendentes > 0 && !confirm('Há ' + pendentes + ' registro(s) ainda NÃO enviados neste celular. Eles ficam guardados e são enviados quando alguém entrar com sinal. Sair mesmo assim?')) return;
   } catch (e) { /* segue */ }
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
-  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
-  localStorage.removeItem('vilasa_obra_ativa_v2');
+  apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
@@ -194,8 +276,7 @@ async function encerrarSessao() {
 
 async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
-  localStorage.removeItem(CHAVE_SESSAO_LOCAL);
-  localStorage.removeItem('vilasa_obra_ativa_v2');
+  apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
@@ -204,14 +285,13 @@ async function encerrarSessaoSemPerguntar() {
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
   const mostrarLogin = () => {
+    prepararCampoEmpresa(false);
     document.getElementById('telaLogin')?.classList.remove('hidden');
     document.getElementById('appPrincipal')?.classList.add('hidden');
   };
-  const raw = localStorage.getItem(CHAVE_SESSAO_LOCAL);
-  if (!raw) return mostrarLogin();
+  const cache = lerPerfilDaSessao();
+  if (!cache?.id) return mostrarLogin();
   try {
-    const cache = JSON.parse(raw);
-    if (!cache?.id) return mostrarLogin();
     usuarioLogado = cache; // sem sinal: confia no perfil guardado (campo sem sinal NÃO desloga)
 
     if (navigator.onLine && obterClienteSupabase()) {
@@ -221,7 +301,7 @@ async function restaurarSessaoSalva() {
         if (!sessao && !erroDeRedeAuth(eSess)) {
           // Servidor respondeu e não há mais login válido (senha trocada, usuário removido...). Pede novo login.
           // A fila de registros pendentes NÃO é apagada.
-          localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+          apagarSessaoLocal(false);
           try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
           usuarioLogado = null;
           return mostrarLogin();
@@ -230,8 +310,7 @@ async function restaurarSessaoSalva() {
           const r = await db.rpc('meu_perfil');
           if (!r.error) {
             if (r.data && r.data.ativo !== false) {
-              usuarioLogado = r.data;
-              localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(r.data));
+              guardarPerfilNaSessao(r.data);
             } else {
               return encerrarSessaoSemPerguntar();
             }
@@ -271,6 +350,11 @@ function montarBotoesBarraExportacaoUniversal() {
     barraCard.appendChild(containerBotoes);
   }
 
+  if (window.Vilasa && Vilasa.extensoes) {
+    Vilasa.extensoes.montarBarra(containerBotoes, abaAtivaGlobal, (rel) => acionarRelatorioDoRegistro(rel));
+    return;
+  }
+
   containerBotoes.innerHTML = `
     <button type="button" onclick="acionarExportacaoUniversalCSV()"
       class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow flex items-center gap-1.5"
@@ -302,7 +386,30 @@ function montarBotoesBarraExportacaoUniversal() {
   `;
 }
 
+function mostrarAvisoModulosBloqueados(carga) {
+  const lista = carga && Array.isArray(carga.bloqueados) ? carga.bloqueados : [];
+  const antigo = document.getElementById('avisoModulosBloqueados');
+  if (!lista.length) {
+    if (antigo && typeof antigo.remove === 'function') antigo.remove();
+    return;
+  }
+  const main = document.querySelector('#appPrincipal main');
+  if (!main) return;
+  const box = antigo || document.createElement('div');
+  box.id = 'avisoModulosBloqueados';
+  box.className = 'bg-amber-50 border border-amber-400 text-amber-950 rounded-2xl p-3 text-xs font-bold';
+  box.textContent = 'Módulos bloqueados (o restante segue disponível): ' + lista.map((b) => `${b.id} — ${b.motivo}`).join(' | ');
+  if (!antigo) main.prepend(box);
+}
+
 async function inicializarSistemaPosLogin() {
+  if (typeof aplicarContextoOffline === 'function') {
+    try { await aplicarContextoOffline(); } catch (e) { console.warn('Contexto offline:', e); }
+  }
+  let carga = null;
+  if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
+    carga = await Vilasa.modulos.garantirCarregados(usuarioLogado);
+  }
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
   montarBotoesBarraExportacaoUniversal();
@@ -316,11 +423,17 @@ async function inicializarSistemaPosLogin() {
   if (elCargo) elCargo.innerText = `${usuarioLogado.matricula || ''} • ${nomesCargos}`;
 
   await carregarObrasEMontarSeletorTopo();
-  ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].forEach(aba => {
-    document.getElementById(`nav-${aba}`)?.classList.toggle('hidden', !podeVerAba(aba));
-  });
+  if (window.Vilasa && Vilasa.modulos && Vilasa.telas) {
+    const contrato = window.Vilasa.sessao ? Vilasa.sessao.contratoDe(usuarioLogado) : { todos: true };
+    Vilasa.modulos.resolverEGuardar(contrato);
+    const menu = document.getElementById('menuLateralModulos');
+    if (menu) Vilasa.telas.montarMenu(menu);
+    const painel = document.querySelector('#appPrincipal main');
+    if (painel) Vilasa.telas.garantirSecoes(painel);
+  }
 
-  const primeiraAba = ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].find(a => podeVerAba(a));
+  mostrarAvisoModulosBloqueados(carga);
+  const primeiraAba = window.Vilasa && Vilasa.telas ? Vilasa.telas.primeiraVisivel() : null;
   if (primeiraAba) navegarPara(primeiraAba);
 }
 
@@ -356,10 +469,25 @@ async function carregarObrasEMontarSeletorTopo() {
   injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal);
 }
 
+function textosDoSeletorDeObra() {
+  if (window.Vilasa && Vilasa.termo && typeof Vilasa.termo.textos === 'function') {
+    return Vilasa.termo.textos();
+  }
+  return {
+    etiqueta: 'Frente / Obra Ativa:',
+    consolidado: 'TODAS AS OBRAS (CONSOLIDADO)',
+    selecionada: 'Obra Selecionada',
+    unica(codigo, nome) {
+      return codigo ? `Obra: ${codigo} - ${nome || ''}` : 'Obra: Matriz Geral';
+    }
+  };
+}
+
 function obterNomeObraAtiva() {
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return 'TODAS AS OBRAS (CONSOLIDADO)';
+  const textos = textosDoSeletorDeObra();
+  if (!obraAtivaId || obraAtivaId === 'TODAS') return textos.consolidado;
   const ob = (cacheObras || []).find(o => String(o.id) === String(obraAtivaId));
-  return ob ? `${ob.codigo} - ${ob.nome}` : 'Obra Selecionada';
+  return ob ? `${ob.codigo} - ${ob.nome}` : textos.selecionada;
 }
 
 function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
@@ -373,18 +501,20 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
     headerUser.appendChild(container);
   }
 
+  const textos = textosDoSeletorDeObra();
   const podeVerConsolidado = temAcessoGlobal || obrasLiberadas.length > 1;
   if (obrasLiberadas.length <= 1 && !podeVerConsolidado) {
     const unica = obrasLiberadas[0];
-    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 Obra: ${unica ? `${esc(unica.codigo)} - ${esc(unica.nome)}` : 'Matriz Geral'}</div>`;
+    const rotulo = textos.unica(unica ? unica.codigo : '', unica ? unica.nome : '');
+    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 ${esc(rotulo)}</div>`;
     return;
   }
 
   container.innerHTML = `
-    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Frente / Obra Ativa:</label>
+    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">${esc(textos.etiqueta)}</label>
     <select id="selectObraGlobalTopo" onchange="trocarObraAtivaGlobal(this.value)"
       class="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-extrabold">
-      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 TODAS AS OBRAS (CONSOLIDADO)</option>` : ''}
+      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
       ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
     </select>
   `;
@@ -411,21 +541,14 @@ function navegarPara(modulo) {
   abaAtivaGlobal = modulo;
   montarBotoesBarraExportacaoUniversal();
 
-  const nomesAbas = {
-    os: 'Ordens de Serviço & Quadro REP',
-    frota: 'Controle de Frota & Mobilização',
-    preventivas: 'Planos Preventivos SAP PM & Histórico',
-    estoque: 'Almoxarifado Central & Notas Fiscais',
-    diesel: 'Controle de Diesel',
-    kpis: 'Indicadores Executivos de Engenharia (KPIs)',
-    admin: 'Governança & Administração'
-  };
+  const telas = window.Vilasa && Vilasa.telas ? Vilasa.telas.ordenadas() : [];
+  const meta = telas.find(t => t.id === modulo) || null;
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
-  if (elTit) elTit.innerText = `Relatórios: ${nomesAbas[modulo] || modulo.toUpperCase()}`;
+  if (elTit) elTit.innerText = `Relatórios: ${(meta && meta.titulo_relatorio) || String(modulo).toUpperCase()}`;
 
-  ['os', 'frota', 'preventivas', 'estoque', 'diesel', 'kpis', 'admin'].forEach(m => {
-    document.getElementById(`sec-${m}`)?.classList.add('hidden');
-    const btn = document.getElementById(`nav-${m}`);
+  telas.forEach(t => {
+    document.getElementById(`sec-${t.id}`)?.classList.add('hidden');
+    const btn = document.getElementById(`nav-${t.id}`);
     if (btn) {
       btn.classList.remove('bg-amber-500', 'text-slate-950', 'font-black', 'shadow-sm');
       btn.classList.add('text-slate-700');
@@ -439,13 +562,11 @@ function navegarPara(modulo) {
     btnAtivo.classList.add('bg-amber-500', 'text-slate-950', 'font-black', 'shadow-sm');
   }
 
-  if (modulo === 'os' && typeof carregarOrdensServico === 'function') carregarOrdensServico('ativas');
-  if (modulo === 'frota' && typeof carregarFrota === 'function') carregarFrota();
-  if (modulo === 'preventivas' && typeof carregarPreventivas === 'function') carregarPreventivas();
-  if (modulo === 'estoque' && typeof carregarEstoque === 'function') carregarEstoque();
-  if (modulo === 'diesel' && typeof carregarDiesel === 'function') carregarDiesel();
-  if (modulo === 'kpis' && typeof calcularKPIs === 'function') calcularKPIs();
-  if (modulo === 'admin' && typeof carregarUsuariosAdmin === 'function') carregarUsuariosAdmin();
+  if (!meta || !meta.abrir || !window.Vilasa) return;
+  const fn = Vilasa.resolverFuncao(meta.abrir, meta.moduloId);
+  if (typeof fn !== 'function') return;
+  const args = Array.isArray(meta.abrirArgs) ? meta.abrirArgs : [];
+  return fn(...args);
 }
 
 // ============================================================================
@@ -456,57 +577,32 @@ function navegarPara(modulo) {
 
 async function acionarExportacaoUniversalCSV() {
   if (!podeExecutarAcao('exportar_relatorios', true)) return;
-
-  if (abaAtivaGlobal === 'os') {
-    const todasOS = typeof buscarTudoSemLimite === 'function'
-      ? await buscarTudoSemLimite('ordens_servico', 'aberta_em', false, '*, equipamentos(tag, nome, marca)')
-      : cacheOrdens || [];
-
-    let lista = filtrarListaPorObraAtiva(todasOS);
-    const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
-    if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
-
-    const cab = [
-      'NUMERO_OS', 'PREFIXO', 'EQUIPAMENTO', 'MARCA', 'STATUS', 'MOTIVO_REP',
-      'CLASSIFICACAO_FALHA', 'LOCAL_MANUTENCAO', 'DESCRICAO_PROBLEMA',
-      'SERVICO_EXECUTADO', 'MECANICO_NOME', 'HORIMETRO_OS', 'DATA_INICIO', 'DATA_FIM', 'DIAS_PARADOS'
-    ];
-
-    const linhas = lista.map(o => {
-      const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
-      const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
-      return [
-        o.numero_os || '',
-        o.equipamentos?.tag || '',
-        (o.equipamentos?.nome || '').replace(/;/g, ','),
-        (o.equipamentos?.marca || '').replace(/;/g, ','),
-        o.status || '',
-        o.motivo_rep || 'CORRETIVA',
-        (o.classificacao_falha || '').replace(/;/g, ','),
-        o.local_manutencao_pcm || 'OFICINA',
-        (o.descricao_problema || '').replace(/[\r\n;]+/g, ' '),
-        (o.servico_executado || '').replace(/[\r\n;]+/g, ' '),
-        (o.mecanico_nome || '').replace(/;/g, ','),
-        String(o.horimetro_os || '').replace('.', ','),
-        o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '',
-        o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'EM ABERTO',
-        dias
-      ].map(csvCelula).join(';');
-    });
-
-    const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `VILASA_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
-    return a.click();
+  const rel = window.Vilasa && Vilasa.extensoes
+    ? Vilasa.extensoes.relatoriosDaTela(abaAtivaGlobal).find(item => item.formato === 'csv')
+    : null;
+  if (rel && window.Vilasa) {
+    const fn = Vilasa.resolverFuncao(rel.funcao, rel.moduloId);
+    if (typeof fn === 'function') return fn();
   }
+  return exportarTabelaVisivelCSV();
+}
 
-  if (abaAtivaGlobal === 'frota' && typeof exportarRelatorioFrotaCSV === 'function') return exportarRelatorioFrotaCSV();
-  if (abaAtivaGlobal === 'preventivas' && typeof exportarHistoricoProprioPreventivasCSV === 'function') return exportarHistoricoProprioPreventivasCSV();
-  if (abaAtivaGlobal === 'estoque' && typeof exportarInventarioAlmoxCSV === 'function') return exportarInventarioAlmoxCSV();
-  if (abaAtivaGlobal === 'diesel' && typeof exportarRelatorioDieselCSV === 'function') return exportarRelatorioDieselCSV();
-  if (abaAtivaGlobal === 'kpis' && typeof exportarRelatorioKPIsCSV === 'function') return exportarRelatorioKPIsCSV();
+function acionarRelatorioDoRegistro(rel) {
+  if (!rel) return;
+  if (!podeExecutarAcao('exportar_relatorios', true)) return;
+  const fn = window.Vilasa ? Vilasa.resolverFuncao(rel.funcao, rel.moduloId) : null;
+  if (rel.formato === 'csv') {
+    if (typeof fn === 'function') return fn();
+    return exportarTabelaVisivelCSV();
+  }
+  const modo = rel.coleta === 'completo' ? 'completo' : 'enxuto_rep';
+  let dados = typeof fn === 'function' ? fn(modo) : null;
+  if (!dados || !Array.isArray(dados.colunas)) dados = coletarRelatorioGenericoDaTela();
+  if (rel.formato === 'png') return gerarResumoExecutivoPNG(dados);
+  return abrirJanelaImpressaoFormatada(dados, modo === 'enxuto_rep');
+}
 
+function exportarTabelaVisivelCSV() {
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const table = sec?.querySelector('table');
   if (!table) return alert('Nenhuma tabela visível para exportar nesta seção.');
@@ -517,136 +613,15 @@ async function acionarExportacaoUniversalCSV() {
   const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `VILASA_${String(abaAtivaGlobal).toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 
-function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
+function coletarRelatorioGenericoDaTela() {
   const obraNome = obterNomeObraAtiva();
-
-  if (abaAtivaGlobal === 'os') {
-    const termo = (document.getElementById('filtroPrefixoOS')?.value || '').trim().toUpperCase();
-    let lista = filtrarListaPorObraAtiva(cacheOrdens || []);
-    if (termo) lista = lista.filter(o => bateComPrefixoEquipamento(o.equipamentos?.tag || '', termo));
-
-    const abertas = lista.filter(o => !o.concluida_em && !['concluida', 'aguardando_pcm'].includes(o.status));
-
-    // MODO 1: ENXUTO DE 1 PÁGINA PARA OS EQUIPAMENTOS PARADOS (REP)
-    if (modo === 'enxuto_rep') {
-      return {
-        titulo: 'QUADRO DE EQUIPAMENTOS PARADOS EM MANUTENÇÃO (REP)',
-        subtitulo: `Obra: ${obraNome} | Posição Atualizada: ${new Date().toLocaleString('pt-BR')}`,
-        kpisResumo: [
-          { label: 'Máquinas Paradas Agora', valor: abertas.length },
-          { label: 'Aguardando Peça', valor: abertas.filter(o => o.status === 'pausada_peca').length },
-          { label: 'Em Execução / Fila', valor: abertas.filter(o => o.status !== 'pausada_peca').length },
-          { label: 'Média Dias Parados', valor: abertas.length > 0 ? (abertas.reduce((acc, o) => acc + Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000)), 0) / abertas.length).toFixed(1) + ' d' : '0 d' }
-        ],
-        colunas: ['PREFIXO', 'EQUIPAMENTO / MARCA', 'SISTEMA (FALHA)', 'DESCRIÇÃO DO PROBLEMA', 'ANDAMENTO / STATUS', 'DIAS PARADOS'],
-        linhas: abertas.map(o => {
-          const dias = Math.max(1, Math.ceil((new Date() - new Date(o.aberta_em)) / 86400000));
-          const statusCurto = o.status === 'pausada_peca' ? 'AGUARD. PEÇA' : (o.servico_executado || 'EM MANUTENÇÃO');
-          return [
-            o.equipamentos?.tag || '-',
-            `${o.equipamentos?.nome || '-'}${o.equipamentos?.marca ? ` (${o.equipamentos.marca})` : ''}`,
-            o.classificacao_falha || 'EM ANÁLISE',
-            o.descricao_problema || '-',
-            statusCurto,
-            `${dias} dia(s)`
-          ];
-        })
-      };
-    }
-
-    // MODO 2: RELATÓRIO COMPLETO DE OS (Todas as ordens + todas as informações)
-    return {
-      titulo: 'Relatório Geral Completo de Ordens de Serviço (Abertas & Concluídas)',
-      subtitulo: `Obra: ${obraNome} | Filtro Prefixo: ${termo || 'TODOS'}`,
-      kpisResumo: [
-        { label: 'Total Listado', valor: lista.length },
-        { label: 'Em Manutenção Agora', valor: abertas.length },
-        { label: 'Triagem PCM', valor: lista.filter(o => o.status === 'aguardando_pcm').length },
-        { label: 'Concluídas', valor: lista.filter(o => Boolean(o.concluida_em) || o.status === 'concluida').length }
-      ],
-      colunas: ['Nº OS', 'Prefixo / Máquina', 'Motivo / Sistema', 'Local', 'Problema', 'Serviço Executado', 'Início / Fim', 'Dias', 'Equipe'],
-      linhas: lista.map(o => {
-        const fimRef = o.concluida_em ? new Date(o.concluida_em) : new Date();
-        const dias = o.aberta_em ? Math.max(1, Math.ceil((fimRef - new Date(o.aberta_em)) / 86400000)) : 1;
-        return [
-          `#${o.numero_os || '-'}`,
-          `${o.equipamentos?.tag || '-'} - ${o.equipamentos?.nome || ''}`,
-          `${o.motivo_rep || 'CORRETIVA'} / ${o.classificacao_falha || '-'}`,
-          o.local_manutencao_pcm || 'OFICINA',
-          o.descricao_problema || '-',
-          o.servico_executado || '-',
-          `${o.aberta_em ? new Date(o.aberta_em).toLocaleString('pt-BR') : '-'} → ${o.concluida_em ? new Date(o.concluida_em).toLocaleString('pt-BR') : 'ABERTA'}`,
-          `${dias}d`,
-          o.mecanico_nome || '-'
-        ];
-      })
-    };
-  }
-
-  if (abaAtivaGlobal === 'frota') {
-    const sit = typeof filtroSituacaoFrota !== 'undefined' ? filtroSituacaoFrota : 'ativo';
-    let lista = typeof obterListaFrotaFiltradaAtual === 'function'
-      ? obterListaFrotaFiltradaAtual()
-      : filtrarListaPorObraAtiva(cacheEquipamentos || []);
-
-    return {
-      titulo: 'Relatório Oficial de Frota e Mobilização de Ativos',
-      subtitulo: `Obra: ${obraNome} | Situação: ${sit.toUpperCase()}`,
-      kpisResumo: [
-        { label: 'Total Filtrado', valor: lista.length },
-        { label: 'Próprios', valor: lista.filter(e => e.propriedade !== 'alugado').length },
-        { label: 'Locados', valor: lista.filter(e => e.propriedade === 'alugado').length },
-        { label: 'Ativos na Obra', valor: lista.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length }
-      ],
-      colunas: ['Prefixo', 'Descrição', 'Marca / Modelo / Ano', 'Nº Série / Placa', 'Vínculo', 'Horímetro / KM', 'Situação'],
-      linhas: lista.map(e => [
-        e.tag || '-',
-        e.nome || '-',
-        `${e.marca || ''} ${e.modelo || ''} ${e.ano_fabricacao ? `(${e.ano_fabricacao})` : ''}`,
-        `Série: ${e.numero_serie || 'N/I'}${e.placa ? ` | Placa: ${e.placa}` : ''}`,
-        (e.propriedade || 'proprio').toUpperCase(),
-        `${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}`,
-        (e.situacao_ciclo || 'ativo').toUpperCase()
-      ])
-    };
-  }
-
-  if (abaAtivaGlobal === 'estoque') {
-    const termo = (document.getElementById('buscaRapidaAlmoxInput')?.value || '').trim().toUpperCase();
-    let lista = filtrarListaPorObraAtiva(cachePecas || []);
-    if (termo && typeof bateComBuscaPecaOuParalelo === 'function') {
-      lista = lista.filter(p => bateComBuscaPecaOuParalelo(p, termo));
-    }
-    const valorTotal = lista.reduce((acc, p) => acc + (parseFloat(p.quantidade || 0) * parseFloat(p.custo_unitario || 0)), 0);
-
-    return {
-      titulo: 'Posição de Almoxarifado & Catálogo Mestre',
-      subtitulo: `Obra: ${obraNome} | Busca: ${termo || 'TODOS'}`,
-      kpisResumo: [
-        { label: 'Itens Listados', valor: lista.length },
-        { label: 'Com Saldo > 0', valor: lista.filter(p => parseFloat(p.quantidade || 0) > 0).length },
-        { label: 'Abaixo do Mínimo', valor: lista.filter(p => parseFloat(p.quantidade || 0) <= parseFloat(p.estoque_minimo || 0)).length },
-        { label: 'Valor em Estoque', valor: valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
-      ],
-      colunas: ['Nosso Código', 'Descrição', 'Códigos Paralelos', 'Saldo Atual', 'Custo Unit.'],
-      linhas: lista.map(p => [
-        p.id_interno || '-',
-        p.descricao || '-',
-        Array.isArray(p.codigos_paralelos) ? p.codigos_paralelos.join(', ') : '-',
-        `${p.quantidade || 0} ${p.unidade || 'UN'}`,
-        Number(p.custo_unitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-      ])
-    };
-  }
-
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const trs = Array.from(sec?.querySelectorAll('table tbody tr') || []);
   const ths = Array.from(sec?.querySelectorAll('table thead th') || []).map(th => th.innerText.trim());
-
   return {
     titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || 'Relatório Gerencial Vilasa',
     subtitulo: `Obra: ${obraNome} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
@@ -659,6 +634,21 @@ function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
     colunas: ths.length > 0 ? ths.slice(0, 7) : ['Informação'],
     linhas: trs.map(tr => Array.from(tr.querySelectorAll('td')).slice(0, 7).map(td => td.innerText.replace(/\n+/g, ' ').trim()))
   };
+}
+
+function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
+  const coleta = modo === 'completo' ? 'completo' : 'enxuto';
+  if (window.Vilasa && Vilasa.extensoes) {
+    const item = Vilasa.extensoes.relatoriosDaTela(abaAtivaGlobal).find(rel => rel.coleta === coleta);
+    if (item) {
+      const fn = Vilasa.resolverFuncao(item.funcao, item.moduloId);
+      if (typeof fn === 'function') {
+        const dados = fn(modo);
+        if (dados && Array.isArray(dados.colunas)) return dados;
+      }
+    }
+  }
+  return coletarRelatorioGenericoDaTela();
 }
 
 function imprimirRelatorioGeralCompleto() {
@@ -720,11 +710,13 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
   win.document.close();
 }
 
-async function gerarResumoExecutivoPNG() {
+async function gerarResumoExecutivoPNG(dadosProntos) {
   if (!podeExecutarAcao('exportar_relatorios', true)) return;
   if (typeof html2canvas === 'undefined') return alert('Aguarde 2 segundos, biblioteca de imagem carregando...');
 
-  const rel = coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
+  const rel = dadosProntos && Array.isArray(dadosProntos.colunas)
+    ? dadosProntos
+    : coletarDadosFiltradosDaAbaAtualParaRelatorio('enxuto_rep');
   const topLinhas = rel.linhas.slice(0, 24);
 
   const cardExecutivo = document.createElement('div');
@@ -852,4 +844,6 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
   if (operacao === 'DELETE') return await db.from(tabela).delete().eq('id', idRegistro);
 };
 
-document.addEventListener('DOMContentLoaded', () => restaurarSessaoSalva());
+document.addEventListener('DOMContentLoaded', async () => {
+  await restaurarSessaoSalva();
+});

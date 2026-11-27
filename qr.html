@@ -42,8 +42,8 @@
       </button>
     </div>
 
-    <!-- Identificação Rápida e Leitura Obrigatória -->
-    <div class="space-y-3 text-xs">
+    <!-- Identificação Rápida e Leitura Obrigatória. Sem id na URL este bloco fica escondido. -->
+    <div id="qrCorpo" class="space-y-3 text-xs">
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block font-black uppercase text-slate-400 mb-1">Sua Matrícula ou Nome</label>
@@ -53,7 +53,7 @@
         <div id="qrFuncaoWrapper">
           <label class="block font-black uppercase text-slate-400 mb-1">Sua Função</label>
           <select id="qrFuncaoSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 font-bold text-amber-300 focus:border-amber-400 focus:outline-none">
-            <option value="encarregado">👷 Encarregado</option>
+            <option value="encarregado">👷 Encarregado / Oper.</option>
             <option value="mecanico">🔧 Mecânico (Já Assumir)</option>
           </select>
         </div>
@@ -98,19 +98,44 @@
   </div>
 
   <script src="config.js"></script>
+  <script src="nucleo/versao.js"></script>
+  <script src="nucleo/nucleo.js"></script>
+  <script src="nucleo/qr.js"></script>
   <script src="offline_sync.js"></script>
+  <script src="modulos/os/manifesto.js"></script>
+  <script src="modulos/frota/manifesto.js"></script>
+  <script src="modulos/preventivas/manifesto.js"></script>
+  <script src="modulos/estoque/manifesto.js"></script>
+  <script src="modulos/diesel/manifesto.js"></script>
+  <script src="modulos/painel/manifesto.js"></script>
+  <script src="modulos/admin/manifesto.js"></script>
   <script>
     // ========================================================================
-    // PORTAL QR - REGRAS DE ACESSO
-    //  • SEM login: só LANÇA HORÍMETRO / KM.
-    //  • COM login de equipe (mecânico, encarregado, PCM, engenheiro, admin): também ABRE OS.
-    //  • Almoxarife e gestor NÃO abrem OS por aqui (o almoxarife segue lançando horímetro).
-    // Obs.: nesta etapa a regra vale na tela; o bloqueio definitivo no banco (RLS) vem na etapa de segurança.
+    // PORTAL QR
+    //  • A máquina vem só do id da URL. Não há campo para escolher ou digitar.
+    //  • As ações (horímetro, abrir OS) vêm dos manifestos dos módulos ativos.
+    //  • Abrir OS chama a RPC os_abrir_pelo_qr, que exige os.abrir no banco.
+    //    Almoxarife não tem essa permissão.
     // ========================================================================
-    const CARGOS_QUE_ABREM_OS = ['mecanico', 'encarregado', 'pcm', 'engenheiro', 'admin'];
 
-    let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null };
+    let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null, empresa_id: null, modulos_ativos: null };
     let enviandoQR = false;
+
+    function publicarEquipamentoQR() { window.equipAtualQR = equipAtualQR; }
+
+    function mostrarEtiquetaAntiga() {
+      equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null, empresa_id: null };
+      publicarEquipamentoQR();
+      document.getElementById('qrTagBadge').innerText = '—';
+      document.getElementById('qrNomeEquip').innerText = 'Etiqueta antiga: peça a reimpressão';
+      document.getElementById('qrAbasContainer')?.classList.add('hidden');
+      document.getElementById('qrCorpo')?.classList.add('hidden');
+      const aviso = document.getElementById('qrAvisoPerfil');
+      if (aviso) {
+        aviso.textContent = 'Etiqueta antiga: peça a reimpressão';
+        aviso.classList.remove('hidden');
+      }
+    }
 
     // Mesmo papel do core.js (o portal não carrega o core): garante o cliente do banco.
     function obterClienteSupabase() {
@@ -122,14 +147,46 @@
     }
 
     function lerSessaoLocal() {
-      try { return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null'); } catch (e) { return null; }
+      try {
+        if (window.Vilasa && Vilasa.sessao) return Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(localStorage));
+        return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
+      } catch (e) { return null; }
     }
     function cargosDaSessao() {
       const s = lerSessaoLocal();
       return s && Array.isArray(s.cargos_lista) ? s.cargos_lista.map(c => String(c).toLowerCase().trim()) : [];
     }
+    function idsDeModulos(lista) {
+      if (!Array.isArray(lista)) return null;
+      return lista.map(item => (typeof item === 'string' ? item : item && item.id)).filter(Boolean);
+    }
+
+    function acoesQrNaTela() {
+      const todas = (window.Vilasa && Vilasa.extensoes) ? Vilasa.extensoes.qr() : [];
+      const sessao = lerSessaoLocal();
+      const daMaquina = idsDeModulos(equipAtualQR.modulos_ativos);
+      const daSessao = idsDeModulos(sessao && sessao.modulos);
+      let modulos = null;
+      if (daMaquina && daSessao) modulos = daMaquina.filter(id => daSessao.includes(id));
+      else modulos = daMaquina || daSessao;
+      if (window.Vilasa && Vilasa.qr && typeof Vilasa.qr.acoesParaContexto === 'function') {
+        return Vilasa.qr.acoesParaContexto({
+          acoes: todas,
+          modulosAtivos: modulos,
+          logado: !!(sessao && sessao.id),
+          permissoes: sessao && Array.isArray(sessao.permissoes) ? sessao.permissoes : null,
+          pode: (permissao) => !!(Vilasa.permissoes && Vilasa.permissoes.pode(permissao, sessao))
+        });
+      }
+      return [];
+    }
+
     function podeAbrirOSNoQR() {
-      return cargosDaSessao().some(c => CARGOS_QUE_ABREM_OS.includes(c));
+      return acoesQrNaTela().some(acao => acao.id === 'abrir_os');
+    }
+
+    function podeLancarLeituraNoQR() {
+      return acoesQrNaTela().some(acao => acao.id === 'lancar_leitura');
     }
 
     function mostrarStatusQR(texto, tipo) {
@@ -159,34 +216,59 @@
     function configurarTelaPorPerfil() {
       const sessao = lerSessaoLocal();
       const cargos = cargosDaSessao();
-      const equipe = podeAbrirOSNoQR();
+      const abreOs = podeAbrirOSNoQR();
+      const lancaLeitura = podeLancarLeituraNoQR();
       const aviso = document.getElementById('qrAvisoPerfil');
 
       if (sessao) document.getElementById('qrUsuarioInput').value = sessao.nome || sessao.matricula || '';
 
-      if (equipe) {
+      if (abreOs && lancaLeitura) {
         document.getElementById('qrAbasContainer').classList.remove('hidden');
         const ehMecanico = cargos.includes('mecanico');
         document.getElementById('qrFuncaoWrapper').classList.toggle('hidden', !ehMecanico);
         document.getElementById('qrFuncaoSelect').value = ehMecanico ? 'mecanico' : 'encarregado';
         trocarAbaQR('os');
-      } else {
-        // Sem permissão de abrir OS (sem login, almoxarife ou gestor): somente horímetro.
+        aviso.classList.add('hidden');
+      } else if (abreOs) {
+        document.getElementById('qrAbasContainer').classList.add('hidden');
+        document.getElementById('qrFuncaoWrapper').classList.add('hidden');
+        trocarAbaQR('os');
+        aviso.classList.add('hidden');
+      } else if (lancaLeitura) {
         document.getElementById('qrAbasContainer').classList.add('hidden');
         document.getElementById('qrFuncaoWrapper').classList.add('hidden');
         trocarAbaQR('horimetro');
         aviso.innerHTML = 'Aqui você lança o <b>horímetro / KM</b>. Para abrir OS, a equipe de manutenção deve entrar no sistema com o login.';
         aviso.classList.remove('hidden');
+      } else {
+        document.getElementById('qrAbasContainer').classList.add('hidden');
+        document.getElementById('qrFuncaoWrapper').classList.add('hidden');
+        document.getElementById('blocoQROS')?.classList.add('hidden');
+        document.getElementById('blocoQRHorimetro')?.classList.add('hidden');
+        aviso.textContent = 'Nenhuma ação deste QR está disponível para os módulos ativos.';
+        aviso.classList.remove('hidden');
       }
     }
 
     // ----- cache da última leitura (permite conferir o valor SEM internet) -----
-    function chaveCacheEquip() { return 'vilasa_qr_equip_' + (equipAtualQR.id || equipAtualQR.tag); }
+    function chaveCacheEquip() {
+      const empresa = equipAtualQR.empresa_id || 'sem-empresa';
+      const nome = 'qr:' + (equipAtualQR.id || '');
+      if (typeof montarChaveCache === 'function') return montarChaveCache(empresa, 'frota', nome);
+      return empresa + ':frota:' + nome;
+    }
     function guardarCacheEquip() {
-      try { localStorage.setItem(chaveCacheEquip(), JSON.stringify({
+      const dados = {
         id: equipAtualQR.id, tag: equipAtualQR.tag, nome: equipAtualQR.nome,
-        unidade_medida: equipAtualQR.unidade_medida, horimetro_atual: equipAtualQR.horimetro_atual, obra_id: equipAtualQR.obra_id
-      })); } catch (e) {}
+        unidade_medida: equipAtualQR.unidade_medida, horimetro_atual: equipAtualQR.horimetro_atual,
+        obra_id: equipAtualQR.obra_id, empresa_id: equipAtualQR.empresa_id,
+        modulos_ativos: equipAtualQR.modulos_ativos || null
+      };
+      if (typeof cacheGravarDados === 'function') {
+        cacheGravarDados(chaveCacheEquip(), dados);
+        return;
+      }
+      try { localStorage.setItem('vilasa_cache_' + chaveCacheEquip(), JSON.stringify(dados)); } catch (e) {}
     }
 
     // Retorna: { ok, semBase }  (semBase = não havia leitura anterior para comparar)
@@ -212,33 +294,45 @@
     }
 
     async function carregarEquipamentoDoQR() {
+      const leitura = window.Vilasa && Vilasa.qr
+        ? Vilasa.qr.lerUrl(window.location.search)
+        : { id: '', etiquetaAntiga: true };
+      if (!leitura || leitura.etiquetaAntiga || !leitura.id) {
+        mostrarEtiquetaAntiga();
+        return;
+      }
+
       configurarTelaPorPerfil();
-      const params = new URLSearchParams(window.location.search);
-      equipAtualQR.id = params.get('id') || '';
-      equipAtualQR.tag = (params.get('tag') || 'EQUIP').toUpperCase();
-      equipAtualQR.nome = (params.get('nome') || 'Equipamento').toUpperCase();
-      equipAtualQR.unidade_medida = (params.get('un') || 'H').toUpperCase();
+      equipAtualQR.id = leitura.id;
+      equipAtualQR.tag = (leitura.tag || '').toUpperCase();
+      equipAtualQR.nome = (leitura.nome || 'Equipamento').toUpperCase();
+      equipAtualQR.unidade_medida = (leitura.un || 'H').toUpperCase();
+      publicarEquipamentoQR();
 
       // 1) Última leitura guardada neste celular (vale mesmo sem sinal)
       try {
-        const salvo = JSON.parse(localStorage.getItem(chaveCacheEquip()) || 'null');
-        if (salvo) equipAtualQR = { ...equipAtualQR, ...salvo };
+        let salvo = null;
+        if (typeof cacheLerDados === 'function') salvo = await cacheLerDados(chaveCacheEquip());
+        if (!salvo) salvo = JSON.parse(localStorage.getItem('vilasa_cache_' + chaveCacheEquip()) || 'null');
+        if (salvo && salvo.id === equipAtualQR.id) equipAtualQR = { ...equipAtualQR, ...salvo };
       } catch (e) {}
 
-      // 2) Leitura mais recente do servidor (quando houver sinal)
+      // 2) Leitura mais recente do servidor (quando houver sinal). Só o id.
       const cliente = obterClienteSupabase();
       if (navigator.onLine && cliente) {
         try {
-          const { data, error } = await cliente.rpc('qr_equipamento', { p_id: equipAtualQR.id || null, p_tag: equipAtualQR.id ? null : equipAtualQR.tag });
-          if (!error && data) {
+          const { data, error } = await cliente.rpc('qr_equipamento', { p_id: equipAtualQR.id });
+          if (!error && data && data.id) {
             equipAtualQR = { ...equipAtualQR, ...data };
             guardarCacheEquip();
           }
         } catch (e) {}
       }
 
-      document.getElementById('qrTagBadge').innerText = equipAtualQR.tag;
-      document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome;
+      publicarEquipamentoQR();
+      configurarTelaPorPerfil();
+      document.getElementById('qrTagBadge').innerText = equipAtualQR.tag || '—';
+      document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome || 'Equipamento';
       atualizarTextoHorimetro();
       atualizarBadgeStatusRede();
     }
@@ -269,6 +363,7 @@
       equipAtualQR.horimetro_atual = horNovo;
       equipAtualQR.horimetro_atualizado_em = new Date().toISOString();
       guardarCacheEquip();
+      publicarEquipamentoQR();
       atualizarTextoHorimetro();
       return { ok: true, offline: r.offline };
     }
@@ -297,21 +392,34 @@
 
       enviandoQR = true;
       try {
-        const rOS = await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
-          equipamento_id: equipAtualQR.id,
-          obra_id: equipAtualQR.obra_id || null,
-          status: ehMecanico ? 'em_execucao' : 'aberta',
-          motivo_rep: 'CORRETIVA',
-          local_manutencao_pcm: localizacao,
-          descricao_problema: problema,
-          mecanico_nome: ehMecanico ? usuarioNome : '',
-          horimetro_os: horNovo,
-          aberta_em: new Date().toISOString()
-        });
+        const payloadOs = (window.Vilasa && Vilasa.qr && Vilasa.qr.payloadAbrirOs)
+          ? Vilasa.qr.payloadAbrirOs({
+            equipamentoId: equipAtualQR.id,
+            problema,
+            localizacao,
+            horimetro: horNovo,
+            mecanico: ehMecanico ? usuarioNome : '',
+            assumir: ehMecanico,
+            id: novoUuid()
+          })
+          : {
+            p_equipamento: equipAtualQR.id,
+            p_problema: problema,
+            p_localizacao: localizacao,
+            p_horimetro: horNovo,
+            p_mecanico: ehMecanico ? usuarioNome : '',
+            p_assumir: ehMecanico,
+            p_id: novoUuid()
+          };
+        const rOS = await gravarDadosOfflineSafe('os_abrir_pelo_qr', 'RPC', payloadOs, null, { modulo: 'os' });
         if (rOS.error) return mostrarStatusQR('❌ A OS NÃO foi registrada. Tente novamente.', 'erro');
 
         const rHor = await gravarLeituraHorimetro(horNovo, usuarioNome);
         document.getElementById('qrProblemaInput').value = '';
+        if (rOS.suspenso) {
+          mostrarStatusQR('⏸ A OS ficou suspensa neste celular e não foi descartada. O badge mostra os suspensos.', 'offline');
+          return;
+        }
         const offline = rOS.offline || rHor.offline;
         if (offline) {
           mostrarStatusQR('📲 SEM SINAL: a OS ficou SALVA NO CELULAR e será enviada sozinha quando voltar o sinal. Mantenha este celular com o site instalado.', 'offline');
@@ -357,6 +465,13 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
     }
+
+    // Ponto de extensão do QR. Quem vê "Abrir OS" continua em podeAbrirOSNoQR(),
+    // para as etiquetas e os cargos atuais desta página não mudarem.
+    window.acoesQrDoRegistro = function () {
+      if (!window.Vilasa || !Vilasa.extensoes) return [];
+      return Vilasa.extensoes.qr();
+    };
   </script>
 </body>
 </html>

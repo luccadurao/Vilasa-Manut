@@ -1,0 +1,127 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const vm = require('node:vm');
+const { carregarVilasa } = require('../scripts/carregar-sandbox');
+
+const raiz = path.resolve(__dirname, '..');
+
+/**
+ * @param {Record<string, string>} [inicial]
+ */
+function memoria(inicial) {
+  /** @type {Record<string, string>} */
+  const dados = Object.assign({}, inicial);
+  return {
+    getItem(chave) {
+      return Object.prototype.hasOwnProperty.call(dados, chave) ? dados[chave] : null;
+    },
+    setItem(chave, valor) { dados[chave] = String(valor); },
+    removeItem(chave) { delete dados[chave]; }
+  };
+}
+
+test('o primeiro acesso mostra a empresa e o vazio vale VILASA', () => {
+  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const store = memoria();
+  const estado = Vilasa.sessao.estadoLoginEmpresa(store, false);
+  assert.equal(estado.lembrada, null);
+  assert.equal(estado.mostrarCampo, true);
+  assert.equal(estado.mostrarLembrada, false);
+  assert.equal(Vilasa.sessao.codigoEmpresa(''), 'VILASA');
+  assert.equal(Vilasa.sessao.codigoEmpresa('  outra '), 'OUTRA');
+});
+
+test('depois do primeiro acesso a empresa fica lembrada e a troca reabre o campo', () => {
+  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const store = memoria();
+  Vilasa.sessao.lembrarEmpresa(store, 'vilasa');
+  const quieto = Vilasa.sessao.estadoLoginEmpresa(store, false);
+  assert.equal(quieto.mostrarCampo, false);
+  assert.equal(quieto.mostrarLembrada, true);
+  assert.equal(quieto.codigo, 'VILASA');
+  assert.equal(store.getItem(Vilasa.sessao.CHAVE_EMPRESA), 'VILASA');
+  const trocando = Vilasa.sessao.estadoLoginEmpresa(store, true);
+  assert.equal(trocando.mostrarCampo, true);
+  assert.equal(trocando.mostrarLembrada, false);
+  assert.equal(trocando.codigo, 'VILASA');
+});
+
+test('a sessão guarda empresa_id a partir do perfil', () => {
+  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+  const store = memoria();
+  const sessao = Vilasa.sessao.gravar(store, {
+    id: '9',
+    matricula: '9',
+    nome: 'Ana',
+    cargos_lista: ['mecanico'],
+    ativo: true,
+    empresa_id: '00000000-0000-0000-0000-000000000001',
+    empresa: {
+      id: '00000000-0000-0000-0000-000000000001',
+      codigo: 'VILASA',
+      nome: 'Vilasa'
+    }
+  });
+  assert.equal(sessao && sessao.empresa_id, '00000000-0000-0000-0000-000000000001');
+  const usuario = Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(store));
+  assert.equal(usuario.empresa_id, '00000000-0000-0000-0000-000000000001');
+  assert.equal(usuario.empresa.codigo, 'VILASA');
+});
+
+test('a tela de login manda a empresa no resolver_login e lembra o código', () => {
+  const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+  const core = fs.readFileSync(path.join(raiz, 'core.js'), 'utf8');
+  assert.match(html, /id="loginEmpresa"/);
+  assert.match(html, /abrirTrocaEmpresa\(\)/);
+  assert.match(core, /p_empresa: codigoEmpresa/);
+  assert.match(core, /lembrarEmpresa/);
+  assert.match(core, /prepararCampoEmpresa\(false\)/);
+});
+
+test('a fila nova guarda empresa_id e o INSERT leva a empresa no payload', () => {
+  const { sandbox, contexto } = carregarVilasa(raiz, { manifestos: false });
+  const store = memoria();
+  sandbox.Vilasa.sessao.gravar(store, {
+    id: '9',
+    nome: 'Ana',
+    ativo: true,
+    empresa: { id: '00000000-0000-0000-0000-000000000001', codigo: 'VILASA' }
+  });
+  sandbox.localStorage = store;
+  sandbox.crypto = crypto;
+  sandbox.navigator = { onLine: false };
+  sandbox.document = {
+    visibilityState: 'hidden',
+    addEventListener() {},
+    getElementById() { return null; }
+  };
+  sandbox.addEventListener = () => {};
+  sandbox.setInterval = () => 0;
+  sandbox.setTimeout = () => 0;
+  sandbox.alert = () => {};
+  sandbox.confirm = () => false;
+  vm.runInContext(
+    fs.readFileSync(path.join(raiz, 'offline_sync.js'), 'utf8'),
+    contexto,
+    { filename: 'offline_sync.js' }
+  );
+  const item = sandbox.enfileirarOperacaoOffline('ordens_servico', 'INSERT', {
+    equipamento_id: 'eq-1',
+    descricao_problema: 'VAZAMENTO'
+  });
+  assert.equal(item.empresa_id, '00000000-0000-0000-0000-000000000001');
+  assert.equal(item.payload.empresa_id, '00000000-0000-0000-0000-000000000001');
+  assert.ok(item.payload.id);
+
+  const rpc = sandbox.enfileirarOperacaoOffline('lancar_horimetro', 'RPC', {
+    p_equipamento: 'eq-1',
+    p_leitura: 10
+  });
+  assert.equal(rpc.empresa_id, '00000000-0000-0000-0000-000000000001');
+  assert.equal(Object.prototype.hasOwnProperty.call(rpc.payload, 'empresa_id'), false);
+  assert.equal(rpc.payload.p_equipamento, 'eq-1');
+});

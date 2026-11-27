@@ -1,20 +1,29 @@
 // ============================================================================
-// VILASA CMMS - SERVICE WORKER V3 (abre e funciona sem internet)
+// VILASA CMMS - SERVICE WORKER
 //
 //  • Arquivos do próprio site: tenta a rede por até 4 s; se falhar/demorar, usa a cópia
 //    guardada no celular (sinal "fraco" não trava a tela).
 //  • Bibliotecas externas (Tailwind, Font Awesome, Supabase, html2canvas): usa a cópia
 //    guardada na hora e atualiza em segundo plano.
 //  • Chamadas ao banco (supabase.co) NUNCA passam por aqui: o app trata offline sozinho.
+//  • ARQUIVOS_NUCLEO entra sempre no precache. Os scripts dos módulos entram depois,
+//    por postMessage, quando o núcleo resolve o contrato.
 // ============================================================================
-const VERSAO = 'v19';
+importScripts('./nucleo/versao.js');
+
+const VERSAO = VILASA_VERSAO_APP;
 const CACHE_NAME = `vilasa-pwa-${VERSAO}`;
 const TEMPO_LIMITE_REDE_MS = 4000;
+const CHAVE_MODULOS = './nucleo/precache-modulos.json';
 
-const ARQUIVOS_LOCAIS = [
+const ARQUIVOS_NUCLEO = [
   './', './index.html', './qr.html', './manifest.webmanifest',
-  './config.js', './core.js', './offline_sync.js', './os_rep.js', './pcm_sap.js',
-  './frota.js', './estoque.js', './kpis.js', './diesel.js', './admin.js',
+  './config.js', './core.js', './offline_sync.js',
+  './nucleo/versao.js', './nucleo/nucleo.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
+  './modulos/os/manifesto.js', './modulos/frota/manifesto.js',
+  './modulos/preventivas/manifesto.js', './modulos/estoque/manifesto.js',
+  './modulos/diesel/manifesto.js', './modulos/painel/manifesto.js',
+  './modulos/admin/manifesto.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
   './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
   './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',
@@ -25,12 +34,28 @@ const ARQUIVOS_LOCAIS = [
 const LIBS_EXTERNAS = [];
 const HOSTS_EXTERNOS = [];
 
+/**
+ * @param {string} caminho
+ */
+function normalizarArquivo(caminho) {
+  let texto = String(caminho || '').trim();
+  if (!texto || texto.includes('..')) return '';
+  try {
+    if (texto.includes('://')) texto = new URL(texto).pathname;
+  } catch (e) { /* caminho relativo */ }
+  texto = texto.split('?')[0].split('#')[0].replace(/^\.\//, '').replace(/^\//, '');
+  if (!texto) return './';
+  return './' + texto;
+}
+
+const NUCLEO_NORMALIZADO = new Set(ARQUIVOS_NUCLEO.map(normalizarArquivo));
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     // Um arquivo que falhe não impede os demais de serem guardados.
-    await Promise.all(ARQUIVOS_LOCAIS.map(u => cache.add(u).catch(() => {})));
+    await Promise.all(ARQUIVOS_NUCLEO.map(u => cache.add(u).catch(() => {})));
     await Promise.all(LIBS_EXTERNAS.map(async (u) => {
       try { await cache.put(u, await fetch(u, { mode: 'no-cors' })); } catch (e) {}
     }));
@@ -44,6 +69,44 @@ self.addEventListener('activate', (event) => {
     await self.clients.claim();
   })());
 });
+
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.tipo !== 'precache' || !Array.isArray(data.arquivos)) return;
+  if (data.versao !== VERSAO) return;
+  event.waitUntil(atualizarPrecacheModulos(data.arquivos));
+});
+
+/**
+ * @param {string[]} arquivos
+ */
+async function atualizarPrecacheModulos(arquivos) {
+  const desejados = [...new Set(arquivos.map(normalizarArquivo).filter((item) => item && item !== './'))];
+  if (!desejados.length) return;
+  const cache = await caches.open(CACHE_NAME);
+  /** @type {string[]} */
+  let anteriores = [];
+  try {
+    const salvo = await cache.match(CHAVE_MODULOS);
+    if (salvo) {
+      const lido = await salvo.json();
+      if (Array.isArray(lido)) anteriores = lido.map((item) => normalizarArquivo(String(item))).filter(Boolean);
+    }
+  } catch (e) { anteriores = []; }
+
+  const conjunto = new Set(desejados);
+  const chaves = await cache.keys();
+  await Promise.all(anteriores.map(async (antigo) => {
+    if (conjunto.has(antigo) || NUCLEO_NORMALIZADO.has(antigo)) return;
+    await Promise.all(chaves.map(async (req) => {
+      if (normalizarArquivo(req.url) === antigo) await cache.delete(req);
+    }));
+  }));
+  await Promise.all(desejados.map((u) => cache.add(u).catch(() => {})));
+  await cache.put(CHAVE_MODULOS, new Response(JSON.stringify(desejados), {
+    headers: { 'Content-Type': 'application/json' }
+  }));
+}
 
 function guardar(req, resp) {
   if (resp && (resp.ok || resp.type === 'opaque')) {

@@ -19,7 +19,7 @@
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
   <!-- 1. TELA DE LOGIN -->
-  <div id="telaLogin" class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+  <div id="telaLogin" class="hidden min-h-screen bg-slate-100 flex items-center justify-center p-4">
     <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-5">
       <div class="text-center">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 font-black text-2xl mb-2 shadow-md">
@@ -30,6 +30,18 @@
       </div>
 
       <form onsubmit="realizarLogin(event)" class="space-y-4">
+        <div id="loginEmpresaBloco" class="space-y-1">
+          <div id="loginEmpresaLembrada" class="hidden flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+            <span>Empresa <span id="loginEmpresaCodigo" class="font-black text-slate-700"></span></span>
+            <button type="button" onclick="abrirTrocaEmpresa()" class="text-[10px] uppercase tracking-wide text-slate-400 hover:text-amber-600 font-bold">Trocar</button>
+          </div>
+          <div id="loginEmpresaCampo">
+            <label class="block text-[11px] font-black uppercase text-slate-600 mb-1" for="loginEmpresa">Empresa</label>
+            <input id="loginEmpresa" type="text" autocapitalize="characters" autocorrect="off" spellcheck="false"
+              placeholder="VILASA"
+              class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
+          </div>
+        </div>
         <div>
           <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Matrícula / Usuário</label>
           <input id="loginMatricula" type="text" required autocapitalize="none" autocorrect="off" spellcheck="false"
@@ -68,36 +80,7 @@
           </div>
         </div>
 
-        <nav class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
-          <button id="nav-os" onclick="navegarPara('os')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-wrench w-4 text-center"></i>
-            <span>Ordens & REP</span>
-          </button>
-          <button id="nav-frota" onclick="navegarPara('frota')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-truck-monster w-4 text-center"></i>
-            <span>Frota & QR Codes</span>
-          </button>
-          <button id="nav-preventivas" onclick="navegarPara('preventivas')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-calendar-check w-4 text-center"></i>
-            <span>Preventivas (SAP)</span>
-          </button>
-          <button id="nav-estoque" onclick="navegarPara('estoque')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-boxes-stacked w-4 text-center"></i>
-            <span>Almoxarifado</span>
-          </button>
-          <button id="nav-diesel" onclick="navegarPara('diesel')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-gas-pump w-4 text-center"></i>
-            <span>Diesel</span>
-          </button>
-          <button id="nav-kpis" onclick="navegarPara('kpis')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-chart-line w-4 text-center"></i>
-            <span>Indicadores (KPIs)</span>
-          </button>
-          <button id="nav-admin" onclick="navegarPara('admin')" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-user-shield w-4 text-center"></i>
-            <span>Administração</span>
-          </button>
-        </nav>
+        <nav id="menuLateralModulos" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5"></nav>
       </div>
     </aside>
 
@@ -166,19 +149,23 @@
 
   <!-- 3. SCRIPTS DA ARQUITETURA MODULAR V2 -->
   <script src="config.js"></script>
+  <script src="nucleo/versao.js"></script>
+  <script src="nucleo/nucleo.js"></script>
+  <script src="nucleo/qr.js"></script>
+  <script src="nucleo/ativos.js"></script>
+  <script src="modulos/os/manifesto.js"></script>
+  <script src="modulos/frota/manifesto.js"></script>
+  <script src="modulos/preventivas/manifesto.js"></script>
+  <script src="modulos/estoque/manifesto.js"></script>
+  <script src="modulos/diesel/manifesto.js"></script>
+  <script src="modulos/painel/manifesto.js"></script>
+  <script src="modulos/admin/manifesto.js"></script>
   <script src="core.js"></script>
   <script src="offline_sync.js"></script>
-  <script src="os_rep.js"></script>
-  <script src="pcm_sap.js"></script>
-  <script src="frota.js"></script>
-  <script src="estoque.js"></script>
-  <script src="kpis.js"></script>
-  <script src="diesel.js"></script>
-  <script src="admin.js"></script>
   <script>
     // Instala o "modo offline": guarda o site no celular para abrir sem internet.
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
+      navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
     }
   </script>
 </body>
