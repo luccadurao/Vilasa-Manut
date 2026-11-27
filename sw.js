@@ -16,7 +16,7 @@ const ARQUIVOS_LOCAIS = [
   './config.js', './core.js', './offline_sync.js', './os_rep.js', './pcm_sap.js',
   './frota.js', './estoque.js', './kpis.js', './diesel.js', './admin.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
-  './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js', './vendor/xlsx.mini.min.js',
+  './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
   './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',
   './vendor/fa/webfonts/fa-regular-400.woff2', './vendor/fa/webfonts/fa-brands-400.woff2'
 ];
