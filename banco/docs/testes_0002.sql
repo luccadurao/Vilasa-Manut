@@ -1,5 +1,6 @@
 -- =============================================================================
 -- testes_0002.sql — conferência da etapa 3, só leitura.
+-- teste: pontual (vale só logo depois da 0002; a 0003 muda app.empresa_atual)
 -- Rode no SQL editor da homologação, como o mesmo papel que aplicou a 0002
 -- (postgres), depois da migração:
 --   psql -1 -v ON_ERROR_STOP=1 -f banco/docs/testes_0002.sql

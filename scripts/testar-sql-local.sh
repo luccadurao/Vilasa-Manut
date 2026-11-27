@@ -1,34 +1,79 @@
 #!/bin/bash
-# Sobe um Postgres local vazio e aplica 0000 a 0005.
-# 0000 e 0001 vivem na branch do PR #2 (cursor/fase1-migracao-base-3e5d),
-# porque ainda não estão nesta pilha. Não fala com o Supabase.
+# Sobe um banco Postgres vazio e testa todas as migrações de banco/migracoes/.
+# Não fala com o Supabase: simula só o que o Supabase traz pronto
+# (papéis anon/authenticated/service_role, auth.users e auth.uid()).
+#
+# Passos:
+#   1. aplica 0000 → última, em ordem. A partir da 0002, cada migração é
+#      aplicada duas vezes seguidas (tem que ser idempotente) e o
+#      banco/docs/testes_NNNN.sql dela roda logo depois;
+#   2. carrega a semente fictícia e roda de novo os testes de regressão
+#      (todos, menos os marcados "-- teste: pontual");
+#   3. simula login (JWT) e confere uma permissão liberada e uma negada;
+#   4. reverte a última migração, confere a reversão, reaplica e testa.
+#
+# Conexão:
+#   - padrão: Postgres local via socket, como usuário postgres (sudo);
+#   - CI: defina PGHOST/PGPORT/PGUSER (e PGPASSWORD) e o script usa psql direto.
+# O banco de teste é apagado e recriado: nunca aponte para um banco real.
 set -euo pipefail
 raiz="$(cd "$(dirname "$0")/.." && pwd)"
-ref="${REF_BASE:-origin/cursor/fase1-migracao-base-3e5d}"
-tmp="$(mktemp -d)"
-db="${PGDATABASE_TESTE:-vilasa_etapa6}"
+db="${PGDATABASE_TESTE:-plataforma_teste}"
 export PGHOST="${PGHOST:-/var/run/postgresql}"
 export PGPORT="${PGPORT:-5432}"
-if [ "$(id -un)" = "postgres" ]; then
-  psql_cmd=(psql -h "$PGHOST" -p "$PGPORT")
+
+case "$PGHOST" in
+  *supabase.co*|*supabase.com*|*pooler*)
+    echo "PGHOST aponta para o Supabase. Este script só roda em banco local." >&2
+    exit 1
+    ;;
+esac
+
+if [ -n "${PGUSER:-}" ] || [ "$(id -un)" = "postgres" ]; then
+  psql_cmd=(psql -h "$PGHOST" -p "$PGPORT" -q)
 else
-  psql_cmd=(sudo -u postgres psql -h "$PGHOST" -p "$PGPORT")
+  psql_cmd=(sudo -u postgres psql -h "$PGHOST" -p "$PGPORT" -q)
 fi
 
-if ! git -C "$raiz" cat-file -e "${ref}:banco/migracoes/0000_base_producao_2026-11-24.sql" 2>/dev/null; then
-  git -C "$raiz" fetch origin cursor/fase1-migracao-base-3e5d --depth=1
-  ref="FETCH_HEAD"
+sql() { "${psql_cmd[@]}" -d "$db" -v ON_ERROR_STOP=1 "$@"; }
+etapa() { printf '\n== %s\n' "$*"; }
+
+mapfile -t migracoes < <(find "$raiz/banco/migracoes" -maxdepth 1 -name '[0-9][0-9][0-9][0-9]_*.sql' | sort)
+if [ "${#migracoes[@]}" -eq 0 ]; then
+  echo "nenhuma migração encontrada" >&2
+  exit 1
 fi
 
-git -C "$raiz" show "${ref}:banco/migracoes/0000_base_producao_2026-11-24.sql" > "$tmp/0000.sql"
-git -C "$raiz" show "${ref}:banco/migracoes/0001_seguranca_minima.sql" > "$tmp/0001.sql"
-chmod 755 "$tmp"
-chmod 644 "$tmp"/*.sql
+numero_de() { basename "$1" | cut -c1-4; }
+teste_de() {
+  local t="$raiz/banco/docs/testes_$(numero_de "$1").sql"
+  if [ -f "$t" ]; then echo "$t"; fi
+}
+reversao_de() {
+  local base
+  base="$(basename "$1" .sql)"
+  local r="$raiz/banco/migracoes/reverter/${base}_reverter.sql"
+  if [ -f "$r" ]; then echo "$r"; fi
+}
+# Teste com a linha "-- teste: pontual" só vale logo depois da própria
+# migração (uma migração seguinte muda o que ele confere). Fica fora das
+# rodadas de regressão.
+rodar_todos_os_testes() {
+  local m t
+  for m in "${migracoes[@]}"; do
+    t="$(teste_de "$m")"
+    if [ -n "$t" ] && ! grep -q '^-- teste: pontual' "$t"; then
+      echo "   teste $(basename "$t")"
+      sql -1 -f "$t"
+    fi
+  done
+}
 
+etapa "banco vazio: $db"
 "${psql_cmd[@]}" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${db};"
 "${psql_cmd[@]}" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db};"
 
-"${psql_cmd[@]}" -d "$db" -v ON_ERROR_STOP=1 <<'SQL'
+sql <<'SQL'
 CREATE SCHEMA IF NOT EXISTS extensions;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
@@ -60,22 +105,30 @@ AS $$
 $$;
 SQL
 
-"${psql_cmd[@]}" -d "$db" -v ON_ERROR_STOP=1 -f "$tmp/0000.sql"
-"${psql_cmd[@]}" -d "$db" -v ON_ERROR_STOP=1 -f "$tmp/0001.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0002_plataforma_empresas_modulos.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0002.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0003_empresa_id_em_tudo.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0003.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0004_locais_ativos.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0003.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0004.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0005_offline_qr.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0005_offline_qr.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/seed_ficticia_local.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0004.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0005.sql"
+etapa "1. migrações em ordem"
+for m in "${migracoes[@]}"; do
+  echo "   aplica $(basename "$m")"
+  # 0000 e 0001 vieram de um dump e não rodam numa transação só.
+  if [ "$(numero_de "$m")" -le 1 ]; then
+    sql -f "$m"
+  else
+    sql -1 -f "$m"
+    echo "   reaplica $(basename "$m") (idempotência)"
+    sql -1 -f "$m"
+  fi
+  t="$(teste_de "$m")"
+  if [ -n "$t" ]; then
+    echo "   teste $(basename "$t")"
+    sql -1 -f "$t"
+  fi
+done
 
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 <<'SQL'
+etapa "2. semente fictícia e testes de regressão"
+sql -1 -f "$raiz/banco/docs/seed_ficticia_local.sql"
+rodar_todos_os_testes
+
+etapa "3. login simulado: mecânico abre OS, almoxarife recebe VM403"
+sql -1 <<'SQL'
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 SELECT public.os_abrir_pelo_qr(
   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -97,19 +150,33 @@ SELECT public.os_abrir_pelo_qr(
 ) AS repetida;
 SQL
 
-if "${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -c "SELECT set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true); SELECT public.os_abrir_pelo_qr('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'NAO PODE', 'X', 12, 'ALMOX', false, 'ffffffff-ffff-4fff-8fff-ffffffffffff');" >/tmp/vilasa-almox.out 2>/tmp/vilasa-almox.err; then
+saida_negada="$(mktemp)"
+if sql -1 -c "SELECT set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true); SELECT public.os_abrir_pelo_qr('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'NAO PODE', 'X', 12, 'ALMOX', false, 'ffffffff-ffff-4fff-8fff-ffffffffffff');" >/dev/null 2>"$saida_negada"; then
   echo "almoxarife abriu OS; isso não pode" >&2
-  cat /tmp/vilasa-almox.err >&2
+  cat "$saida_negada" >&2
   exit 1
 fi
-if ! grep -q 'VM403' /tmp/vilasa-almox.err; then
+if ! grep -q 'VM403' "$saida_negada"; then
   echo "o bloqueio do almoxarife não foi VM403" >&2
-  cat /tmp/vilasa-almox.err >&2
+  cat "$saida_negada" >&2
   exit 1
 fi
 
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/reverter/0005_offline_qr_reverter.sql"
-"${psql_cmd[@]}" -d "$db" -tA -1 -v ON_ERROR_STOP=1 -c "SELECT to_regprocedure('public.os_abrir_pelo_qr(uuid, text, text, numeric, text, boolean, uuid)') IS NULL;" | grep -qx t
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/migracoes/0005_offline_qr.sql"
-"${psql_cmd[@]}" -d "$db" -1 -v ON_ERROR_STOP=1 -f "$raiz/banco/docs/testes_0005.sql"
+ultima="${migracoes[${#migracoes[@]}-1]}"
+reversao="$(reversao_de "$ultima")"
+etapa "4. reversão da última migração: $(basename "$ultima")"
+if [ -z "$reversao" ]; then
+  echo "a última migração não tem arquivo em reverter/" >&2
+  exit 1
+fi
+sql -1 -f "$reversao"
+conferencia="$raiz/banco/docs/reverter_$(numero_de "$ultima").sql"
+if [ -f "$conferencia" ]; then
+  echo "   confere $(basename "$conferencia")"
+  sql -1 -f "$conferencia"
+fi
+sql -1 -f "$ultima"
+rodar_todos_os_testes
+
+echo
 echo "sql local ok"
