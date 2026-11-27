@@ -20,11 +20,17 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   - Homologação: projeto `zqjgruwmqomgguxoxiuv` ("Vilasa Homologação").
 - `nucleo/` — núcleo da plataforma: registro de módulos, contrato, permissões,
   carregador, QR, cadastro de ativos. `nucleo/tipos.js` define o contrato (JSDoc).
-  `nucleo/contexto.js` guarda o estado comum (`usuarioLogado`, `obraAtivaId`,
-  `cache*`) como propriedade de `window`: nunca declare esses nomes com `let`/`const`.
+  O objeto global é `Plataforma` (`Vilasa` é só um apelido antigo; não use em
+  código novo). `nucleo/produto.js` tem o nome do produto e os prefixos do que
+  fica no aparelho (`PlataformaProduto.chave('...')`): nenhuma chave `vilasa_`
+  nova. `nucleo/contexto.js` guarda o estado comum (`usuarioLogado`,
+  `localAtivoId`, `cacheLocais`, `cacheAtivos`…) como propriedade de `window`:
+  nunca declare esses nomes com `let`/`const`. `obraAtivaId`, `cacheObras` e
+  `cacheEquipamentos` são apelidos antigos.
 - `config.js` — escolhe o banco pelo endereço. Só os endereços listados em
   `AMBIENTES.producao` usam produção; preview, `localhost` e endereço novo caem
-  na homologação. Cliente novo em produção = endereço novo nessa lista.
+  na homologação. Cliente novo em produção = endereço novo nessa lista, com
+  `site`, `empresa_padrao` e `marca` dele.
 - `modulos/<id>/manifesto.js` — manifesto declarativo de cada módulo
   (dependências, permissões, cargos padrão, telas, relatórios, ações de QR).
   A tela do módulo ainda vive no arquivo da raiz que o manifesto aponta
@@ -63,7 +69,7 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
      `app.exigir('<modulo>.<acao>')`. Exceções do portal público, de propósito:
      `resolver_login`, `meu_perfil`, `qr_equipamento`, `lancar_horimetro`.
 5. **Permissões vêm do manifesto.** Não teste cargo pelo nome no código
-   (`if (cargo === 'pcm')`). Use `Vilasa.permissoes.pode('<modulo>.<acao>')` no front e
+   (`if (cargo === 'pcm')`). Use `Plataforma.permissoes.pode('<modulo>.<acao>')` no front e
    `app.pode(...)`/`app.exigir(...)` no banco.
 6. **O núcleo não conhece módulo pelo nome.** Ele percorre o que os manifestos
    registraram. Módulo que depende de outro declara em `depende`.
@@ -72,8 +78,12 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
 8. **Offline primeiro.** Lançamento de campo (horímetro, OS, movimento de
    estoque) tem que funcionar sem rede e entrar na fila de `offline_sync.js`.
    O horímetro só sobe; correção só por `corrigir_leitura`, com cargo.
-9. **Termos genéricos.** O produto é vendido para construtoras e qualquer empresa
-   com frota. Não escreva "Obra" fixo em tela nova: use `Vilasa.termo('local.nivel1')`, `Vilasa.termo('ativo')` etc. (chaves em `TERMOS_PADRAO`, `nucleo/nucleo.js`).
+9. **Termos e nomes genéricos.** O produto é vendido para empresas de qualquer
+   ramo. Nada de "Obra", "Equipamento" ou nome de cliente fixo em código ou tela
+   nova: use `Plataforma.termo('local.nivel1')`, `Plataforma.termo('ativo')` etc.
+   (chaves em `TERMOS_PADRAO`, `nucleo/nucleo.js`; o padrão é Local/Ativo) e
+   `Plataforma.marca.nome()` para o nome da empresa. Variável nova usa `local`,
+   não `obra`.
 10. **Sem segredos no repositório.** A chave `anon` no `config.js` é pública por
     natureza; nada além disso (service role, senhas, tokens) entra no git.
 
