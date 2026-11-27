@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 1: CORE.JS (COMPLETO, VALIDADO E PRONTO PARA USO)
+// CORE.JS — LOGIN, SESSÃO, MENU E EXPORTAÇÃO COMUM
 // ============================================================================
 
 // O estado compartilhado (usuarioLogado, obraAtivaId, abaAtivaGlobal e os
@@ -126,8 +126,13 @@ function csvCelula(v) {
 // 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
 // Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
 // continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
-const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v3';
-const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
+// Chaves do localStorage com o prefixo do produto (nucleo/produto.js).
+function chaveLocalCore(nome) {
+  return window.PlataformaProduto ? PlataformaProduto.chave(nome) : 'plat_' + nome;
+}
+const CHAVE_SESSAO_LOCAL = chaveLocalCore('sessao_v3');
+const CHAVE_SESSAO_ANTERIOR = chaveLocalCore('sessao_v2');
+const CHAVE_LOCAL_ATIVO = chaveLocalCore('local_ativo');
 const COLUNAS_PERFIL_SEGURAS = 'id, matricula, nome, cargos_lista, obras_permitidas, ativo';
 
 function sessaoPlataforma() {
@@ -163,7 +168,7 @@ function lerPerfilDaSessao() {
 function apagarSessaoLocal(limparObra) {
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
-  if (limparObra) localStorage.removeItem('vilasa_obra_ativa_v2');
+  if (limparObra) localStorage.removeItem(CHAVE_LOCAL_ATIVO);
 }
 
 let trocaEmpresaAberta = false;
@@ -249,7 +254,7 @@ async function realizarLogin(event) {
 
     const apiSessao = sessaoPlataforma();
     if (apiSessao && apiSessao.lembrarEmpresa) apiSessao.lembrarEmpresa(localStorage, codigoEmpresa);
-    else localStorage.setItem('vilasa_empresa_codigo', codigoEmpresa);
+    else localStorage.setItem(chaveLocalCore('empresa_codigo'), codigoEmpresa);
     guardarPerfilNaSessao(perfil);
     await inicializarSistemaPosLogin();
   } catch (e) {
@@ -453,7 +458,7 @@ async function carregarObrasEMontarSeletorTopo() {
     ? cacheObras
     : cacheObras.filter(o => permissoesObra.includes(o.id) || permissoesObra.includes(o.codigo));
 
-  const salva = localStorage.getItem('vilasa_obra_ativa_v2');
+  const salva = localStorage.getItem(CHAVE_LOCAL_ATIVO);
   if (obrasLiberadas.length === 1 && !temAcessoGlobal) {
     obraAtivaId = obrasLiberadas[0].id;
   } else if (salva && (salva === 'TODAS' || obrasLiberadas.some(o => o.id === salva))) {
@@ -518,7 +523,7 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
 
 function trocarObraAtivaGlobal(novoId) {
   obraAtivaId = novoId || 'TODAS';
-  localStorage.setItem('vilasa_obra_ativa_v2', obraAtivaId);
+  localStorage.setItem(CHAVE_LOCAL_ATIVO, obraAtivaId);
   navegarPara(abaAtivaGlobal);
 }
 
@@ -824,12 +829,12 @@ window.lerDadosComFallbackOffline = window.lerDadosComFallbackOffline || async f
     if (navigator.onLine && typeof fnQuerySupabase === 'function') {
       const res = await fnQuerySupabase();
       if (res && !res.error && res.data) {
-        try { localStorage.setItem(`vilasa_cache_${chaveCache}`, JSON.stringify(res.data)); } catch (e) {}
+        try { localStorage.setItem(chaveLocalCore(`cache_${chaveCache}`), JSON.stringify(res.data)); } catch (e) {}
         return { data: res.data, error: null, offline: false };
       }
     }
   } catch (err) {}
-  const salvo = localStorage.getItem(`vilasa_cache_${chaveCache}`);
+  const salvo = localStorage.getItem(chaveLocalCore(`cache_${chaveCache}`));
   return { data: salvo ? JSON.parse(salvo) : [], error: null, offline: true };
 };
 

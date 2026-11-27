@@ -21,6 +21,7 @@ function carregarPlataforma(raiz, opcoes = {}) {
     vm.runInContext(fs.readFileSync(arquivo, 'utf8'), contexto, { filename: arquivo });
   }
 
+  rodar('nucleo/produto.js');
   rodar('nucleo/nucleo.js');
   rodar('nucleo/contexto.js');
   rodar('nucleo/ativos.js');

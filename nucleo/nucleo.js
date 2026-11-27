@@ -1,6 +1,6 @@
 // @ts-check
 // ============================================================================
-// VILASA CMMS — NÚCLEO
+// NÚCLEO DA PLATAFORMA
 // Registro de módulos, resolução, permissões por id, eventos locais e os
 // pontos de extensão de tela, relatório e QR.
 // Este arquivo não cita módulo de produto pelo nome: só percorre o que cada
@@ -411,8 +411,17 @@
     return efetivas(cargos, manifestos).includes(permissao);
   }
 
-  const CHAVE_SESSAO = 'vilasa_sessao_v3';
-  const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
+  /**
+   * Chave do localStorage com o prefixo do produto (nucleo/produto.js).
+   * @param {string} nome
+   */
+  function chaveLocal(nome) {
+    const produto = root.PlataformaProduto;
+    return produto && typeof produto.chave === 'function' ? produto.chave(nome) : 'plat_' + nome;
+  }
+
+  const CHAVE_SESSAO = chaveLocal('sessao_v3');
+  const CHAVE_SESSAO_ANTERIOR = chaveLocal('sessao_v2');
 
   /**
    * @param {any} entrada
@@ -884,7 +893,7 @@
     return `${URL_BASE_QR}?id=${encodeURIComponent(texto)}`;
   }
 
-  const CHAVE_EMPRESA = 'vilasa_empresa_codigo';
+  const CHAVE_EMPRESA = chaveLocal('empresa_codigo');
   const CODIGO_EMPRESA_PADRAO = 'VILASA';
 
   /**
@@ -983,7 +992,7 @@
    * @returns {string}
    */
   function versaoApp() {
-    return typeof VILASA_VERSAO_APP === 'string' ? VILASA_VERSAO_APP : '';
+    return typeof PLATAFORMA_VERSAO_APP === 'string' ? PLATAFORMA_VERSAO_APP : '';
   }
 
   /**

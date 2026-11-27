@@ -36,7 +36,7 @@ function carregarFila(inicial, opcoes) {
   const { sandbox, contexto } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria(inicial);
   sandbox.localStorage = store;
-  sandbox.VILASA_VERSAO_APP = (opcoes && opcoes.versao) || 'v25';
+  sandbox.PLATAFORMA_VERSAO_APP = (opcoes && opcoes.versao) || 'v25';
   sandbox.crypto = crypto;
   sandbox.navigator = { onLine: true };
   sandbox.document = {
@@ -95,7 +95,7 @@ test('módulo desligado, outra empresa, versão baixa e 403 vão para suspensos'
     modulos: [{ id: 'nucleo' }],
     versao_minima_app: 'v25'
   });
-  sandbox.VILASA_VERSAO_APP = 'v24';
+  sandbox.PLATAFORMA_VERSAO_APP = 'v24';
   const preparadoVersao = sandbox.prepararFila([
     {
       id_temp: 'v1', tabela: 'ordens_servico', operacao: 'INSERT',
@@ -107,7 +107,7 @@ test('módulo desligado, outra empresa, versão baixa e 403 vão para suspensos'
   assert.equal(preparadoVersao.suspensos.length, 1);
   assert.equal(preparadoVersao.suspensos[0].motivo, 'versao_minima_app');
 
-  sandbox.VILASA_VERSAO_APP = 'v25';
+  sandbox.PLATAFORMA_VERSAO_APP = 'v25';
   const ctx = sandbox.contextoDaSessao();
   const preparado = sandbox.prepararFila([
     {
@@ -125,7 +125,7 @@ test('módulo desligado, outra empresa, versão baixa e 403 vão para suspensos'
   assert.equal(preparado.fila.length, 0);
   assert.equal(preparado.fila.length + preparado.suspensos.length, 2);
 
-  store.setItem('vilasa_fila_sync_v2', JSON.stringify([{
+  store.setItem('plat_fila_sync_v2', JSON.stringify([{
     id_temp: 'http',
     tabela: 'os_abrir_pelo_qr',
     operacao: 'RPC',
@@ -142,9 +142,9 @@ test('módulo desligado, outra empresa, versão baixa e 403 vão para suspensos'
     }
   };
   await sandbox.sincronizarFilaOffline();
-  const suspensos = JSON.parse(store.getItem('vilasa_fila_suspensos_v1') || '[]');
-  const rejeitados = JSON.parse(store.getItem('vilasa_fila_rejeitados_v2') || '[]');
-  const fila = JSON.parse(store.getItem('vilasa_fila_sync_v2') || '[]');
+  const suspensos = JSON.parse(store.getItem('plat_fila_suspensos_v1') || '[]');
+  const rejeitados = JSON.parse(store.getItem('plat_fila_rejeitados_v2') || '[]');
+  const fila = JSON.parse(store.getItem('plat_fila_sync_v2') || '[]');
   assert.equal(fila.length, 0);
   assert.equal(rejeitados.length, 0);
   assert.equal(suspensos.some((item) => item.id_temp === 'http' && item.motivo === 'vm403'), true);
@@ -169,15 +169,15 @@ test('suspenso volta para a fila na ordem original quando o módulo liga', () =>
 test('o badge mostra suspensos e a lista não é descartada', () => {
   const { sandbox, store } = carregarFila();
   sessao(sandbox);
-  store.setItem('vilasa_fila_suspensos_v1', JSON.stringify([
+  store.setItem('plat_fila_suspensos_v1', JSON.stringify([
     { id_temp: 's1', motivo: 'modulo_desligado', operacao: 'INSERT', tabela: 'ordens_servico', modulo: 'os' }
   ]));
   const badge = { innerHTML: '' };
   sandbox.document.getElementById = (id) => (id === 'badgeStatusRedeV2' ? badge : null);
   sandbox.atualizarBadgeStatusRede();
   assert.match(badge.innerHTML, /suspensos/);
-  assert.equal(JSON.parse(store.getItem('vilasa_fila_suspensos_v1')).length, 1);
-  assert.match(sandbox.textoSuspensos(JSON.parse(store.getItem('vilasa_fila_suspensos_v1'))), /modulo_desligado/);
+  assert.equal(JSON.parse(store.getItem('plat_fila_suspensos_v1')).length, 1);
+  assert.match(sandbox.textoSuspensos(JSON.parse(store.getItem('plat_fila_suspensos_v1'))), /modulo_desligado/);
 });
 
 test('a chave do cache é empresa:modulo:chave e o KPI leva o período', () => {

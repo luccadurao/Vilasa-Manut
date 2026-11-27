@@ -75,7 +75,7 @@ test('o perfil novo manda no contrato e nas permissões', () => {
 test('a sessão v2 migra para a v3 e continua no padrão dos manifestos', () => {
   const { Plataforma } = carregarPlataforma(raiz);
   const store = memoria({
-    vilasa_sessao_v2: JSON.stringify({
+    plat_sessao_v2: JSON.stringify({
       id: 'abc',
       matricula: '1',
       nome: 'Bia',
@@ -85,8 +85,8 @@ test('a sessão v2 migra para a v3 e continua no padrão dos manifestos', () => 
     })
   });
   const sessao = Plataforma.sessao.ler(store);
-  assert.equal(store.getItem('vilasa_sessao_v2'), null);
-  const guardada = JSON.parse(store.getItem('vilasa_sessao_v3') || 'null');
+  assert.equal(store.getItem('plat_sessao_v2'), null);
+  const guardada = JSON.parse(store.getItem('plat_sessao_v3') || 'null');
   assert.equal(guardada.perfil.nome, 'Bia');
   assert.equal(guardada.modulos, null);
   assert.equal(guardada.permissoes, null);
@@ -101,7 +101,7 @@ test('a sessão v2 migra para a v3 e continua no padrão dos manifestos', () => 
 test('o core grava a v3 e lê a v2 migrada', () => {
   const { sandbox, contexto } = carregarPlataforma(raiz);
   const store = memoria({
-    vilasa_sessao_v2: JSON.stringify({
+    plat_sessao_v2: JSON.stringify({
       id: 'p1',
       matricula: '4',
       nome: 'Caio',
@@ -116,8 +116,8 @@ test('o core grava a v3 e lê a v2 migrada', () => {
 
   const lido = sandbox.lerPerfilDaSessao();
   assert.equal(lido.nome, 'Caio');
-  assert.equal(store.getItem('vilasa_sessao_v2'), null);
-  assert.match(store.getItem('vilasa_sessao_v3') || '', /vilasa_sessao_v3|gestor|"perfil"/);
+  assert.equal(store.getItem('plat_sessao_v2'), null);
+  assert.match(store.getItem('plat_sessao_v3') || '', /plat_sessao_v3|gestor|"perfil"/);
 
   sandbox.guardarPerfilNaSessao({
     id: 'p1',
@@ -141,5 +141,5 @@ test('o core grava a v3 e lê a v2 migrada', () => {
 test('o portal QR lê a sessão v3', () => {
   const html = fs.readFileSync(path.join(raiz, 'qr.html'), 'utf8');
   assert.match(html, /Plataforma\.sessao\.ler\(localStorage\)/);
-  assert.match(html, /vilasa_sessao_v2/);
+  assert.match(html, /plat_sessao_v2/);
 });

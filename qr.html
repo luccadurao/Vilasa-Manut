@@ -99,6 +99,7 @@
 
   <script src="config.js"></script>
   <script src="nucleo/versao.js"></script>
+  <script src="nucleo/produto.js"></script>
   <script src="nucleo/nucleo.js"></script>
   <script src="nucleo/contexto.js"></script>
   <script src="nucleo/qr.js"></script>
@@ -150,7 +151,7 @@
     function lerSessaoLocal() {
       try {
         if (window.Plataforma && Plataforma.sessao) return Plataforma.sessao.usuarioDe(Plataforma.sessao.ler(localStorage));
-        return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
+        return JSON.parse(localStorage.getItem(window.PlataformaProduto ? PlataformaProduto.chave('sessao_v2') : 'plat_sessao_v2') || 'null');
       } catch (e) { return null; }
     }
     function cargosDaSessao() {
@@ -269,7 +270,7 @@
         cacheGravarDados(chaveCacheEquip(), dados);
         return;
       }
-      try { localStorage.setItem('vilasa_cache_' + chaveCacheEquip(), JSON.stringify(dados)); } catch (e) {}
+      try { localStorage.setItem(PlataformaProduto.chave('cache_' + chaveCacheEquip()), JSON.stringify(dados)); } catch (e) {}
     }
 
     // Retorna: { ok, semBase }  (semBase = não havia leitura anterior para comparar)
@@ -314,7 +315,7 @@
       try {
         let salvo = null;
         if (typeof cacheLerDados === 'function') salvo = await cacheLerDados(chaveCacheEquip());
-        if (!salvo) salvo = JSON.parse(localStorage.getItem('vilasa_cache_' + chaveCacheEquip()) || 'null');
+        if (!salvo) salvo = JSON.parse(localStorage.getItem(PlataformaProduto.chave('cache_' + chaveCacheEquip())) || 'null');
         if (salvo && salvo.id === equipAtualQR.id) equipAtualQR = { ...equipAtualQR, ...salvo };
       } catch (e) {}
 

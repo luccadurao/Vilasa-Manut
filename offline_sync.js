@@ -15,9 +15,16 @@
 //     Não é apagado. Volta para a fila quando o motivo passa, na ordem original.
 // ============================================================================
 
-const CHAVE_FILA_OFFLINE = 'vilasa_fila_sync_v2';
-const CHAVE_FILA_REJEITADOS = 'vilasa_fila_rejeitados_v2';
-const CHAVE_FILA_SUSPENSOS = 'vilasa_fila_suspensos_v1';
+// Chaves do localStorage com o prefixo do produto (nucleo/produto.js).
+function chaveLocalApp(nome) {
+  const produto = typeof window !== 'undefined' ? window.PlataformaProduto : null;
+  return produto ? produto.chave(nome) : 'plat_' + nome;
+}
+const CHAVE_FILA_OFFLINE = chaveLocalApp('fila_sync_v2');
+const CHAVE_FILA_REJEITADOS = chaveLocalApp('fila_rejeitados_v2');
+const CHAVE_FILA_SUSPENSOS = chaveLocalApp('fila_suspensos_v1');
+const PREFIXO_CACHE_LOCAL = chaveLocalApp('cache_');
+const PREFIXO_QR_EQUIP_LOCAL = chaveLocalApp('qr_equip_');
 const EMPRESA_1 = '00000000-0000-0000-0000-000000000001';
 const INTERVALO_TENTATIVA_MS = 30000;
 
@@ -104,7 +111,7 @@ function lerRejeitadosOffline() { return lerListaLocal(CHAVE_FILA_REJEITADOS); }
 function lerSuspensosOffline() { return lerListaLocal(CHAVE_FILA_SUSPENSOS); }
 
 function versaoAppAtual() {
-  return typeof VILASA_VERSAO_APP === 'string' ? VILASA_VERSAO_APP : '';
+  return typeof PLATAFORMA_VERSAO_APP === 'string' ? PLATAFORMA_VERSAO_APP : '';
 }
 
 function numeroVersaoApp(valor) {
@@ -388,7 +395,7 @@ function explicarLimiteSalto(unidade, info) {
 
 // Cópias dos dados para uso sem sinal ficam no IndexedDB (aguenta dezenas de MB; o localStorage
 // do celular estoura em ~5 MB). Se o IndexedDB não existir, usa o localStorage como antes.
-const IDB_NOME = 'vilasa_dados_v1';
+const IDB_NOME = (typeof window !== 'undefined' && window.PlataformaProduto) ? window.PlataformaProduto.bancoLocal : 'plat_dados_v1';
 const IDB_TABELA = 'cache';
 let _idbPromessa = null;
 
@@ -422,10 +429,10 @@ function idbOperar(modo, fn) {
 async function cacheGravarDados(chave, dados) {
   try {
     await idbOperar('readwrite', st => st.put(dados, chave));
-    try { localStorage.removeItem(`vilasa_cache_${chave}`); } catch (e) {} // libera a cópia antiga
+    try { localStorage.removeItem(PREFIXO_CACHE_LOCAL + chave); } catch (e) {} // libera a cópia antiga
     return true;
   } catch (e) {
-    try { localStorage.setItem(`vilasa_cache_${chave}`, JSON.stringify(dados)); return true; }
+    try { localStorage.setItem(PREFIXO_CACHE_LOCAL + chave, JSON.stringify(dados)); return true; }
     catch (e2) { console.warn('Cache local cheio:', e2); return false; }
   }
 }
@@ -436,7 +443,7 @@ async function cacheLerDados(chave) {
     if (v !== undefined && v !== null) return v;
   } catch (e) { /* cai para o localStorage */ }
   try {
-    const bruto = localStorage.getItem(`vilasa_cache_${chave}`);
+    const bruto = localStorage.getItem(PREFIXO_CACHE_LOCAL + chave);
     if (bruto) return JSON.parse(bruto);
   } catch (e) { /* ignora */ }
   return null;
@@ -446,7 +453,7 @@ async function cacheLerDados(chave) {
 async function limparCacheLocalDeDados() {
   try { await idbOperar('readwrite', st => st.clear()); } catch (e) {}
   try {
-    Object.keys(localStorage).filter(k => k.startsWith('vilasa_cache_') || k.startsWith('vilasa_qr_equip_'))
+    Object.keys(localStorage).filter(k => k.startsWith(PREFIXO_CACHE_LOCAL) || k.startsWith(PREFIXO_QR_EQUIP_LOCAL))
       .forEach(k => localStorage.removeItem(k));
   } catch (e) {}
 }
@@ -491,7 +498,7 @@ async function listarChavesCache() {
   } catch (e) { /* sem IndexedDB */ }
   try {
     for (const nome of listarNomesArmazem(localStorage)) {
-      if (nome.startsWith('vilasa_cache_')) chaves.push(nome.slice('vilasa_cache_'.length));
+      if (nome.startsWith(PREFIXO_CACHE_LOCAL)) chaves.push(nome.slice(PREFIXO_CACHE_LOCAL.length));
     }
   } catch (e) { /* sem localStorage */ }
   return Array.from(new Set(chaves));
@@ -519,7 +526,7 @@ async function apagarChavesCache(chaves) {
     }
   } catch (e) { /* segue no localStorage */ }
   try {
-    for (const chave of alvo) localStorage.removeItem('vilasa_cache_' + chave);
+    for (const chave of alvo) localStorage.removeItem(PREFIXO_CACHE_LOCAL + chave);
   } catch (e) { /* ignora */ }
 }
 
@@ -532,7 +539,7 @@ async function aplicarContextoOffline(ctx) {
   }));
   try {
     for (const nome of listarNomesArmazem(localStorage)) {
-      if (nome.startsWith('vilasa_qr_equip_')) localStorage.removeItem(nome);
+      if (nome.startsWith(PREFIXO_QR_EQUIP_LOCAL)) localStorage.removeItem(nome);
     }
   } catch (e) { /* chave antiga do QR */ }
   const preparado = prepararFila(lerFilaOffline(), lerSuspensosOffline(), contexto);
@@ -807,7 +814,7 @@ function revisarSuspensosOffline() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'vilasa-suspensos.txt';
+    a.download = 'registros-suspensos.txt';
     document.body.appendChild(a);
     a.click();
     a.remove();
