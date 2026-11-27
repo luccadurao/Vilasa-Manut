@@ -44,6 +44,14 @@
   const DESCARTAVEIS = /^(?:cache_|qr_equip_)/;
 
   /**
+   * Copiadas sem apagar a antiga, nesta versão: uma aba antiga ainda aberta
+   * continua lendo a sessão, a empresa e o local pelo nome velho (e põe a
+   * empresa nos lançamentos). O "sair" apaga as duas (esquecerLegado).
+   * A cópia antiga deixa de existir numa versão futura.
+   */
+  const ESPELHADAS = new Set(['sessao_v3', 'sessao_v2', 'empresa_codigo', 'local_ativo']);
+
+  /**
    * Chave do localStorage com o prefixo do produto.
    * @param {string} nome ex.: 'sessao_v3'
    */
@@ -78,10 +86,14 @@
   }
 
   /**
-   * Muda as chaves antigas de nome. Pode rodar quantas vezes for preciso.
+   * Muda as chaves antigas de nome. Pode rodar quantas vezes for preciso
+   * (roda ao abrir, quando outra aba grava e antes de cada sincronização).
+   * - Sessão, empresa e local: copia se a nova está vazia e mantém a antiga.
    * - Chave nova ainda vazia: copia e só então apaga a antiga.
    * - As duas existem e são listas (fila, rejeitados, suspensos): junta,
    *   sem repetir item igual, mantendo primeiro a ordem da chave nova.
+   * - Só a antiga é uma lista válida (a nova está corrompida): a antiga vale.
+   * - Antiga ilegível: fica onde está (não se apaga o que não se leu).
    * - As duas existem e não são listas: vale a nova; a antiga sai.
    * - Cópia de cache que não cabe: descarta (volta na próxima leitura online).
    * - Item da fila que não cabe: a chave antiga fica, e a próxima abertura tenta de novo.
@@ -119,6 +131,13 @@
           }
           continue;
         }
+        if (ESPELHADAS.has(resto)) {
+          if (valorNovo == null) {
+            storage.setItem(nova, valorAntigo);
+            resultado.movidas.push(antiga);
+          }
+          continue;
+        }
         if (valorNovo == null) {
           storage.setItem(nova, valorAntigo);
           storage.removeItem(antiga);
@@ -127,7 +146,8 @@
         }
         const listaNova = lerLista(valorNovo);
         const listaAntiga = lerLista(valorAntigo);
-        if (listaNova && listaAntiga) {
+        const pareceLista = /^\s*\[/.test(valorAntigo) || /^\s*\[/.test(valorNovo);
+        if (listaAntiga && listaNova) {
           const vistos = new Set(listaNova.map((item) => JSON.stringify(item)));
           const junta = listaNova.slice();
           for (const item of listaAntiga) {
@@ -136,6 +156,14 @@
           }
           storage.setItem(nova, JSON.stringify(junta));
           resultado.juntadas.push(antiga);
+        } else if (listaAntiga && !listaNova) {
+          // A nova está corrompida: vale a antiga, que é uma lista legível.
+          storage.setItem(nova, valorAntigo);
+          resultado.movidas.push(antiga);
+        } else if (!listaAntiga && pareceLista) {
+          // Antiga ilegível de uma chave de lista: não se apaga o que não se leu.
+          resultado.pendentes.push(antiga);
+          continue;
         }
         storage.removeItem(antiga);
       } catch (e) {
@@ -146,21 +174,54 @@
     return resultado;
   }
 
-  let migracao = null;
-  try {
-    migracao = migrarChavesLegadas(root.localStorage);
-    if (migracao.pendentes.length && root.console) {
-      root.console.warn('Chaves antigas que não couberam e ficam para a próxima abertura:', migracao.pendentes);
+  /**
+   * Apaga as cópias antigas de chaves espelhadas (usado no "sair").
+   * @param {string[]} nomes ex.: ['sessao_v3', 'sessao_v2']
+   * @param {{ removeItem: (k: string) => void } | null | undefined} [storage]
+   */
+  function esquecerLegado(nomes, storage) {
+    const alvo = storage || root.localStorage;
+    if (!alvo) return;
+    for (const nome of nomes || []) {
+      for (const [antiga, nova] of Object.entries(RENOMEADAS)) {
+        if (nova === chave(nome)) { try { alvo.removeItem(antiga); } catch (e) { /* ignora */ } }
+      }
+      for (const prefixo of PREFIXOS_LEGADOS) {
+        try { alvo.removeItem(prefixo + nome); } catch (e) { /* ignora */ }
+      }
     }
-  } catch (e) {
-    migracao = null;
   }
+
+  /** @type {ReturnType<typeof migrarChavesLegadas> | null} */
+  let migracao = null;
+  function migrarAgora() {
+    try {
+      migracao = migrarChavesLegadas(root.localStorage);
+      if (migracao.pendentes.length && root.console) {
+        root.console.warn('Chaves antigas que ficam para a próxima tentativa:', migracao.pendentes);
+      }
+    } catch (e) {
+      /* sem localStorage */
+    }
+    return migracao;
+  }
+  migrarAgora();
+  // Uma aba antiga ainda aberta pode gravar com o nome velho: migra na hora.
+  try {
+    if (typeof root.addEventListener === 'function') {
+      root.addEventListener('storage', (/** @type {any} */ ev) => {
+        if (ev && typeof ev.key === 'string' && chaveNova(ev.key)) migrarAgora();
+      });
+    }
+  } catch (e) { /* sem eventos */ }
 
   root.PLATAFORMA_PRODUTO = PRODUTO;
   root.PlataformaProduto = Object.freeze({
     ...PRODUTO,
     chave,
     migrarChavesLegadas,
+    migrarAgora,
+    esquecerLegado,
     ultimaMigracao: () => migracao
   });
 })(/** @type {any} */ (typeof globalThis !== 'undefined' ? globalThis : window));

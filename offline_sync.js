@@ -395,7 +395,7 @@ function explicarLimiteSalto(unidade, info) {
 
 // Cópias dos dados para uso sem sinal ficam no IndexedDB (aguenta dezenas de MB; o localStorage
 // do celular estoura em ~5 MB). Se o IndexedDB não existir, usa o localStorage como antes.
-const IDB_NOME = (typeof window !== 'undefined' && window.PlataformaProduto) ? window.PlataformaProduto.bancoLocal : 'plat_dados_v1';
+const IDB_NOME = (typeof window !== 'undefined' && window.PlataformaProduto) ? window.PlataformaProduto.bancoLocal : 'vilasa_dados_v1'; // nome histórico do IndexedDB
 const IDB_TABELA = 'cache';
 let _idbPromessa = null;
 
@@ -724,6 +724,12 @@ function reclassificarFilaOffline() {
 async function sincronizarFilaOffline() {
   if (sincronizacaoEmAndamento) return;
   if (!navigator.onLine || typeof db === 'undefined' || !db) return;
+  // Junta o que uma aba antiga ainda tenha gravado com o nome velho da fila.
+  try {
+    if (typeof window !== 'undefined' && window.PlataformaProduto && typeof window.PlataformaProduto.migrarAgora === 'function') {
+      window.PlataformaProduto.migrarAgora();
+    }
+  } catch (e) { /* segue com a fila atual */ }
   sincronizacaoEmAndamento = true;
 
   const idsRejeitados = new Set();

@@ -29,7 +29,7 @@
 
   /**
    * Ambiente escolhido pelo config.js (banco, site, empresa padrão, marca).
-   * @returns {{ site?: string | null, empresa_padrao?: string, marca?: string | null } | null}
+   * @returns {{ site?: string | null, empresa_padrao?: string, marca?: string | null, termos?: Record<string, string> | null } | null}
    */
   function ambienteAtual() {
     const amb = root.AMBIENTE_ATUAL;
@@ -954,6 +954,8 @@
   function nomeDaMarca(usuario) {
     const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
     const empresa = pessoa && pessoa.empresa && typeof pessoa.empresa === 'object' ? pessoa.empresa : null;
+    const marca = empresa && empresa.marca && typeof empresa.marca === 'object' ? empresa.marca : null;
+    if (marca && typeof marca.nome === 'string' && marca.nome.trim()) return marca.nome.trim();
     if (empresa && typeof empresa.nome === 'string' && empresa.nome.trim()) return empresa.nome.trim();
     const amb = ambienteAtual();
     if (amb && typeof amb.marca === 'string' && amb.marca.trim()) return amb.marca.trim();
@@ -1338,7 +1340,31 @@
     const fonte = termos === undefined ? termosDaPessoa(undefined) : termos;
     const bruto = fonte && typeof fonte[chave] === 'string' ? fonte[chave].trim() : '';
     if (bruto) return bruto;
+    // Reserva do ambiente (config.js), para sessão antiga sem empresa.termos.
+    const amb = ambienteAtual();
+    const doAmbiente = amb && /** @type {any} */ (amb).termos && typeof /** @type {any} */ (amb).termos[chave] === 'string'
+      ? /** @type {any} */ (amb).termos[chave].trim() : '';
+    if (doAmbiente && termos === undefined) return doAmbiente;
     return TERMOS_PADRAO[chave] || chave;
+  }
+
+  /**
+   * Gênero do nível 1. Empresa que deu nome próprio ao local sem dizer o
+   * gênero mantém o feminino de antes (era o texto fixo de "Obra").
+   * @param {Record<string, string> | null | undefined} termos
+   */
+  function generoDoLocal(termos) {
+    const fonte = termos === undefined ? termosDaPessoa(undefined) : termos;
+    const explicito = fonte && typeof fonte['local.nivel1.genero'] === 'string' ? fonte['local.nivel1.genero'].trim().toLowerCase() : '';
+    if (explicito === 'f' || explicito === 'm') return explicito;
+    const nomeProprio = lerTermo('local.nivel1', termos);
+    if (nomeProprio && nomeProprio !== TERMOS_PADRAO['local.nivel1']) {
+      const amb = ambienteAtual();
+      const genAmb = amb && /** @type {any} */ (amb).termos && /** @type {any} */ (amb).termos['local.nivel1.genero'];
+      if (genAmb === 'f' || genAmb === 'm') return genAmb;
+      return 'f';
+    }
+    return TERMOS_PADRAO['local.nivel1.genero'];
   }
 
   /**
@@ -1349,7 +1375,7 @@
     const nivel1 = lerTermo('local.nivel1', termos);
     const nivel2 = lerTermo('local.nivel2', termos);
     const plural = lerTermo('local.nivel1.plural', termos);
-    const feminino = String(lerTermo('local.nivel1.genero', termos)).trim().toLowerCase() === 'f';
+    const feminino = generoDoLocal(termos) === 'f';
     return {
       nivel1,
       nivel2,

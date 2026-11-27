@@ -12,6 +12,9 @@
 --      para o app antigo; a coluna não muda de nome nesta migração.
 --   2. app.email_interno deixa de tratar o código 'vilasa' como especial. Todo
 --      usuário NOVO ganha matricula@codigo.login.invalid.
+--   3. Empresa cujo termo de local é "Obra" (gravado pela 0004) e que não tem
+--      gênero ganha 'local.nivel1.genero' = 'f'. O termo padrão do produto
+--      passou a ser "Local" (masculino) e o front monta as frases pelo gênero.
 --
 -- O que NÃO faz, de propósito:
 --   - não muda o e-mail de nenhum usuário que já existe: o login lê
@@ -108,6 +111,15 @@ AS $function$
 $function$;
 
 REVOKE ALL ON FUNCTION app.email_interno(text, text) FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. Gênero do termo de local para quem usa "Obra". Só acrescenta a chave
+--    que falta; chave que a empresa já gravou fica.
+-- ---------------------------------------------------------------------------
+UPDATE public.empresas
+SET termos = termos || '{"local.nivel1.genero": "f"}'::jsonb
+WHERE termos ->> 'local.nivel1' = 'Obra'
+  AND NOT (termos ? 'local.nivel1.genero');
 
 -- ---------------------------------------------------------------------------
 -- Registro

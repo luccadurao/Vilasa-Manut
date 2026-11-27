@@ -11,6 +11,12 @@ BEGIN
   IF app.email_interno('joao', 'VILASA') <> 'joao' || app.dominio_login() THEN
     RAISE EXCEPTION 'reversão da 0006: email_interno não voltou ao texto da 0003';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.empresas
+    WHERE termos ->> 'local.nivel1' = 'Obra' AND termos ? 'local.nivel1.genero'
+  ) THEN
+    RAISE EXCEPTION 'reversão da 0006: o gênero acrescentado aos termos ficou';
+  END IF;
   IF EXISTS (SELECT 1 FROM public.migracoes_aplicadas WHERE arquivo = '0006_nome_neutro.sql') THEN
     RAISE EXCEPTION 'reversão da 0006: o registro em migracoes_aplicadas ficou';
   END IF;

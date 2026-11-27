@@ -169,6 +169,10 @@ function apagarSessaoLocal(limparLocal) {
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
   if (limparLocal) localStorage.removeItem(CHAVE_LOCAL_ATIVO);
+  // Cópias com o nome antigo (aba antiga): sem isto o "sair" voltaria a logar.
+  if (window.PlataformaProduto && typeof PlataformaProduto.esquecerLegado === 'function') {
+    PlataformaProduto.esquecerLegado(limparLocal ? ['sessao_v3', 'sessao_v2', 'local_ativo'] : ['sessao_v3', 'sessao_v2']);
+  }
 }
 
 let trocaEmpresaAberta = false;

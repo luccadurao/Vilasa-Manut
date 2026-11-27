@@ -49,7 +49,42 @@ test('o termo da sessão vence o padrão', () => {
   assert.equal(Plataforma.termo('local.nivel1'), 'Contrato');
   assert.equal(Plataforma.termo('ativo'), 'Máquina');
   assert.equal(Plataforma.termo('local.nivel2'), 'Setor');
+  // Nome próprio sem gênero: mantém o feminino de antes.
+  assert.equal(Plataforma.termo.textos().etiqueta, 'Setor / Contrato Ativa:');
+  sandbox.usuarioLogado = {
+    empresa: { termos: { 'local.nivel1': 'Contrato', 'local.nivel1.genero': 'm' } }
+  };
   assert.equal(Plataforma.termo.textos().etiqueta, 'Setor / Contrato Ativo:');
+});
+
+test('paridade: a Vilasa com os termos exatos da 0004 (sem gênero) vê o texto de antes', () => {
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  const termos0004 = {
+    'local.nivel1': 'Obra',
+    'local.nivel2': 'Frente',
+    'local.nivel1.plural': 'Obras',
+    'ativo': 'Equipamento',
+    'ativo.plural': 'Equipamentos',
+    'os': 'Ordem de Serviço'
+  };
+  const t = Plataforma.termo.textos(termos0004);
+  assert.equal(t.etiqueta, 'Frente / Obra Ativa:');
+  assert.equal(t.consolidado, 'TODAS AS OBRAS (CONSOLIDADO)');
+  assert.equal(t.selecionada, 'Obra Selecionada');
+  assert.equal(t.unica('OB-01', 'PÁTIO'), 'Obra: OB-01 - PÁTIO');
+});
+
+test('sessão antiga sem empresa.termos usa a reserva do ambiente (produção Vilasa)', () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
+  sandbox.AMBIENTE_ATUAL = { termos: { 'local.nivel1': 'Obra', 'local.nivel1.plural': 'Obras', 'local.nivel2': 'Frente', 'local.nivel1.genero': 'f', 'ativo': 'Equipamento' } };
+  sandbox.usuarioLogado = { id: '1' };
+  assert.equal(Plataforma.termo('local.nivel1'), 'Obra');
+  assert.equal(Plataforma.termo('ativo'), 'Equipamento');
+  assert.equal(Plataforma.termo.textos().consolidado, 'TODAS AS OBRAS (CONSOLIDADO)');
+  // O termo gravado na empresa vence a reserva do ambiente.
+  sandbox.usuarioLogado = { empresa: { termos: { 'local.nivel1': 'Canteiro', 'local.nivel1.genero': 'm' } } };
+  assert.equal(Plataforma.termo('local.nivel1'), 'Canteiro');
+  assert.equal(Plataforma.termo.textos().etiqueta, 'Frente / Canteiro Ativo:');
 });
 
 test('o cadastro do núcleo grava local e tipo sem pedir a máquina no QR', () => {

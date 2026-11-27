@@ -17,7 +17,9 @@
 //                     null = o endereço em que a página abriu;
 //   empresa_padrao  → código de empresa quando o login vem sem código;
 //                     '' = a empresa 1 do banco;
-//   marca           → nome mostrado antes do login; null = nome do produto.
+//   marca           → nome mostrado antes do login; null = nome do produto;
+//   termos          → reserva de termos (Obra, Equipamento…) para sessão antiga
+//                     que ainda não trouxe empresa.termos do banco; null = padrão.
 
 var AMBIENTES = {
   homologacao: {
@@ -28,6 +30,7 @@ var AMBIENTES = {
     site: null,
     empresa_padrao: '',
     marca: null,
+    termos: null,
     producao: false
   },
   producao: [
@@ -40,6 +43,14 @@ var AMBIENTES = {
       site: 'https://vilasa-manut.vercel.app',
       empresa_padrao: 'VILASA',
       marca: 'Vilasa',
+      termos: {
+        'local.nivel1': 'Obra',
+        'local.nivel2': 'Frente',
+        'local.nivel1.plural': 'Obras',
+        'local.nivel1.genero': 'f',
+        'ativo': 'Equipamento',
+        'ativo.plural': 'Equipamentos'
+      },
       producao: true
     }
   ]
@@ -47,7 +58,11 @@ var AMBIENTES = {
 
 // Congelado: nenhum outro script troca o banco depois que a página abriu.
 Object.freeze(AMBIENTES.homologacao);
-AMBIENTES.producao.forEach(function (amb) { Object.freeze(amb.enderecos); Object.freeze(amb); });
+AMBIENTES.producao.forEach(function (amb) {
+  Object.freeze(amb.enderecos);
+  if (amb.termos) Object.freeze(amb.termos);
+  Object.freeze(amb);
+});
 Object.freeze(AMBIENTES.producao);
 Object.freeze(AMBIENTES);
 

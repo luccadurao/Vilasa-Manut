@@ -74,6 +74,14 @@ BEGIN
     RAISE EXCEPTION 'authenticated sem meu_perfil';
   END IF;
 
+  -- quem usa "Obra" tem gênero definido
+  IF EXISTS (
+    SELECT 1 FROM public.empresas
+    WHERE termos ->> 'local.nivel1' = 'Obra' AND NOT (termos ? 'local.nivel1.genero')
+  ) THEN
+    RAISE EXCEPTION 'empresa com termo Obra sem local.nivel1.genero';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM public.migracoes_aplicadas WHERE arquivo = '0006_nome_neutro.sql') THEN
     RAISE EXCEPTION '0006 não registrada em migracoes_aplicadas';
   END IF;

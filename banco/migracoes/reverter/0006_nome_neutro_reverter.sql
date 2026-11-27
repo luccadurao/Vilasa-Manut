@@ -1,7 +1,8 @@
 -- =============================================================================
 -- 0006_nome_neutro_reverter.sql — plataforma
--- Desfaz a 0006: meu_perfil volta ao texto da 0005 (sem locais_permitidos) e
--- app.email_interno volta ao texto da 0003. Idempotente.
+-- Desfaz a 0006: meu_perfil volta ao texto da 0005 (sem locais_permitidos),
+-- app.email_interno volta ao texto da 0003 e sai o gênero 'f' acrescentado
+-- aos termos "Obra". Idempotente.
 --   psql -1 -v ON_ERROR_STOP=1 -f este arquivo.
 -- Usuários criados enquanto a 0006 valia mantêm o e-mail gravado
 -- (…@codigo.login.invalid) e continuam entrando: o login lê email_login.
@@ -70,6 +71,12 @@ AS $function$
 $function$;
 
 REVOKE ALL ON FUNCTION app.email_interno(text, text) FROM PUBLIC, anon, authenticated;
+
+-- Tira o gênero que a 0006 acrescentou (só onde o termo é "Obra" e o gênero 'f').
+UPDATE public.empresas
+SET termos = termos - 'local.nivel1.genero'
+WHERE termos ->> 'local.nivel1' = 'Obra'
+  AND termos ->> 'local.nivel1.genero' = 'f';
 
 DELETE FROM public.migracoes_aplicadas
 WHERE escopo = 'plataforma' AND arquivo = '0006_nome_neutro.sql';
