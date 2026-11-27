@@ -187,6 +187,7 @@
  * @property {string | null} empresa_id
  * @property {any[] | null} modulos
  * @property {string[] | null} permissoes
+ * @property {string | null} versao_minima_app
  * @property {Record<string, any>} flags
  * @property {string} gerado_em
  */

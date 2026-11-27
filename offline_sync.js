@@ -10,11 +10,61 @@
 //  4. Erro definitivo (ex.: dado recusado pelo banco) => vai para a lista de REJEITADOS
 //     para revisão. Nada é descartado em silêncio.
 //  5. Só sai da fila o que o banco confirmou que gravou.
+//  6. Item que não pode ser enviado (módulo desligado, outra empresa, aplicativo
+//     abaixo de versao_minima_app ou recusa VM403/403) vai para SUSPENSOS.
+//     Não é apagado. Volta para a fila quando o motivo passa, na ordem original.
 // ============================================================================
 
 const CHAVE_FILA_OFFLINE = 'vilasa_fila_sync_v2';
 const CHAVE_FILA_REJEITADOS = 'vilasa_fila_rejeitados_v2';
+const CHAVE_FILA_SUSPENSOS = 'vilasa_fila_suspensos_v1';
+const EMPRESA_1 = '00000000-0000-0000-0000-000000000001';
 const INTERVALO_TENTATIVA_MS = 30000;
+
+// Tabela ou RPC -> módulo dono. Equipamento novo nasce no núcleo; ciclo, obra e
+// leitura passam o módulo frota na chamada.
+const MODULO_POR_TABELA = {
+  ordens_servico: 'os',
+  os_assumir: 'os',
+  os_abrir_pelo_qr: 'os',
+  os_pecas_previstas: 'os',
+  apontamentos_os: 'os',
+  equipamentos: 'nucleo',
+  obras: 'nucleo',
+  lancar_horimetro: 'frota',
+  diario_horimetro: 'frota',
+  pecas_estoque: 'estoque',
+  movimentacoes_almoxarifado: 'estoque',
+  almox_movimentar: 'estoque',
+  planos_preventiva: 'preventivas',
+  execucoes_preventiva: 'preventivas',
+  preventiva_estrategias: 'preventivas',
+  preventiva_pacotes: 'preventivas',
+  preventiva_listas: 'preventivas',
+  preventiva_lista_tarefas: 'preventivas',
+  preventiva_lista_materiais: 'preventivas'
+};
+
+const MODULO_POR_CHAVE = {
+  obras_ativas: 'nucleo',
+  obras: 'nucleo',
+  equipamentos: 'nucleo',
+  os_ativas: 'os',
+  os_concluidas: 'os',
+  mov_por_os: 'os',
+  pecas_estoque: 'estoque',
+  movimentacoes_almoxarifado: 'estoque',
+  kpi_os: 'painel',
+  kpi_movs: 'painel',
+  kpi_leituras: 'painel',
+  execucoes_preventiva: 'preventivas',
+  planos_preventiva: 'preventivas',
+  preventiva_estrategias: 'preventivas',
+  preventiva_pacotes: 'preventivas',
+  preventiva_listas: 'preventivas',
+  preventiva_lista_tarefas: 'preventivas',
+  preventiva_lista_materiais: 'preventivas'
+};
 
 let sincronizacaoEmAndamento = false;
 
@@ -51,16 +101,210 @@ function salvarListaLocal(chave, lista) {
 
 function lerFilaOffline() { return lerListaLocal(CHAVE_FILA_OFFLINE); }
 function lerRejeitadosOffline() { return lerListaLocal(CHAVE_FILA_REJEITADOS); }
+function lerSuspensosOffline() { return lerListaLocal(CHAVE_FILA_SUSPENSOS); }
+
+function versaoAppAtual() {
+  return typeof VILASA_VERSAO_APP === 'string' ? VILASA_VERSAO_APP : '';
+}
+
+function numeroVersaoApp(valor) {
+  const achado = String(valor || '').match(/(\d+)/);
+  return achado ? Number(achado[1]) : 0;
+}
+
+function versaoAppAbaixoDaMinima(atual, minima) {
+  if (minima == null || String(minima).trim() === '') return false;
+  return numeroVersaoApp(atual) < numeroVersaoApp(minima);
+}
+
+function moduloDaTabela(tabela) {
+  return MODULO_POR_TABELA[tabela] || null;
+}
+
+function sessaoOfflineAtual() {
+  try {
+    if (typeof window !== 'undefined' && window.Vilasa && Vilasa.sessao && typeof localStorage !== 'undefined') {
+      return Vilasa.sessao.ler(localStorage);
+    }
+  } catch (e) { /* sessão ilegível */ }
+  return null;
+}
+
+function contextoDaSessao() {
+  const sessao = sessaoOfflineAtual();
+  const usuarioMemoria = typeof usuarioLogado !== 'undefined' && usuarioLogado ? usuarioLogado : null;
+  let usuario = usuarioMemoria;
+  try {
+    if (!usuario && sessao && window.Vilasa && Vilasa.sessao) usuario = Vilasa.sessao.usuarioDe(sessao);
+  } catch (e) { usuario = usuarioMemoria; }
+  const fonte = usuario || {};
+  const modulosBrutos = fonte.modulos || (sessao && sessao.modulos) || null;
+  const modulos = Array.isArray(modulosBrutos)
+    ? modulosBrutos.map(item => (typeof item === 'string' ? item : item && item.id)).filter(Boolean)
+    : null;
+  const permissoesBrutas = Array.isArray(fonte.permissoes)
+    ? fonte.permissoes
+    : (sessao && Array.isArray(sessao.permissoes) ? sessao.permissoes : null);
+  const empresaBruta = fonte.empresa_id || (fonte.empresa && fonte.empresa.id) || null;
+  return {
+    empresaId: empresaBruta ? String(empresaBruta) : null,
+    modulos,
+    permissoes: permissoesBrutas ? permissoesBrutas.map(id => String(id)) : null,
+    versaoApp: versaoAppAtual(),
+    versaoMinima: fonte.versao_minima_app || (sessao && sessao.versao_minima_app) || null
+  };
+}
+
+function contextoIdOffline(ctx) {
+  const base = ctx || {};
+  const mods = Array.isArray(base.modulos) ? base.modulos.slice().sort().join(',') : '';
+  const perms = Array.isArray(base.permissoes) ? base.permissoes.slice().sort().join(',') : '';
+  return [base.empresaId || '', mods, perms, base.versaoApp || '', base.versaoMinima || ''].join('|');
+}
+
+function completarItemFila(item) {
+  const bruto = item || {};
+  const legado = !Object.prototype.hasOwnProperty.call(bruto, 'versao_app');
+  let empresa = bruto.empresa_id || null;
+  if (!empresa && bruto.payload && bruto.operacao !== 'RPC' && bruto.payload.empresa_id) {
+    empresa = bruto.payload.empresa_id;
+  }
+  if (!empresa && legado) empresa = EMPRESA_1;
+  const modulo = bruto.modulo || moduloDaTabela(bruto.tabela) || null;
+  let payload = bruto.payload;
+  if (payload && typeof payload === 'object' && bruto.operacao !== 'RPC' && empresa && !payload.empresa_id) {
+    payload = Object.assign({}, payload, { empresa_id: empresa });
+  }
+  return Object.assign({}, bruto, {
+    empresa_id: empresa || null,
+    modulo,
+    versao_app: Object.prototype.hasOwnProperty.call(bruto, 'versao_app') ? bruto.versao_app : null,
+    payload
+  });
+}
+
+function classificarItemFila(item, ctx) {
+  const atual = completarItemFila(item);
+  const contexto = ctx || contextoDaSessao();
+  if (versaoAppAbaixoDaMinima(contexto.versaoApp, contexto.versaoMinima)) {
+    return { destino: 'suspenso', motivo: 'versao_minima_app' };
+  }
+  if (atual.empresa_id && contexto.empresaId && String(atual.empresa_id) !== String(contexto.empresaId)) {
+    return { destino: 'suspenso', motivo: 'outra_empresa' };
+  }
+  if (atual.modulo && Array.isArray(contexto.modulos) && contexto.modulos.indexOf(atual.modulo) < 0) {
+    return { destino: 'suspenso', motivo: 'modulo_desligado' };
+  }
+  if (atual.motivo === 'vm403' && atual.contexto_id && atual.contexto_id === contextoIdOffline(contexto)) {
+    return { destino: 'suspenso', motivo: 'vm403' };
+  }
+  return { destino: 'enviar', motivo: null };
+}
+
+function prepararFila(fila, suspensos, ctx) {
+  const contexto = ctx || contextoDaSessao();
+  const todos = [];
+  const vistos = new Set();
+  const origem = (Array.isArray(fila) ? fila : []).concat(Array.isArray(suspensos) ? suspensos : []);
+  for (const bruto of origem) {
+    const item = completarItemFila(bruto);
+    const chave = item.id_temp || JSON.stringify([item.tabela, item.operacao, item.criado_em]);
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    todos.push(item);
+  }
+  todos.sort((a, b) => String(a.criado_em || '').localeCompare(String(b.criado_em || ''))
+    || String(a.id_temp || '').localeCompare(String(b.id_temp || '')));
+  const novaFila = [];
+  const novosSuspensos = [];
+  const idsBloqueados = new Set();
+  for (const item of todos) {
+    let decisao = classificarItemFila(item, contexto);
+    const pai = item.idRegistro ? String(item.idRegistro) : '';
+    if (decisao.destino === 'enviar' && pai && idsBloqueados.has(pai)) {
+      decisao = { destino: 'suspenso', motivo: 'depende_de_suspenso' };
+    }
+    if (decisao.destino === 'suspenso') {
+      novosSuspensos.push(Object.assign({}, item, {
+        motivo: decisao.motivo,
+        suspenso_em: item.suspenso_em || new Date().toISOString(),
+        contexto_id: decisao.motivo === 'vm403'
+          ? (item.contexto_id || contextoIdOffline(contexto))
+          : (item.contexto_id || null)
+      }));
+      if (item.operacao === 'INSERT' && item.payload && item.payload.id) {
+        idsBloqueados.add(String(item.payload.id));
+      }
+    } else {
+      const limpo = Object.assign({}, item);
+      delete limpo.motivo;
+      delete limpo.suspenso_em;
+      delete limpo.detalhe;
+      delete limpo.contexto_id;
+      novaFila.push(limpo);
+    }
+  }
+  return { fila: novaFila, suspensos: novosSuspensos };
+}
+
+function partirChaveCache(chave) {
+  const texto = String(chave || '');
+  const primeira = texto.indexOf(':');
+  const segunda = primeira < 0 ? -1 : texto.indexOf(':', primeira + 1);
+  if (primeira < 1 || segunda < 0 || segunda === primeira + 1) return null;
+  return {
+    empresa: texto.slice(0, primeira),
+    modulo: texto.slice(primeira + 1, segunda),
+    chave: texto.slice(segunda + 1)
+  };
+}
+
+function montarChaveCache(empresaId, modulo, chave) {
+  const empresa = empresaId ? String(empresaId) : 'sem-empresa';
+  const mod = modulo ? String(modulo) : 'nucleo';
+  return empresa + ':' + mod + ':' + String(chave || '');
+}
+
+function resolverChaveLeitura(chaveCache, meta) {
+  if (meta && meta.chavePronta) return String(chaveCache || '');
+  const modulo = (meta && meta.modulo) || MODULO_POR_CHAVE[chaveCache] || 'nucleo';
+  const nome = meta && meta.periodo ? String(chaveCache) + ':' + String(meta.periodo) : String(chaveCache || '');
+  const empresa = (meta && meta.empresaId) || empresaIdDaSessao();
+  return montarChaveCache(empresa, modulo, nome);
+}
+
+function chavesObsoletas(chaves, ctx) {
+  const contexto = ctx || {};
+  const empresa = contexto.empresaId ? String(contexto.empresaId) : '';
+  const ativas = Array.isArray(contexto.modulosAtivos) ? new Set(contexto.modulosAtivos.map(String)) : null;
+  return (Array.isArray(chaves) ? chaves : []).filter(chave => {
+    const partes = partirChaveCache(chave);
+    if (!partes) return true;
+    if (empresa && partes.empresa !== empresa) return true;
+    if (ativas && !ativas.has(partes.modulo)) return true;
+    return false;
+  });
+}
 
 // O erro é "temporário"? (sem sinal, servidor fora, sessão vencida): então mantém na fila.
 function erroEhRecuperavel(res) {
   if (!res || !res.error) return false;
+  if (erroEhSuspensao(res)) return false;
   const status = Number(res.status || 0);
   const msg = String(res.error.message || res.error).toLowerCase();
   if (status === 0) return true;                       // sem resposta = sem rede
   if (status >= 500) return true;                      // servidor com problema
   if (status === 401 || status === 408 || status === 429) return true;
   return /failed to fetch|networkerror|network request failed|load failed|timeout|timed out|fetch failed|jwt expired/.test(msg);
+}
+
+function erroEhSuspensao(res) {
+  if (!res || !res.error) return false;
+  const status = Number(res.status || 0);
+  const codigo = String((res.error && (res.error.code || res.error.sqlstate)) || '');
+  const msg = descreverErro(res);
+  if (status === 403 || codigo === 'VM403') return true;
+  return /vm403|sem permiss[aã]o/i.test(msg);
 }
 
 function descreverErro(res) {
@@ -207,25 +451,103 @@ async function limparCacheLocalDeDados() {
   } catch (e) {}
 }
 
-async function lerDadosComFallbackOffline(chaveCache, fnQuerySupabase) {
+async function lerDadosComFallbackOffline(chaveCache, fnQuerySupabase, meta) {
+  const chave = resolverChaveLeitura(chaveCache, meta);
   try {
     if (typeof obterClienteSupabase === 'function') obterClienteSupabase();
     if (navigator.onLine && typeof fnQuerySupabase === 'function') {
       const res = await fnQuerySupabase();
       if (res && !res.error && res.data) {
-        await cacheGravarDados(chaveCache, res.data);
+        await cacheGravarDados(chave, res.data);
         return { data: res.data, error: null, offline: false };
       }
       if (res && res.error && !erroEhRecuperavel(res)) {
-        console.warn(`Erro ao ler ${chaveCache}:`, res.error);
+        console.warn(`Erro ao ler ${chave}:`, res.error);
       }
     }
   } catch (err) {
-    console.warn(`Modo offline para ${chaveCache}:`, err);
+    console.warn(`Modo offline para ${chave}:`, err);
   }
 
-  const dados = await cacheLerDados(chaveCache);
+  const dados = await cacheLerDados(chave);
   return { data: dados || [], error: null, offline: true };
+}
+
+function listarNomesArmazem(storage) {
+  const nomes = [];
+  try {
+    if (storage && typeof storage.length === 'number' && typeof storage.key === 'function') {
+      for (let i = 0; i < storage.length; i += 1) nomes.push(storage.key(i));
+    }
+  } catch (e) { /* armazém sem índice */ }
+  return nomes.filter(Boolean);
+}
+
+async function listarChavesCache() {
+  const chaves = [];
+  try {
+    const lista = await idbOperar('readonly', st => st.getAllKeys());
+    if (Array.isArray(lista)) chaves.push(...lista.map(item => String(item)));
+  } catch (e) { /* sem IndexedDB */ }
+  try {
+    for (const nome of listarNomesArmazem(localStorage)) {
+      if (nome.startsWith('vilasa_cache_')) chaves.push(nome.slice('vilasa_cache_'.length));
+    }
+  } catch (e) { /* sem localStorage */ }
+  return Array.from(new Set(chaves));
+}
+
+async function apagarChavesCache(chaves) {
+  const lista = Array.isArray(chaves) ? chaves : [];
+  if (lista.length === 0) return;
+  const alvo = new Set(lista.map(item => String(item)));
+  try {
+    const idb = await abrirIDB();
+    if (idb) {
+      await new Promise(resolve => {
+        const tx = idb.transaction(IDB_TABELA, 'readwrite');
+        const st = tx.objectStore(IDB_TABELA);
+        const req = st.getAllKeys();
+        req.onsuccess = () => {
+          for (const k of req.result || []) {
+            if (alvo.has(String(k))) st.delete(k);
+          }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = tx.onabort = () => resolve();
+      });
+    }
+  } catch (e) { /* segue no localStorage */ }
+  try {
+    for (const chave of alvo) localStorage.removeItem('vilasa_cache_' + chave);
+  } catch (e) { /* ignora */ }
+}
+
+async function aplicarContextoOffline(ctx) {
+  const contexto = ctx || contextoDaSessao();
+  const chaves = await listarChavesCache();
+  await apagarChavesCache(chavesObsoletas(chaves, {
+    empresaId: contexto.empresaId,
+    modulosAtivos: contexto.modulos
+  }));
+  try {
+    for (const nome of listarNomesArmazem(localStorage)) {
+      if (nome.startsWith('vilasa_qr_equip_')) localStorage.removeItem(nome);
+    }
+  } catch (e) { /* chave antiga do QR */ }
+  const preparado = prepararFila(lerFilaOffline(), lerSuspensosOffline(), contexto);
+  salvarListaLocal(CHAVE_FILA_OFFLINE, preparado.fila);
+  salvarListaLocal(CHAVE_FILA_SUSPENSOS, preparado.suspensos);
+  if (versaoAppAbaixoDaMinima(contexto.versaoApp, contexto.versaoMinima)) {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && reg.update) await reg.update();
+      }
+    } catch (e) { /* o aviso fica no badge */ }
+  }
+  atualizarBadgeStatusRede();
+  return preparado;
 }
 
 // Mostra na lista o que ainda está na fila de envio (OS aberta/alterada sem sinal aparece na hora, marcada _pendente).
@@ -277,8 +599,22 @@ function payloadComEmpresa(operacao, payload) {
   return { ...payload, empresa_id: empresaId };
 }
 
-function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null) {
+function usuarioIdDaSessao() {
+  const sessao = sessaoOfflineAtual();
+  if (sessao && sessao.perfil && sessao.perfil.id != null && sessao.perfil.id !== '') {
+    return String(sessao.perfil.id);
+  }
+  try {
+    if (typeof usuarioLogado !== 'undefined' && usuarioLogado && usuarioLogado.id != null) {
+      return String(usuarioLogado.id);
+    }
+  } catch (e) { /* sem usuário na memória */ }
+  return null;
+}
+
+function montarItemFila(tabela, operacao, payload, idRegistro, opcoes) {
   const payloadItem = payloadComEmpresa(operacao, payload);
+  const modulo = (opcoes && opcoes.modulo) || moduloDaTabela(tabela) || null;
   const item = {
     id_temp: novoUuid(),
     tabela,
@@ -286,11 +622,32 @@ function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null)
     payload: payloadItem,
     idRegistro,
     empresa_id: empresaIdDaSessao() || (payloadItem && payloadItem.empresa_id) || null,
+    modulo,
+    versao_app: versaoAppAtual(),
+    usuario_id: usuarioIdDaSessao(),
     criado_em: new Date().toISOString(),
     tentativas: 0
   };
-  if (operacao === 'INSERT' && payloadItem && !payloadItem.id) item.payload = { ...payloadItem, id: novoUuid() };
+  if (operacao === 'INSERT' && item.payload && !item.payload.id) {
+    item.payload = Object.assign({}, item.payload, { id: novoUuid() });
+  }
+  return item;
+}
 
+function guardarSuspenso(item, motivo, detalhe, ctx) {
+  const contexto = ctx || contextoDaSessao();
+  const suspensos = lerSuspensosOffline();
+  suspensos.push(Object.assign({}, item, {
+    motivo,
+    detalhe: detalhe || '',
+    suspenso_em: new Date().toISOString(),
+    contexto_id: motivo === 'vm403' ? contextoIdOffline(contexto) : (item.contexto_id || null)
+  }));
+  return salvarListaLocal(CHAVE_FILA_SUSPENSOS, suspensos);
+}
+
+function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null, opcoes = null) {
+  const item = montarItemFila(tabela, operacao, payload, idRegistro, opcoes);
   const fila = lerFilaOffline();
   fila.push(item);
   const ok = salvarListaLocal(CHAVE_FILA_OFFLINE, fila);
@@ -298,21 +655,38 @@ function enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro = null)
   return ok ? item : null;
 }
 
-async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = null) {
+async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = null, opcoes = null) {
   if (typeof obterClienteSupabase === 'function') obterClienteSupabase();
 
   // Todo INSERT nasce com id próprio (permite editar offline e evita duplicar no reenvio).
   payload = payloadComEmpresa(operacao, payload);
   if (operacao === 'INSERT' && payload && !payload.id) payload = { ...payload, id: novoUuid() };
 
+  const ctx = contextoDaSessao();
+  const previsto = montarItemFila(tabela, operacao, payload, idRegistro, opcoes);
+  if (operacao === 'INSERT' && payload && payload.id) previsto.payload = payload;
+  const decisao = classificarItemFila(previsto, ctx);
+  if (decisao.destino === 'suspenso') {
+    const ok = guardarSuspenso(previsto, decisao.motivo, '', ctx);
+    atualizarBadgeStatusRede();
+    if (!ok) return { data: null, error: { message: 'Memória do celular cheia' }, offline: true };
+    return { data: previsto.payload, error: null, offline: true, suspenso: true, motivo: decisao.motivo };
+  }
+
   const haPendentes = lerFilaOffline().length > 0;
 
   // Só grava direto se estiver online E não houver nada esperando (mantém a ordem).
   if (navigator.onLine && typeof db !== 'undefined' && db && !haPendentes) {
-    const res = await executarOperacaoNoBanco({ tabela, operacao, payload, idRegistro });
+    const res = await executarOperacaoNoBanco({ tabela, operacao, payload, idRegistro, empresa_id: previsto.empresa_id, modulo: previsto.modulo, versao_app: previsto.versao_app });
     if (!res.error) {
       const dado = res.data || (operacao === 'INSERT' ? payload : null);
       return { data: dado, error: null, offline: false };
+    }
+    if (erroEhSuspensao(res)) {
+      const ok = guardarSuspenso(previsto, 'vm403', descreverErro(res), ctx);
+      atualizarBadgeStatusRede();
+      if (!ok) return { data: null, error: { message: 'Memória do celular cheia' }, offline: true };
+      return { data: previsto.payload, error: null, offline: true, suspenso: true, motivo: 'vm403' };
     }
     if (!erroEhRecuperavel(res)) {
       alert(operacao === 'RPC' ? 'Não foi possível registrar: ' + descreverErro(res) : `Erro ao gravar em ${tabela}: ` + descreverErro(res));
@@ -321,7 +695,7 @@ async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = nu
     // Erro temporário (sinal ruim): cai para a fila abaixo.
   }
 
-  const item = enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro);
+  const item = enfileirarOperacaoOffline(tabela, operacao, payload, idRegistro, opcoes);
   if (!item) return { data: null, error: { message: 'Memória do celular cheia' }, offline: true };
   if (navigator.onLine) setTimeout(sincronizarFilaOffline, 500);
   return { data: item.payload, error: null, offline: true };
@@ -329,13 +703,35 @@ async function gravarDadosOfflineSafe(tabela, operacao, payload, idRegistro = nu
 
 // ---------- sincronização ---------------------------------------------------
 
+function tirarDaFila(idTemp) {
+  salvarListaLocal(CHAVE_FILA_OFFLINE, lerFilaOffline().filter(i => i.id_temp !== idTemp));
+}
+
+function reclassificarFilaOffline() {
+  const preparado = prepararFila(lerFilaOffline(), lerSuspensosOffline(), contextoDaSessao());
+  salvarListaLocal(CHAVE_FILA_OFFLINE, preparado.fila);
+  salvarListaLocal(CHAVE_FILA_SUSPENSOS, preparado.suspensos);
+  return preparado;
+}
+
 async function sincronizarFilaOffline() {
   if (sincronizacaoEmAndamento) return;
   if (!navigator.onLine || typeof db === 'undefined' || !db) return;
   sincronizacaoEmAndamento = true;
 
   const idsRejeitados = new Set();
+  const idsSuspensos = new Set();
   try {
+    const ctx = contextoDaSessao();
+    const preparado = prepararFila(lerFilaOffline(), lerSuspensosOffline(), ctx);
+    salvarListaLocal(CHAVE_FILA_OFFLINE, preparado.fila);
+    salvarListaLocal(CHAVE_FILA_SUSPENSOS, preparado.suspensos);
+    for (const suspenso of preparado.suspensos) {
+      if (suspenso.operacao === 'INSERT' && suspenso.payload && suspenso.payload.id) {
+        idsSuspensos.add(String(suspenso.payload.id));
+      }
+    }
+
     while (true) {
       const fila = lerFilaOffline();
       if (fila.length === 0) break;
@@ -343,14 +739,28 @@ async function sincronizarFilaOffline() {
 
       if (item.operacao === 'INSERT' && item.payload && !item.payload.id) item.payload.id = item.id_temp;
 
-      // Se o registro-pai foi rejeitado, este item que depende dele também não faz sentido.
-      const dependeDeRejeitado = item.idRegistro && idsRejeitados.has(item.idRegistro);
-      let res = dependeDeRejeitado
-        ? { error: { message: 'Depende de um registro que foi rejeitado' }, status: 400 }
-        : await executarOperacaoNoBanco(item, true);
+      const dependeDeSuspenso = item.idRegistro && idsSuspensos.has(String(item.idRegistro));
+      const dependeDeRejeitado = item.idRegistro && idsRejeitados.has(String(item.idRegistro));
+      let res;
+      if (dependeDeSuspenso) {
+        res = { error: { message: 'Depende de um registro suspenso', code: 'VM403' }, status: 403 };
+      } else if (dependeDeRejeitado) {
+        res = { error: { message: 'Depende de um registro que foi rejeitado' }, status: 400 };
+      } else {
+        res = await executarOperacaoNoBanco(item, true);
+      }
 
       if (!res.error) {
-        salvarListaLocal(CHAVE_FILA_OFFLINE, lerFilaOffline().filter(i => i.id_temp !== item.id_temp));
+        tirarDaFila(item.id_temp);
+        continue;
+      }
+
+      if (erroEhSuspensao(res)) {
+        guardarSuspenso(item, dependeDeSuspenso ? 'depende_de_suspenso' : 'vm403', descreverErro(res), ctx);
+        if (item.operacao === 'INSERT' && item.payload && item.payload.id) {
+          idsSuspensos.add(String(item.payload.id));
+        }
+        tirarDaFila(item.id_temp);
         continue;
       }
 
@@ -368,11 +778,42 @@ async function sincronizarFilaOffline() {
       const rejeitados = lerRejeitadosOffline();
       rejeitados.push({ ...item, erro: descreverErro(res), rejeitado_em: new Date().toISOString() });
       salvarListaLocal(CHAVE_FILA_REJEITADOS, rejeitados);
-      salvarListaLocal(CHAVE_FILA_OFFLINE, lerFilaOffline().filter(i => i.id_temp !== item.id_temp));
+      tirarDaFila(item.id_temp);
     }
   } finally {
     sincronizacaoEmAndamento = false;
     atualizarBadgeStatusRede();
+  }
+}
+
+function textoSuspensos(lista) {
+  return (Array.isArray(lista) ? lista : []).map((r, i) =>
+    `${i + 1}) ${r.motivo || 'suspenso'} — ${r.operacao} em ${r.tabela}` +
+    (r.modulo ? ` (${r.modulo})` : '') +
+    (r.detalhe ? `\n   ${r.detalhe}` : '')
+  ).join('\n\n');
+}
+
+function revisarSuspensosOffline() {
+  const lista = lerSuspensosOffline();
+  if (lista.length === 0) return alert('Nenhum lançamento suspenso.');
+  const linhas = textoSuspensos(lista.slice(0, 15));
+  const msg = `⏸ ${lista.length} suspensos. Nada foi apagado.\n\n${linhas}\n\n` +
+    'Eles voltam sozinhos quando o módulo ligar, a empresa for a desta sessão ou o aplicativo atualizar. Deseja exportar a lista?';
+  if (!confirm(msg)) return;
+  const texto = textoSuspensos(lista);
+  try {
+    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vilasa-suspensos.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(texto);
   }
 }
 
@@ -406,7 +847,13 @@ function atualizarBadgeStatusRede() {
 
   const pend = lerFilaOffline().length;
   const rej = lerRejeitadosOffline().length;
+  const susp = lerSuspensosOffline().length;
   const partes = [];
+  const ctx = contextoDaSessao();
+
+  if (versaoAppAbaixoDaMinima(ctx.versaoApp, ctx.versaoMinima)) {
+    partes.push(`<span class="text-amber-700">Atualize o aplicativo antes de enviar (mínima ${ctx.versaoMinima}).</span>`);
+  }
 
   if (navigator.onLine) {
     partes.push(pend > 0
@@ -417,6 +864,9 @@ function atualizarBadgeStatusRede() {
   }
   if (rej > 0) {
     partes.push(`<button onclick="revisarRejeitadosOffline()" class="block mt-1 underline text-rose-600">❌ ${rej} recusada(s) pelo servidor — revisar</button>`);
+  }
+  if (susp > 0) {
+    partes.push(`<button type="button" onclick="revisarSuspensosOffline()" class="block mt-1 underline text-amber-800">⏸ ${susp} suspensos — revisar</button>`);
   }
   badge.innerHTML = partes.join('');
 }
@@ -429,8 +879,22 @@ window.gravarDadosOfflineSafe = gravarDadosOfflineSafe;
 window.sincronizarFilaOffline = sincronizarFilaOffline;
 window.enfileirarOperacaoOffline = enfileirarOperacaoOffline;
 window.revisarRejeitadosOffline = revisarRejeitadosOffline;
+window.revisarSuspensosOffline = revisarSuspensosOffline;
+window.lerSuspensosOffline = lerSuspensosOffline;
+window.prepararFila = prepararFila;
+window.classificarItemFila = classificarItemFila;
+window.montarChaveCache = montarChaveCache;
+window.resolverChaveLeitura = resolverChaveLeitura;
+window.chavesObsoletas = chavesObsoletas;
+window.versaoAppAbaixoDaMinima = versaoAppAbaixoDaMinima;
+window.contextoDaSessao = contextoDaSessao;
+window.erroEhSuspensao = erroEhSuspensao;
+window.aplicarContextoOffline = aplicarContextoOffline;
+window.textoSuspensos = textoSuspensos;
+window.CHAVE_FILA_SUSPENSOS = CHAVE_FILA_SUSPENSOS;
 
 window.addEventListener('online', () => {
+  reclassificarFilaOffline();
   atualizarBadgeStatusRede();
   sincronizarFilaOffline();
 });
@@ -439,7 +903,11 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') sincronizarFilaOffline();
 });
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => { atualizarBadgeStatusRede(); sincronizarFilaOffline(); }, 1500);
+  setTimeout(() => {
+    reclassificarFilaOffline();
+    atualizarBadgeStatusRede();
+    sincronizarFilaOffline();
+  }, 1500);
 });
 // "online" do navegador nem sempre avisa: tenta de novo sozinho enquanto houver pendência.
 setInterval(() => { if (lerFilaOffline().length > 0) sincronizarFilaOffline(); }, INTERVALO_TENTATIVA_MS);

@@ -403,6 +403,9 @@ function mostrarAvisoModulosBloqueados(carga) {
 }
 
 async function inicializarSistemaPosLogin() {
+  if (typeof aplicarContextoOffline === 'function') {
+    try { await aplicarContextoOffline(); } catch (e) { console.warn('Contexto offline:', e); }
+  }
   let carga = null;
   if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
     carga = await Vilasa.modulos.garantirCarregados(usuarioLogado);
