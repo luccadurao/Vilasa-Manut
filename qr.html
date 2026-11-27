@@ -53,7 +53,7 @@
         <div id="qrFuncaoWrapper">
           <label class="block font-black uppercase text-slate-400 mb-1">Sua Função</label>
           <select id="qrFuncaoSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 font-bold text-amber-300 focus:border-amber-400 focus:outline-none">
-            <option value="encarregado">👷 Encarregado / Oper.</option>
+            <option value="encarregado">👷 Encarregado</option>
             <option value="mecanico">🔧 Mecânico (Já Assumir)</option>
           </select>
         </div>
@@ -110,12 +110,12 @@
   <script>
     // ========================================================================
     // PORTAL QR - REGRAS DE ACESSO
-    //  • SEM login (operadores): só LANÇA HORÍMETRO / KM.
-    //  • COM login de equipe (mecânico, almoxarife, encarregado, PCM, engenheiro, admin): também ABRE OS.
-    //  • Operador e gestor NÃO abrem OS por aqui.
+    //  • SEM login: só LANÇA HORÍMETRO / KM.
+    //  • COM login de equipe (mecânico, encarregado, PCM, engenheiro, admin): também ABRE OS.
+    //  • Almoxarife e gestor NÃO abrem OS por aqui (o almoxarife segue lançando horímetro).
     // Obs.: nesta etapa a regra vale na tela; o bloqueio definitivo no banco (RLS) vem na etapa de segurança.
     // ========================================================================
-    const CARGOS_QUE_ABREM_OS = ['mecanico', 'almoxarife', 'encarregado', 'pcm', 'engenheiro', 'admin'];
+    const CARGOS_QUE_ABREM_OS = ['mecanico', 'encarregado', 'pcm', 'engenheiro', 'admin'];
 
     let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null };
     let enviandoQR = false;
@@ -179,7 +179,7 @@
         document.getElementById('qrFuncaoSelect').value = ehMecanico ? 'mecanico' : 'encarregado';
         trocarAbaQR('os');
       } else {
-        // Operador (ou sem login): somente horímetro.
+        // Sem permissão de abrir OS (sem login, almoxarife ou gestor): somente horímetro.
         document.getElementById('qrAbasContainer').classList.add('hidden');
         document.getElementById('qrFuncaoWrapper').classList.add('hidden');
         trocarAbaQR('horimetro');
