@@ -36,9 +36,9 @@ admin, endereço do site. Criar projeto Supabase tem custo mensal: diga isso.
 4. (A) Criar o usuário do admin no Auth do projeto e o perfil em
    `perfis_usuarios` com o cargo `admin`. Mande a senha inicial só para o Lucca,
    nunca para o repositório nem para o PR.
-5. Site: registrar o endereço do cliente e o par URL/chave `anon` do projeto
-   novo na configuração por endereço (ver a pendência do `config.js` no
-   `CLAUDE.md`; enquanto ela não estiver resolvida, pare aqui e avise).
+5. Site: acrescentar o cliente em `AMBIENTES.producao` no `config.js` (endereço
+   exato, URL e chave `anon` do projeto novo; nunca a `service_role`). Rode
+   `node --test test/config-endereco.test.js`.
 6. Conferir: login com o código da empresa, abas visíveis conforme os módulos,
    QR de um ativo de teste, um lançamento offline.
 

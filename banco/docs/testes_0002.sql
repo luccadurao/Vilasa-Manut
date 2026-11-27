@@ -1,5 +1,7 @@
 -- =============================================================================
 -- testes_0002.sql — conferência da etapa 3, só leitura.
+-- Os trechos marcados com as linhas "pontual:inicio" e "pontual:fim" só valem logo depois da 0002
+-- (a 0003 muda app.empresa_atual); as rodadas de regressão pulam esses trechos.
 -- Rode no SQL editor da homologação, como o mesmo papel que aplicou a 0002
 -- (postgres), depois da migração:
 --   psql -1 -v ON_ERROR_STOP=1 -f banco/docs/testes_0002.sql
@@ -40,13 +42,19 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM public.cargo_permissoes
     WHERE empresa_id = v_empresa AND cargo_codigo = 'almoxarife' AND permissao_id = 'os.abrir'
-  ) OR app.avaliar_permissao('os.abrir', ARRAY['almoxarife']) THEN
+  ) THEN
+    RAISE EXCEPTION 'Almoxarife não pode ter os.abrir';
+  END IF;
+
+  -- pontual:inicio
+  IF app.avaliar_permissao('os.abrir', ARRAY['almoxarife']) THEN
     RAISE EXCEPTION 'Almoxarife não pode ter os.abrir';
   END IF;
 
   IF NOT app.avaliar_permissao('os.ver', ARRAY['almoxarife']) THEN
     RAISE EXCEPTION 'Almoxarife precisa de os.ver';
   END IF;
+  -- pontual:fim
 
   WITH esperado(cargo, permissao) AS (
     VALUES
@@ -145,6 +153,7 @@ BEGIN
       coalesce(v_faltou, '-'), coalesce(v_sobrou, '-');
   END IF;
 
+  -- pontual:inicio
   FOR r IN
     SELECT DISTINCT cargo FROM (
       SELECT cargo_codigo AS cargo FROM public.cargo_permissoes WHERE empresa_id = v_empresa
@@ -162,6 +171,8 @@ BEGIN
       END IF;
     END LOOP;
   END LOOP;
+
+  -- pontual:fim
 
   SELECT pg_get_functiondef('app.pode(text)'::regprocedure) INTO v_def;
   IF v_def NOT LIKE '%app.avaliar_permissao%' OR v_def NOT LIKE '%app.cargos()%' THEN

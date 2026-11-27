@@ -133,10 +133,10 @@ Outras dicas:
 | Produção Vilasa | `main` | `yoignpytyegagpfuvoxu` | só você |
 | Cliente novo | `main` | projeto próprio de cada cliente | `/provisionar-cliente` + você |
 
-**Pendência importante:** hoje o `config.js` aponta fixo para o banco de produção,
-inclusive no preview da `homologacao`. Até isso ser trocado por "banco escolhido
-pelo endereço", não faça login no preview: você estaria mexendo nos dados reais.
-Essa é a primeira tarefa recomendada.
+O `config.js` escolhe o banco pelo endereço. Só `vilasa-manut.vercel.app` usa a
+produção. Qualquer outro endereço (preview do PR, branch `homologacao`,
+`localhost`) usa a homologação e mostra a etiqueta **HOMOLOGAÇÃO** no canto da
+tela. Sem a etiqueta, você está na produção.
 
 ## 8. Como melhorar os agentes com o tempo
 
