@@ -26,6 +26,8 @@ raiz="$(cd "$(dirname "$0")/.." && pwd)"
 db="${PGDATABASE_TESTE:-plataforma_teste}"
 export PGHOST="${PGHOST:-/var/run/postgresql}"
 export PGPORT="${PGPORT:-5432}"
+# Um serviço do libpq pode trazer um hostaddr remoto que o -h não sobrescreve.
+unset PGSERVICE PGSERVICEFILE
 
 # --- travas: só banco local e descartável ------------------------------------
 case "$PGHOST" in
