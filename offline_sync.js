@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS - MÓDULO 2: OFFLINE_SYNC.JS (CACHE LOCAL E FILA DE SINCRONIZAÇÃO) - V3
+// MÓDULO 2: OFFLINE_SYNC.JS (CACHE LOCAL E FILA DE SINCRONIZAÇÃO) - V3
 //
 // Regras desta versão:
 //  1. Todo INSERT ganha um id (UUID) criado no aparelho. Assim o reenvio não duplica

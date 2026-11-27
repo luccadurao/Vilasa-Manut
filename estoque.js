@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 7: ESTOQUE.JS (100% CASADO COM AS COLUNAS LIMPAS)
+// MÓDULO 7: ESTOQUE.JS (100% CASADO COM AS COLUNAS LIMPAS)
 // ============================================================================
 
 let cacheMovimentacoesAlmox = [];
@@ -762,7 +762,7 @@ function exportarInventarioAlmoxCSV() {
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_ALMOXARIFADO_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_ALMOXARIFADO_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 

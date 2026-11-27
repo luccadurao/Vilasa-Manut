@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vilasa CMMS • Portal QR de Campo</title>
+  <title>Portal QR de Campo</title>
   <link rel="stylesheet" href="vendor/tailwind.css" />
   <script src="vendor/supabase.js"></script>
   <link rel="stylesheet" href="vendor/fa/css/all.min.css" />
@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#f59e0b" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Vilasa CMMS" />
+  <meta name="apple-mobile-web-app-title" content="Manut" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
@@ -20,7 +20,7 @@
     <!-- Cabeçalho da Máquina -->
     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
       <div>
-        <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">VILASA CMMS • PORTAL QR CODE</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-amber-400"><span data-marca></span> • PORTAL QR CODE</span>
         <div class="flex items-center gap-2 mt-1">
           <span id="qrTagBadge" class="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded text-sm">EQUIP</span>
           <h1 id="qrNomeEquip" class="text-sm font-extrabold text-white truncate">Carregando...</h1>
@@ -463,7 +463,10 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', carregarEquipamentoDoQR);
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar(lerSessaoLocal() || null);
+      carregarEquipamentoDoQR();
+    });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
     }

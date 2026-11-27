@@ -25,8 +25,35 @@
   /** @type {Promise<import('./tipos.js').ResultadoCarga> | null} */
   let cargaPromise = null;
 
-  const URL_BASE_QR = 'https://vilasa-manut.vercel.app/qr.html';
   const VERSAO_NUCLEO = '1.0.0';
+
+  /**
+   * Ambiente escolhido pelo config.js (banco, site, empresa padrão, marca).
+   * @returns {{ site?: string | null, empresa_padrao?: string, marca?: string | null } | null}
+   */
+  function ambienteAtual() {
+    const amb = root.AMBIENTE_ATUAL;
+    return amb && typeof amb === 'object' ? amb : null;
+  }
+
+  /**
+   * Endereço do site: o oficial do ambiente, ou o endereço em que a página abriu.
+   * @returns {string}
+   */
+  function siteAtual() {
+    const amb = ambienteAtual();
+    if (amb && typeof amb.site === 'string' && amb.site) return amb.site.replace(/\/+$/, '');
+    const loc = root.location;
+    if (loc && typeof loc.origin === 'string' && /^https?:/.test(String(loc.protocol || loc.origin))) {
+      return loc.origin.replace(/\/+$/, '');
+    }
+    return '';
+  }
+
+  /** Base das etiquetas de QR: `<site>/qr.html`. */
+  function urlBaseQr() {
+    return `${siteAtual()}/qr.html`;
+  }
 
   /** @type {Record<import('./tipos.js').EstiloRelatorio, { icone: string, classe: string }>} */
   const ESTILOS_RELATORIO = {
@@ -889,21 +916,70 @@
    */
   function urlCanonica(id) {
     const texto = String(id == null ? '' : id).trim();
-    if (!texto) return URL_BASE_QR;
-    return `${URL_BASE_QR}?id=${encodeURIComponent(texto)}`;
+    const base = urlBaseQr();
+    if (!texto) return base;
+    return `${base}?id=${encodeURIComponent(texto)}`;
   }
 
   const CHAVE_EMPRESA = chaveLocal('empresa_codigo');
-  const CODIGO_EMPRESA_PADRAO = 'VILASA';
+  /**
+   * Código de empresa quando o login vem sem código: o do ambiente
+   * (config.js). '' deixa o servidor usar a empresa 1 do banco.
+   * @returns {string}
+   */
+  function codigoEmpresaPadrao() {
+    const amb = ambienteAtual();
+    return amb && typeof amb.empresa_padrao === 'string' ? amb.empresa_padrao.trim().toUpperCase() : '';
+  }
 
   /**
-   * Código digitado no login. Vazio vira a empresa 1.
+   * Código digitado no login. Vazio vira o código padrão do ambiente.
    * @param {unknown} texto
    * @returns {string}
    */
   function codigoEmpresa(texto) {
     const limpo = String(texto == null ? '' : texto).trim().toUpperCase();
-    return limpo || CODIGO_EMPRESA_PADRAO;
+    return limpo || codigoEmpresaPadrao();
+  }
+
+  /**
+   * Nome mostrado na tela e nos relatórios: a empresa logada; antes do
+   * login, a marca do ambiente; sem nada disso, o nome do produto.
+   * @param {any} [usuario]
+   * @returns {string}
+   */
+  function nomeDaMarca(usuario) {
+    const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
+    const empresa = pessoa && pessoa.empresa && typeof pessoa.empresa === 'object' ? pessoa.empresa : null;
+    if (empresa && typeof empresa.nome === 'string' && empresa.nome.trim()) return empresa.nome.trim();
+    const amb = ambienteAtual();
+    if (amb && typeof amb.marca === 'string' && amb.marca.trim()) return amb.marca.trim();
+    const produto = root.PLATAFORMA_PRODUTO;
+    return produto && produto.nome ? String(produto.nome) : '';
+  }
+
+  /**
+   * Preenche os elementos [data-marca] com o nome da marca.
+   * @param {any} [usuario]
+   */
+  function aplicarMarca(usuario) {
+    const doc = root.document;
+    if (!doc || typeof doc.querySelectorAll !== 'function') return;
+    const nome = nomeDaMarca(usuario);
+    const nos = doc.querySelectorAll('[data-marca]');
+    for (let i = 0; i < nos.length; i += 1) nos[i].textContent = nome;
+  }
+
+  /**
+   * Prefixo dos arquivos exportados: o código da empresa, ou o nome da marca.
+   * @param {any} [usuario]
+   * @returns {string}
+   */
+  function prefixoArquivo(usuario) {
+    const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
+    const empresa = pessoa && pessoa.empresa && typeof pessoa.empresa === 'object' ? pessoa.empresa : null;
+    const base = (empresa && empresa.codigo) || nomeDaMarca(pessoa) || 'RELATORIO';
+    return String(base).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'RELATORIO';
   }
 
   /**
@@ -1312,7 +1388,7 @@
       CHAVE: CHAVE_SESSAO,
       CHAVE_ANTERIOR: CHAVE_SESSAO_ANTERIOR,
       CHAVE_EMPRESA,
-      CODIGO_EMPRESA_PADRAO,
+      get CODIGO_EMPRESA_PADRAO() { return codigoEmpresaPadrao(); },
       codigoEmpresa,
       lerEmpresaLembrada,
       lembrarEmpresa,
@@ -1327,7 +1403,8 @@
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
     telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel },
     resolverFuncao,
-    qr: { URL_BASE: URL_BASE_QR, urlCanonica, lerUrl: lerUrlQr },
+    qr: { get URL_BASE() { return urlBaseQr(); }, urlCanonica, lerUrl: lerUrlQr },
+    marca: { nome: nomeDaMarca, prefixoArquivo, site: siteAtual, aplicar: aplicarMarca },
     termo
   };
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 3: OS_REP.JS (FLUXO DIRETO SEM CONDIÇÃO OPERACIONAL)
+// MÓDULO 3: OS_REP.JS (FLUXO DIRETO SEM CONDIÇÃO OPERACIONAL)
 // ============================================================================
 
 let abaStatusOSAtual = 'ativas';
@@ -1092,7 +1092,7 @@ async function exportarOrdensServicoCSV() {
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 

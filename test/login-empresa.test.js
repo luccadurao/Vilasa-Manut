@@ -24,15 +24,32 @@ function memoria(inicial) {
   };
 }
 
-test('o primeiro acesso mostra a empresa e o vazio vale VILASA', () => {
-  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+test('o primeiro acesso mostra a empresa e o vazio vale o padrão do ambiente', () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
   const store = memoria();
   const estado = Plataforma.sessao.estadoLoginEmpresa(store, false);
   assert.equal(estado.lembrada, null);
   assert.equal(estado.mostrarCampo, true);
   assert.equal(estado.mostrarLembrada, false);
+  // Sem ambiente: vazio deixa o servidor escolher a empresa 1 do banco.
+  assert.equal(Plataforma.sessao.codigoEmpresa(''), '');
+  // Produção da Vilasa (config.js): vazio vira VILASA.
+  sandbox.AMBIENTE_ATUAL = { empresa_padrao: 'vilasa' };
   assert.equal(Plataforma.sessao.codigoEmpresa(''), 'VILASA');
+  assert.equal(Plataforma.sessao.CODIGO_EMPRESA_PADRAO, 'VILASA');
   assert.equal(Plataforma.sessao.codigoEmpresa('  outra '), 'OUTRA');
+});
+
+test('a marca é a empresa logada, depois a do ambiente, depois o produto', () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
+  assert.equal(Plataforma.marca.nome(null), sandbox.PLATAFORMA_PRODUTO.nome);
+  sandbox.AMBIENTE_ATUAL = { marca: 'Vilasa' };
+  assert.equal(Plataforma.marca.nome(null), 'Vilasa');
+  const pessoa = { empresa: { codigo: 'agro-sul', nome: 'Agro Sul Ltda' } };
+  assert.equal(Plataforma.marca.nome(pessoa), 'Agro Sul Ltda');
+  assert.equal(Plataforma.marca.prefixoArquivo(pessoa), 'AGRO_SUL');
+  assert.equal(Plataforma.marca.prefixoArquivo({ empresa: { nome: 'Fazenda São João' } }), 'FAZENDA_SAO_JOAO');
+  assert.equal(Plataforma.marca.prefixoArquivo(null), 'VILASA');
 });
 
 test('depois do primeiro acesso a empresa fica lembrada e a troca reabre o campo', () => {

@@ -52,21 +52,36 @@ test('sem id a etiqueta é antiga e não vira busca por tag', () => {
   assert.equal(html.includes('digitar a máquina'), false);
 });
 
-test('a URL canônica do QR identifica a máquina só pelo id', () => {
-  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+test('a URL canônica do QR identifica a máquina só pelo id, no site do ambiente', () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
   const id = '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f';
-  assert.equal(
-    Plataforma.qr.urlCanonica(id),
-    `https://vilasa-manut.vercel.app/qr.html?id=${id}`
-  );
+  // Produção: o site oficial do ambiente (config.js), venha de onde vier a página.
+  sandbox.AMBIENTE_ATUAL = { site: 'https://vilasa-manut.vercel.app/' };
+  sandbox.location = { origin: 'https://outro-endereco.vercel.app', protocol: 'https:' };
+  assert.equal(Plataforma.qr.urlCanonica(id), `https://vilasa-manut.vercel.app/qr.html?id=${id}`);
   assert.equal(Plataforma.qr.URL_BASE, 'https://vilasa-manut.vercel.app/qr.html');
+  // Homologação (site null): o endereço em que a página abriu.
+  sandbox.AMBIENTE_ATUAL = { site: null };
+  assert.equal(Plataforma.qr.URL_BASE, 'https://outro-endereco.vercel.app/qr.html');
+  // Sem ambiente nem endereço http: caminho relativo.
+  sandbox.AMBIENTE_ATUAL = undefined;
+  sandbox.location = { origin: 'null', protocol: 'file:' };
+  assert.equal(Plataforma.qr.URL_BASE, '/qr.html');
+});
+
+test('o núcleo e as telas não têm endereço nem nome de cliente fixo', () => {
+  for (const rel of ['nucleo/nucleo.js', 'nucleo/qr.js', 'nucleo/contexto.js', 'nucleo/produto.js', 'frota.js', 'core.js', 'index.html', 'qr.html', 'manifest.webmanifest']) {
+    const texto = fs.readFileSync(path.join(raiz, rel), 'utf8');
+    assert.equal(texto.includes('vilasa-manut.vercel.app'), false, `${rel}: endereço fixo`);
+    assert.equal(/VILASA/.test(texto), false, `${rel}: nome de cliente fixo`);
+  }
 });
 
 test('as etiquetas atuais continuam com id, tag, nome e unidade', () => {
   const frota = fs.readFileSync(path.join(raiz, 'frota.js'), 'utf8');
-  const inicio = frota.indexOf('const URL_BASE_QR_PRODUCAO');
+  const inicio = frota.indexOf('function gerarUrlQRCodeOfflineReady');
   const fim = frota.indexOf('function abrirEtiquetaQRIndividual');
-  const sandbox = { URLSearchParams };
+  const sandbox = { URLSearchParams, Plataforma: { qr: { URL_BASE: 'https://vilasa-manut.vercel.app/qr.html' } } };
   vm.runInContext(frota.slice(inicio, fim), vm.createContext(sandbox));
   const url = sandbox.gerarUrlQRCodeOfflineReady({
     id: '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f',

@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 8: KPIS.JS (CONFIABILIDADE NBR 5462 & CUSTOS)
+// MÓDULO 8: KPIS.JS (CONFIABILIDADE NBR 5462 & CUSTOS)
 // ============================================================================
 
 let filtroKpiDataInicio = '';
@@ -366,6 +366,6 @@ function exportarRelatorioKPIsCSV() {
   const blob = new Blob(['\uFEFF' + cab.join(';') + '\n' + linha], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_KPIS_${filtroKpiDataInicio}_A_${filtroKpiDataFim}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_KPIS_${filtroKpiDataInicio}_A_${filtroKpiDataFim}.csv`;
   a.click();
 }

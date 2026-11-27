@@ -203,7 +203,7 @@ function codigoEmpresaDoLogin() {
     : ((api && api.lerEmpresaLembrada && api.lerEmpresaLembrada(localStorage)) || '');
   if (api && api.codigoEmpresa) return api.codigoEmpresa(texto);
   const limpo = String(texto || '').trim().toUpperCase();
-  return limpo || 'VILASA';
+  return limpo;
 }
 
 function erroDeRedeAuth(err) {
@@ -404,6 +404,7 @@ function mostrarAvisoModulosBloqueados(carga) {
 }
 
 async function inicializarSistemaPosLogin() {
+  if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar();
   if (typeof aplicarContextoOffline === 'function') {
     try { await aplicarContextoOffline(); } catch (e) { console.warn('Contexto offline:', e); }
   }
@@ -614,7 +615,7 @@ function exportarTabelaVisivelCSV() {
   const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_${String(abaAtivaGlobal).toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_${String(abaAtivaGlobal).toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 
@@ -624,7 +625,7 @@ function coletarRelatorioGenericoDaTela() {
   const trs = Array.from(sec?.querySelectorAll('table tbody tr') || []);
   const ths = Array.from(sec?.querySelectorAll('table thead th') || []).map(th => th.innerText.trim());
   return {
-    titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || 'Relatório Gerencial Vilasa',
+    titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || `Relatório Gerencial ${Plataforma.marca.nome()}`,
     subtitulo: `Obra: ${obraNome} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
     kpisResumo: [
       { label: 'Registros Filtrados', valor: trs.length },
@@ -697,7 +698,7 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
       <body onload="setTimeout(() => { window.print(); window.onafterprint = () => window.close(); }, 350)">
         <div style="border-bottom:2px solid #f59e0b; padding-bottom:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:10px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
+            <div style="font-size:10px; font-weight:900; color:#d97706;">${esc(Plataforma.marca.nome().toUpperCase())} • ENGENHARIA DE MANUTENÇÃO</div>
             <h1 style="margin:2px 0; font-size:15px;">${esc(rel.titulo)}</h1>
             <div style="font-size:10px; color:#475569; font-weight:700;">${esc(rel.subtitulo)}</div>
           </div>
@@ -725,7 +726,7 @@ async function gerarResumoExecutivoPNG(dadosProntos) {
   cardExecutivo.innerHTML = `
     <div style="background:#0f172a; color:#ffffff; padding:12px 18px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div>
-        <div style="color:#fbbf24; font-size:10px; font-weight:900;">VILASA CMMS • QUADRO EXECUTIVO (1 PÁGINA)</div>
+        <div style="color:#fbbf24; font-size:10px; font-weight:900;">${esc(Plataforma.marca.nome().toUpperCase())} • QUADRO EXECUTIVO (1 PÁGINA)</div>
         <div style="font-size:17px; font-weight:900; margin-top:2px;">${esc(rel.titulo)}</div>
         <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">${esc(rel.subtitulo)}</div>
       </div>
@@ -748,7 +749,7 @@ async function gerarResumoExecutivoPNG(dadosProntos) {
   try {
     const canvas = await html2canvas(cardExecutivo, { scale: 2, backgroundColor: '#ffffff' });
     const link = document.createElement('a');
-    link.download = `REP_VILASA_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
+    link.download = `REP_${Plataforma.marca.prefixoArquivo()}_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   } finally {
@@ -846,5 +847,6 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar();
   await restaurarSessaoSalva();
 });

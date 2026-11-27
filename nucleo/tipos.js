@@ -232,6 +232,16 @@
  */
 
 /**
+ * Nome mostrado na tela, prefixo de arquivo exportado e site do ambiente.
+ * Sem argumento, usam a pessoa logada.
+ * @typedef {Object} ApiMarca
+ * @property {(usuario?: any) => string} nome
+ * @property {(usuario?: any) => string} prefixoArquivo
+ * @property {() => string} site
+ * @property {(usuario?: any) => void} aplicar
+ */
+
+/**
  * Estado compartilhado (nucleo/contexto.js). Os nomes antigos do core.js
  * (usuarioLogado, obraAtivaId, cache*) são propriedades de window com get/set.
  * @typedef {Object} ApiContexto
@@ -254,6 +264,7 @@
  * @property {{ URL_BASE: string, urlCanonica: (id: string) => string, lerUrl: (search: string) => { id: string, etiquetaAntiga: boolean, mensagem: string, tag: string, nome: string, un: string } }} qr
  * @property {TermoFn} termo
  * @property {ApiContexto} [contexto]
+ * @property {ApiMarca} marca
  */
 
 export {};

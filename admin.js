@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 9: ADMIN.JS (USUÁRIOS, OBRAS E EDITOR MODO DEUS)
+// MÓDULO 9: ADMIN.JS (USUÁRIOS, OBRAS E EDITOR MODO DEUS)
 // ============================================================================
 
 let subAbaAdminAtual = 'usuarios';
