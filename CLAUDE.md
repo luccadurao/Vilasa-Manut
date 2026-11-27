@@ -20,6 +20,11 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   - Homologação: projeto `zqjgruwmqomgguxoxiuv` ("Vilasa Homologação").
 - `nucleo/` — núcleo da plataforma: registro de módulos, contrato, permissões,
   carregador, QR, cadastro de ativos. `nucleo/tipos.js` define o contrato (JSDoc).
+  `nucleo/contexto.js` guarda o estado comum (`usuarioLogado`, `obraAtivaId`,
+  `cache*`) como propriedade de `window`: nunca declare esses nomes com `let`/`const`.
+- `config.js` — escolhe o banco pelo endereço. Só os endereços listados em
+  `AMBIENTES.producao` usam produção; preview, `localhost` e endereço novo caem
+  na homologação. Cliente novo em produção = endereço novo nessa lista.
 - `modulos/<id>/manifesto.js` — manifesto declarativo de cada módulo
   (dependências, permissões, cargos padrão, telas, relatórios, ações de QR).
   A tela do módulo ainda vive no arquivo da raiz que o manifesto aponta
@@ -27,7 +32,10 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
 - `offline_sync.js` — fila offline (por empresa e módulo) e cache.
 - `sw.js` — service worker; `nucleo/versao.js` — versão do app servido.
 - `banco/migracoes/` — migrações numeradas; `banco/migracoes/reverter/` — reversões;
-  `banco/docs/testes_NNNN.sql` — testes SQL só de leitura de cada migração.
+  `banco/docs/testes_NNNN.sql` — testes SQL só de leitura de cada migração
+  (marque `-- teste: pontual` no topo se ele só valer logo depois da própria migração).
+- `scripts/testar-sql-local.sh` — aplica todas as migrações num Postgres 17 vazio,
+  com idempotência, testes, login simulado e reversão da última. Roda no CI (job `banco`).
 - `test/*.test.js` — testes `node --test`; `scripts/validar-manifestos.js` — validador.
 
 ## Regras que não se quebram
@@ -95,7 +103,5 @@ Corrija o que eles apontarem e rode de novo até passar.
 
 ## Pendências conhecidas
 
-- `config.js` aponta fixo para o Supabase de produção, inclusive no preview da
-  `homologacao`. Precisa escolher o banco pelo endereço antes de testes com login.
 - Provisionamento de cliente novo (banco próprio) ainda não é automatizado; ver a
   skill `provisionar-cliente`.
