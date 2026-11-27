@@ -4,8 +4,8 @@
 // Registro de módulos, resolução, permissões por id, eventos locais e os
 // pontos de extensão de tela, relatório e QR.
 // Este arquivo não cita módulo de produto pelo nome: só percorre o que cada
-// manifesto registrou. Os scripts dos módulos continuam no index.html (etapa 2
-// é que passa a carregá-los daqui).
+// manifesto registrou. Os scripts dos módulos entram daqui, na ordem da
+// resolução, e não por tag fixa no index.html.
 // ============================================================================
 
 /**
@@ -20,6 +20,10 @@
   const ouvintes = new Map();
   /** @type {import('./tipos.js').ResultadoResolucao | null} */
   let resolucaoGuardada = null;
+  /** @type {import('./tipos.js').ResultadoCarga | null} */
+  let resultadoCarga = null;
+  /** @type {Promise<import('./tipos.js').ResultadoCarga> | null} */
+  let cargaPromise = null;
 
   const URL_BASE_QR = 'https://vilasa-manut.vercel.app/qr.html';
   const VERSAO_NUCLEO = '1.0.0';
@@ -664,9 +668,9 @@
       const texto = doc.createElement('span');
       texto.textContent = tela.rotulo;
       botao.append(icone, texto);
-      const visivel = typeof root.podeVerAba === 'function'
+      const visivel = !idsBloqueados().has(tela.moduloId) && (typeof root.podeVerAba === 'function'
         ? root.podeVerAba(tela.id)
-        : pode(tela.permissao, root.usuarioLogado);
+        : pode(tela.permissao, root.usuarioLogado));
       if (!visivel) botao.classList.add('hidden');
       nav.appendChild(botao);
     }
@@ -688,8 +692,15 @@
     }
   }
 
+  function idsBloqueados() {
+    const lista = resultadoCarga && resultadoCarga.bloqueados;
+    return new Set((lista || []).map((item) => item.id));
+  }
+
   function primeiraVisivel() {
+    const bloqueados = idsBloqueados();
     for (const tela of telasDe()) {
+      if (bloqueados.has(tela.moduloId)) continue;
       const visivel = typeof root.podeVerAba === 'function'
         ? root.podeVerAba(tela.id)
         : pode(tela.permissao, root.usuarioLogado);
@@ -705,6 +716,211 @@
     const texto = String(id == null ? '' : id).trim();
     if (!texto) return URL_BASE_QR;
     return `${URL_BASE_QR}?id=${encodeURIComponent(texto)}`;
+  }
+
+  /**
+   * @returns {string}
+   */
+  function versaoApp() {
+    return typeof VILASA_VERSAO_APP === 'string' ? VILASA_VERSAO_APP : '';
+  }
+
+  /**
+   * @param {string} src
+   * @param {import('./tipos.js').TipoScriptModulo} tipo
+   * @returns {Promise<void>}
+   */
+  function carregarScriptNoDocumento(src, tipo) {
+    const doc = root.document;
+    if (!doc || typeof doc.createElement !== 'function') {
+      return Promise.reject(new Error('Documento indisponível para ' + src));
+    }
+    switch (tipo) {
+      case 'classico':
+        return new Promise((resolve, reject) => {
+          const el = /** @type {HTMLScriptElement} */ (doc.createElement('script'));
+          let terminou = false;
+          const fim = (/** @type {Error | null} */ erro) => {
+            if (terminou) return;
+            terminou = true;
+            if (erro) reject(erro);
+            else resolve();
+          };
+          const timer = setTimeout(() => fim(new Error(src + ' (tempo esgotado)')), 20000);
+          el.async = false;
+          el.src = src;
+          el.onload = () => {
+            clearTimeout(timer);
+            fim(null);
+          };
+          el.onerror = () => {
+            clearTimeout(timer);
+            fim(new Error(src));
+          };
+          const pai = doc.body || doc.head || doc.documentElement;
+          if (!pai || typeof pai.appendChild !== 'function') {
+            clearTimeout(timer);
+            fim(new Error(src));
+            return;
+          }
+          pai.appendChild(el);
+        });
+      case 'esm': {
+        const base = (root.location && root.location.href) || doc.baseURI || 'http://localhost/';
+        const url = new URL(src, base).href;
+        return import(url).then(() => undefined);
+      }
+      default: {
+        /** @type {never} */
+        const nunca = tipo;
+        return Promise.reject(new Error('Tipo de script desconhecido: ' + String(nunca)));
+      }
+    }
+  }
+
+  /**
+   * @param {import('./tipos.js').ResultadoResolucao} resolucao
+   * @param {import('./tipos.js').Manifesto[]} manifestos
+   * @param {{ carregarScript: (src: string, tipo: import('./tipos.js').TipoScriptModulo) => Promise<void> }} io
+   * @returns {Promise<import('./tipos.js').ResultadoCarga>}
+   */
+  async function carregar(resolucao, manifestos, io) {
+    /** @type {Map<string, import('./tipos.js').Manifesto>} */
+    const porId = new Map();
+    for (const manifesto of manifestos || []) {
+      if (manifesto && manifesto.id && !porId.has(manifesto.id)) porId.set(manifesto.id, manifesto);
+    }
+    /** @type {import('./tipos.js').BloqueioModulo[]} */
+    const bloqueados = (resolucao.bloqueados || []).map((item) => ({ id: item.id, motivo: item.motivo }));
+    const bloqueadosIds = new Set(bloqueados.map((item) => item.id));
+    /** @type {string[]} */
+    const avisos = (resolucao.avisos || []).slice();
+    /** @type {string[]} */
+    const carregados = [];
+    /** @type {string[]} */
+    const arquivos = [];
+    const vistos = new Set();
+    const baixar = io && io.carregarScript;
+
+    /**
+     * @param {string} src
+     * @param {import('./tipos.js').TipoScriptModulo} tipo
+     */
+    async function baixarUm(src, tipo) {
+      if (!src || vistos.has(src)) return;
+      if (typeof baixar !== 'function') throw new Error('Carregador de script ausente');
+      await baixar(src, tipo);
+      vistos.add(src);
+      arquivos.push(src);
+    }
+
+    for (const id of resolucao.ordem || []) {
+      if (bloqueadosIds.has(id)) continue;
+      const manifesto = porId.get(id);
+      if (!manifesto) continue;
+      const depende = manifesto.depende || {};
+      let dependenciaParada = '';
+      for (const dep of Object.keys(depende)) {
+        if (dep !== 'nucleo' && bloqueadosIds.has(dep)) {
+          dependenciaParada = dep;
+          break;
+        }
+      }
+      if (dependenciaParada) {
+        const motivo = `A dependência "${dependenciaParada}" não carregou.`;
+        bloqueados.push({ id, motivo });
+        bloqueadosIds.add(id);
+        avisos.push(`Módulo "${id}" bloqueado: ${motivo}`);
+        continue;
+      }
+      try {
+        for (const vendor of manifesto.vendor || []) {
+          await baixarUm(String(vendor), 'classico');
+        }
+        for (const script of manifesto.scripts || []) {
+          if (!script || !script.src) throw new Error('script sem src');
+          if (script.tipo !== 'classico' && script.tipo !== 'esm') {
+            throw new Error('Tipo de script desconhecido: ' + script.tipo);
+          }
+          await baixarUm(script.src, script.tipo);
+        }
+        const iniciar = resolverFuncao('iniciar', id);
+        if (typeof iniciar === 'function') await iniciar({ id });
+        carregados.push(id);
+      } catch (erro) {
+        const detalhe = erro && /** @type {Error} */ (erro).message ? /** @type {Error} */ (erro).message : String(erro);
+        const motivo = `Falha ao carregar script: ${detalhe}`;
+        bloqueados.push({ id, motivo });
+        bloqueadosIds.add(id);
+        avisos.push(`Módulo "${id}" bloqueado: ${motivo}`);
+      }
+    }
+
+    bloqueados.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    avisos.sort();
+    return { carregados, bloqueados, avisos, arquivos };
+  }
+
+  /**
+   * @returns {string[]}
+   */
+  function scriptsEstaticosForaDoNucleo() {
+    const doc = root.document;
+    if (!doc || typeof doc.querySelectorAll !== 'function') return [];
+    /** @type {string[]} */
+    const fora = [];
+    const nos = doc.querySelectorAll('script[src]');
+    for (let i = 0; i < nos.length; i += 1) {
+      const src = nos[i].getAttribute('src') || '';
+      if (!src || src.includes('://')) continue;
+      const limpo = src.replace(/^\.\//, '');
+      if (limpo === 'config.js' || limpo === 'core.js' || limpo === 'offline_sync.js') continue;
+      if (limpo.startsWith('nucleo/') || limpo.startsWith('modulos/')) continue;
+      if (limpo.startsWith('vendor/supabase') || limpo.startsWith('vendor/html2canvas')) continue;
+      fora.push(limpo);
+    }
+    return fora;
+  }
+
+  /**
+   * @param {string[]} arquivos
+   */
+  function enviarPrecache(arquivos) {
+    const nav = root.navigator;
+    if (!nav || !nav.serviceWorker || !nav.serviceWorker.ready) return;
+    const lista = [...new Set([...(arquivos || []), ...scriptsEstaticosForaDoNucleo()].filter(Boolean))];
+    if (!lista.length) return;
+    nav.serviceWorker.ready.then((/** @type {{ active?: { postMessage: Function } }} */ registro) => {
+      const alvo = (registro && registro.active) || nav.serviceWorker.controller;
+      if (!alvo || typeof alvo.postMessage !== 'function') return;
+      alvo.postMessage({ tipo: 'precache', arquivos: lista, versao: versaoApp() });
+    }).catch((/** @type {unknown} */ erro) => {
+      console.warn('Precache:', erro);
+    });
+  }
+
+  /**
+   * @returns {Promise<import('./tipos.js').ResultadoCarga>}
+   */
+  function garantirCarregados() {
+    if (!cargaPromise) {
+      cargaPromise = (async () => {
+        const resolucao = resolverEGuardar({ todos: true });
+        const resultado = await carregar(resolucao, registros.slice(), {
+          carregarScript: carregarScriptNoDocumento
+        });
+        resultadoCarga = resultado;
+        for (const bloqueio of resultado.bloqueados) {
+          console.warn(`Módulo bloqueado: ${bloqueio.id}. ${bloqueio.motivo}`);
+        }
+        enviarPrecache(resultado.arquivos);
+        return resultado;
+      })().catch((erro) => {
+        cargaPromise = null;
+        throw erro;
+      });
+    }
+    return cargaPromise;
   }
 
   registrar({
@@ -741,7 +957,10 @@
       lista,
       resolver,
       resolverEGuardar,
-      ultimaResolucao: () => resolucaoGuardada
+      carregar,
+      garantirCarregados,
+      ultimaResolucao: () => resolucaoGuardada,
+      ultimaCarga: () => resultadoCarga
     },
     permissoes: {
       pode,

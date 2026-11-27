@@ -102,12 +102,23 @@
  */
 
 /**
+ * @typedef {Object} ResultadoCarga
+ * @property {string[]} carregados
+ * @property {BloqueioModulo[]} bloqueados
+ * @property {string[]} avisos
+ * @property {string[]} arquivos
+ */
+
+/**
  * @typedef {Object} ApiModulos
  * @property {(manifesto: Manifesto) => void} registrar
  * @property {() => Manifesto[]} lista
  * @property {(contrato: ContratoModulos | string[], manifestos: Manifesto[]) => ResultadoResolucao} resolver
  * @property {(contrato: ContratoModulos | string[]) => ResultadoResolucao} resolverEGuardar
+ * @property {(resolucao: ResultadoResolucao, manifestos: Manifesto[], io: { carregarScript: (src: string, tipo: TipoScriptModulo) => Promise<void> }) => Promise<ResultadoCarga>} carregar
+ * @property {() => Promise<ResultadoCarga>} garantirCarregados
  * @property {() => ResultadoResolucao | null} ultimaResolucao
+ * @property {() => ResultadoCarga | null} ultimaCarga
  */
 
 /**

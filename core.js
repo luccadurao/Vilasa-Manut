@@ -315,7 +315,27 @@ function montarBotoesBarraExportacaoUniversal() {
   `;
 }
 
+function mostrarAvisoModulosBloqueados(carga) {
+  const lista = carga && Array.isArray(carga.bloqueados) ? carga.bloqueados : [];
+  const antigo = document.getElementById('avisoModulosBloqueados');
+  if (!lista.length) {
+    if (antigo && typeof antigo.remove === 'function') antigo.remove();
+    return;
+  }
+  const main = document.querySelector('#appPrincipal main');
+  if (!main) return;
+  const box = antigo || document.createElement('div');
+  box.id = 'avisoModulosBloqueados';
+  box.className = 'bg-amber-50 border border-amber-400 text-amber-950 rounded-2xl p-3 text-xs font-bold';
+  box.textContent = 'Módulos bloqueados (o restante segue disponível): ' + lista.map((b) => `${b.id} — ${b.motivo}`).join(' | ');
+  if (!antigo) main.prepend(box);
+}
+
 async function inicializarSistemaPosLogin() {
+  let carga = null;
+  if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
+    carga = await Vilasa.modulos.garantirCarregados();
+  }
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
   montarBotoesBarraExportacaoUniversal();
@@ -337,6 +357,7 @@ async function inicializarSistemaPosLogin() {
     if (painel) Vilasa.telas.garantirSecoes(painel);
   }
 
+  mostrarAvisoModulosBloqueados(carga);
   const primeiraAba = window.Vilasa && Vilasa.telas ? Vilasa.telas.primeiraVisivel() : null;
   if (primeiraAba) navegarPara(primeiraAba);
 }
@@ -731,4 +752,10 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
   if (operacao === 'DELETE') return await db.from(tabela).delete().eq('id', idRegistro);
 };
 
-document.addEventListener('DOMContentLoaded', () => restaurarSessaoSalva());
+document.addEventListener('DOMContentLoaded', async () => {
+  if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
+    try { await Vilasa.modulos.garantirCarregados(); }
+    catch (e) { console.warn('Módulos:', e); }
+  }
+  await restaurarSessaoSalva();
+});

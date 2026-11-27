@@ -19,7 +19,7 @@
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
   <!-- 1. TELA DE LOGIN -->
-  <div id="telaLogin" class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+  <div id="telaLogin" class="hidden min-h-screen bg-slate-100 flex items-center justify-center p-4">
     <div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-5">
       <div class="text-center">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-950 font-black text-2xl mb-2 shadow-md">
@@ -137,6 +137,7 @@
 
   <!-- 3. SCRIPTS DA ARQUITETURA MODULAR V2 -->
   <script src="config.js"></script>
+  <script src="nucleo/versao.js"></script>
   <script src="nucleo/nucleo.js"></script>
   <script src="modulos/os/manifesto.js"></script>
   <script src="modulos/frota/manifesto.js"></script>
@@ -147,17 +148,10 @@
   <script src="modulos/admin/manifesto.js"></script>
   <script src="core.js"></script>
   <script src="offline_sync.js"></script>
-  <script src="os_rep.js"></script>
-  <script src="pcm_sap.js"></script>
-  <script src="frota.js"></script>
-  <script src="estoque.js"></script>
-  <script src="kpis.js"></script>
-  <script src="diesel.js"></script>
-  <script src="admin.js"></script>
   <script>
     // Instala o "modo offline": guarda o site no celular para abrir sem internet.
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
+      navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
     }
   </script>
 </body>
