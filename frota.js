@@ -472,7 +472,8 @@ async function abrirModalTransferirObraEquipamento(equipId) {
     </div>`);
 }
 
-// QR impresso no escritório sempre aponta para produção, mesmo se gerado a partir de teste/preview
+// QR impresso no escritório sempre aponta para produção, mesmo se gerado a partir de teste/preview.
+// O id (uuid) identifica a máquina. O formato estável está em docs/qr-url.md.
 const URL_BASE_QR_PRODUCAO = 'https://vilasa-manut.vercel.app/';
 
 function gerarUrlQRCodeOfflineReady(eq) {
@@ -630,4 +631,33 @@ async function confirmarCorrecaoLeitura(equipId) {
   if (error) return alert('Não foi possível corrigir: ' + error.message);
   _fecharModalFrota('modalCorrigirLeituraV2');
   await carregarFrota(filtroSituacaoFrota);
+}
+
+function coletarRelatorioFrota() {
+  const obraNome = obterNomeObraAtiva();
+  const sit = typeof filtroSituacaoFrota !== 'undefined' ? filtroSituacaoFrota : 'ativo';
+  const lista = typeof obterListaFrotaFiltradaAtual === 'function'
+    ? obterListaFrotaFiltradaAtual()
+    : filtrarListaPorObraAtiva(cacheEquipamentos || []);
+
+  return {
+    titulo: 'Relatório Oficial de Frota e Mobilização de Ativos',
+    subtitulo: `Obra: ${obraNome} | Situação: ${String(sit).toUpperCase()}`,
+    kpisResumo: [
+      { label: 'Total Filtrado', valor: lista.length },
+      { label: 'Próprios', valor: lista.filter(e => e.propriedade !== 'alugado').length },
+      { label: 'Locados', valor: lista.filter(e => e.propriedade === 'alugado').length },
+      { label: 'Ativos na Obra', valor: lista.filter(e => (e.situacao_ciclo || 'ativo') === 'ativo').length }
+    ],
+    colunas: ['Prefixo', 'Descrição', 'Marca / Modelo / Ano', 'Nº Série / Placa', 'Vínculo', 'Horímetro / KM', 'Situação'],
+    linhas: lista.map(e => [
+      e.tag || '-',
+      e.nome || '-',
+      `${e.marca || ''} ${e.modelo || ''} ${e.ano_fabricacao ? `(${e.ano_fabricacao})` : ''}`,
+      `Série: ${e.numero_serie || 'N/I'}${e.placa ? ` | Placa: ${e.placa}` : ''}`,
+      (e.propriedade || 'proprio').toUpperCase(),
+      `${e.horimetro_atual || 0} ${e.unidade_medida || 'H'}`,
+      (e.situacao_ciclo || 'ativo').toUpperCase()
+    ])
+  };
 }

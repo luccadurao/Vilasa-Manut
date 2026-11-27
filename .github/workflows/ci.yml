@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ferramentas/package-lock.json
+      - run: npm ci
+        working-directory: ferramentas
+      - run: node scripts/validar-manifestos.js
+      - run: node --test test/*.test.js
+      - run: npm run types --prefix ferramentas

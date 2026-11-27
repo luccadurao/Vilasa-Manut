@@ -305,7 +305,7 @@ async function excluirItemAlmoxDireto(id, btnEl) {
 
 function renderizarTabelaCatalogoComParalelos(listaPecas, podeOperar) {
   if (listaPecas.length === 0) {
-    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum item encontrado. Use o Botão 1, a Planilha Rápida ou o Importador no Admin.</div>`;
+    return `<div class="bg-white p-6 rounded-xl border text-center text-slate-500 font-bold">Nenhum item encontrado. Use o Botão 1 ou a Planilha Rápida.</div>`;
   }
 
   return `
@@ -764,4 +764,33 @@ function exportarInventarioAlmoxCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = `VILASA_ALMOXARIFADO_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
+}
+
+function coletarRelatorioEstoque() {
+  const obraNome = obterNomeObraAtiva();
+  const termo = (document.getElementById('buscaRapidaAlmoxInput')?.value || '').trim().toUpperCase();
+  let lista = filtrarListaPorObraAtiva(cachePecas || []);
+  if (termo && typeof bateComBuscaPecaOuParalelo === 'function') {
+    lista = lista.filter(p => bateComBuscaPecaOuParalelo(p, termo));
+  }
+  const valorTotal = lista.reduce((acc, p) => acc + (parseFloat(p.quantidade || 0) * parseFloat(p.custo_unitario || 0)), 0);
+
+  return {
+    titulo: 'Posição de Almoxarifado & Catálogo Mestre',
+    subtitulo: `Obra: ${obraNome} | Busca: ${termo || 'TODOS'}`,
+    kpisResumo: [
+      { label: 'Itens Listados', valor: lista.length },
+      { label: 'Com Saldo > 0', valor: lista.filter(p => parseFloat(p.quantidade || 0) > 0).length },
+      { label: 'Abaixo do Mínimo', valor: lista.filter(p => parseFloat(p.quantidade || 0) <= parseFloat(p.estoque_minimo || 0)).length },
+      { label: 'Valor em Estoque', valor: valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
+    ],
+    colunas: ['Nosso Código', 'Descrição', 'Códigos Paralelos', 'Saldo Atual', 'Custo Unit.'],
+    linhas: lista.map(p => [
+      p.id_interno || '-',
+      p.descricao || '-',
+      Array.isArray(p.codigos_paralelos) ? p.codigos_paralelos.join(', ') : '-',
+      `${p.quantidade || 0} ${p.unidade || 'UN'}`,
+      Number(p.custo_unitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    ])
+  };
 }
