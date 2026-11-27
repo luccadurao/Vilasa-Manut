@@ -39,7 +39,7 @@ BEGIN
   FOR r IN
     SELECT auth_user_id, obras_permitidas FROM public.perfis_usuarios
     WHERE auth_user_id IS NOT NULL AND ativo IS NOT FALSE
-    LIMIT 20
+    ORDER BY id
   LOOP
     PERFORM set_config('request.jwt.claim.sub', r.auth_user_id::text, true);
     v_perfil := public.meu_perfil();
@@ -47,11 +47,17 @@ BEGIN
       RAISE EXCEPTION 'meu_perfil vazio para %', r.auth_user_id;
     END IF;
     IF (v_perfil -> 'locais_permitidos') IS DISTINCT FROM (v_perfil -> 'obras_permitidas')
-       OR (v_perfil -> 'locais_permitidos') IS DISTINCT FROM to_jsonb(r.obras_permitidas) THEN
+       OR (v_perfil -> 'locais_permitidos') IS DISTINCT FROM coalesce(to_jsonb(r.obras_permitidas), 'null'::jsonb) THEN
       RAISE EXCEPTION 'locais_permitidos divergiu de obras_permitidas para %', r.auth_user_id;
     END IF;
   END LOOP;
   PERFORM set_config('request.jwt.claim.sub', '', true);
+
+  -- usuário que já existe não tem o e-mail recalculado na edição
+  IF position('coalesce(v_email_atual' IN pg_get_functiondef(
+       'public.admin_salvar_usuario(uuid, text, text, text, jsonb, jsonb, boolean)'::regprocedure)) = 0 THEN
+    RAISE EXCEPTION 'admin_salvar_usuario deixou de preservar o e-mail gravado na edição';
+  END IF;
 
   -- sem sessão, meu_perfil não devolve ninguém
   IF public.meu_perfil() IS NOT NULL THEN
