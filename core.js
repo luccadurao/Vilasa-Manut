@@ -2,14 +2,10 @@
 // VILASA CMMS V2 - MÓDULO 1: CORE.JS (COMPLETO, VALIDADO E PRONTO PARA USO)
 // ============================================================================
 
-let usuarioLogado = null;
-let obraAtivaId = 'TODAS';
-let abaAtivaGlobal = 'os';
-let cacheObras = [];
-let cacheEquipamentos = [];
-let cacheUsuarios = [];
-let cachePecas = [];
-let cacheOrdens = [];
+// O estado compartilhado (usuarioLogado, obraAtivaId, abaAtivaGlobal e os
+// cache*) mora em nucleo/contexto.js, como propriedade de window. Não declare
+// esses nomes aqui com let/const: o núcleo deixaria de enxergar o valor.
+abaAtivaGlobal = 'os';
 
 function obterClienteSupabase() {
   if (typeof db !== 'undefined' && db) return db;

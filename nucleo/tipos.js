@@ -232,6 +232,17 @@
  */
 
 /**
+ * Estado compartilhado (nucleo/contexto.js). Os nomes antigos do core.js
+ * (usuarioLogado, obraAtivaId, cache*) são propriedades de window com get/set.
+ * @typedef {Object} ApiContexto
+ * @property {(nome: string) => any} ler
+ * @property {(nome: string, valor: any) => void} definir
+ * @property {any} usuario
+ * @property {string} localAtivoId
+ * @property {() => string[]} campos
+ */
+
+/**
  * @typedef {Object} ApiNucleo
  * @property {ApiModulos} modulos
  * @property {ApiPermissoes} permissoes
@@ -242,6 +253,7 @@
  * @property {(nome: string, moduloId?: string) => Function | null} resolverFuncao
  * @property {{ URL_BASE: string, urlCanonica: (id: string) => string, lerUrl: (search: string) => { id: string, etiquetaAntiga: boolean, mensagem: string, tag: string, nome: string, un: string } }} qr
  * @property {TermoFn} termo
+ * @property {ApiContexto} [contexto]
  */
 
 export {};
