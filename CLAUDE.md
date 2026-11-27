@@ -33,7 +33,8 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
 - `sw.js` — service worker; `nucleo/versao.js` — versão do app servido.
 - `banco/migracoes/` — migrações numeradas; `banco/migracoes/reverter/` — reversões;
   `banco/docs/testes_NNNN.sql` — testes SQL só de leitura de cada migração
-  (marque `-- teste: pontual` no topo se ele só valer logo depois da própria migração).
+  (trecho que só vale logo depois da própria migração fica entre as linhas
+  `-- pontual:inicio` e `-- pontual:fim`; a regressão pula esse trecho).
 - `scripts/testar-sql-local.sh` — aplica todas as migrações num Postgres 17 vazio,
   com idempotência, testes, login simulado e reversão da última. Roda no CI (job `banco`).
 - `test/*.test.js` — testes `node --test`; `scripts/validar-manifestos.js` — validador.
