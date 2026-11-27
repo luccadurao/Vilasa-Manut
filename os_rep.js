@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 3: OS_REP.JS (FLUXO DIRETO SEM CONDIÇÃO OPERACIONAL)
+// MÓDULO 3: OS_REP.JS (FLUXO DIRETO SEM CONDIÇÃO OPERACIONAL)
 // ============================================================================
 
 let abaStatusOSAtual = 'ativas';
@@ -44,13 +44,13 @@ const LISTA_CLASSIFICACAO_FALHA = [
 
 function usuarioPodeAbrirOS(user = usuarioLogado) {
   if (!user) return false;
-  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.abrir', user);
+  if (window.Plataforma && Plataforma.permissoes) return Plataforma.permissoes.pode('os.abrir', user);
   return obterCargosUsuario(user).some(c => ['encarregado', 'mecanico', 'pcm', 'engenheiro', 'admin'].includes(c));
 }
 
 function usuarioPodeClassificarPCM(user = usuarioLogado) {
   if (!user) return false;
-  if (window.Vilasa && Vilasa.permissoes) return Vilasa.permissoes.pode('os.classificar_rep', user);
+  if (window.Plataforma && Plataforma.permissoes) return Plataforma.permissoes.pode('os.classificar_rep', user);
   return obterCargosUsuario(user).some(c => ['pcm', 'engenheiro', 'admin'].includes(c));
 }
 
@@ -1092,7 +1092,7 @@ async function exportarOrdensServicoCSV() {
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_OS_COMPLETO_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 

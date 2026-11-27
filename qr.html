@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vilasa CMMS • Portal QR de Campo</title>
+  <title>Portal QR de Campo</title>
   <link rel="stylesheet" href="vendor/tailwind.css" />
   <script src="vendor/supabase.js"></script>
   <link rel="stylesheet" href="vendor/fa/css/all.min.css" />
@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#f59e0b" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Vilasa CMMS" />
+  <meta name="apple-mobile-web-app-title" content="Manut" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
@@ -20,7 +20,7 @@
     <!-- Cabeçalho da Máquina -->
     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
       <div>
-        <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">VILASA CMMS • PORTAL QR CODE</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-amber-400"><span data-marca></span> • PORTAL QR CODE</span>
         <div class="flex items-center gap-2 mt-1">
           <span id="qrTagBadge" class="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded text-sm">EQUIP</span>
           <h1 id="qrNomeEquip" class="text-sm font-extrabold text-white truncate">Carregando...</h1>
@@ -99,6 +99,7 @@
 
   <script src="config.js"></script>
   <script src="nucleo/versao.js"></script>
+  <script src="nucleo/produto.js"></script>
   <script src="nucleo/nucleo.js"></script>
   <script src="nucleo/contexto.js"></script>
   <script src="nucleo/qr.js"></script>
@@ -149,8 +150,8 @@
 
     function lerSessaoLocal() {
       try {
-        if (window.Vilasa && Vilasa.sessao) return Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(localStorage));
-        return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
+        if (window.Plataforma && Plataforma.sessao) return Plataforma.sessao.usuarioDe(Plataforma.sessao.ler(localStorage));
+        return JSON.parse(localStorage.getItem(window.PlataformaProduto ? PlataformaProduto.chave('sessao_v2') : 'plat_sessao_v2') || 'null');
       } catch (e) { return null; }
     }
     function cargosDaSessao() {
@@ -163,20 +164,20 @@
     }
 
     function acoesQrNaTela() {
-      const todas = (window.Vilasa && Vilasa.extensoes) ? Vilasa.extensoes.qr() : [];
+      const todas = (window.Plataforma && Plataforma.extensoes) ? Plataforma.extensoes.qr() : [];
       const sessao = lerSessaoLocal();
       const daMaquina = idsDeModulos(equipAtualQR.modulos_ativos);
       const daSessao = idsDeModulos(sessao && sessao.modulos);
       let modulos = null;
       if (daMaquina && daSessao) modulos = daMaquina.filter(id => daSessao.includes(id));
       else modulos = daMaquina || daSessao;
-      if (window.Vilasa && Vilasa.qr && typeof Vilasa.qr.acoesParaContexto === 'function') {
-        return Vilasa.qr.acoesParaContexto({
+      if (window.Plataforma && Plataforma.qr && typeof Plataforma.qr.acoesParaContexto === 'function') {
+        return Plataforma.qr.acoesParaContexto({
           acoes: todas,
           modulosAtivos: modulos,
           logado: !!(sessao && sessao.id),
           permissoes: sessao && Array.isArray(sessao.permissoes) ? sessao.permissoes : null,
-          pode: (permissao) => !!(Vilasa.permissoes && Vilasa.permissoes.pode(permissao, sessao))
+          pode: (permissao) => !!(Plataforma.permissoes && Plataforma.permissoes.pode(permissao, sessao))
         });
       }
       return [];
@@ -269,7 +270,7 @@
         cacheGravarDados(chaveCacheEquip(), dados);
         return;
       }
-      try { localStorage.setItem('vilasa_cache_' + chaveCacheEquip(), JSON.stringify(dados)); } catch (e) {}
+      try { localStorage.setItem(PlataformaProduto.chave('cache_' + chaveCacheEquip()), JSON.stringify(dados)); } catch (e) {}
     }
 
     // Retorna: { ok, semBase }  (semBase = não havia leitura anterior para comparar)
@@ -295,8 +296,8 @@
     }
 
     async function carregarEquipamentoDoQR() {
-      const leitura = window.Vilasa && Vilasa.qr
-        ? Vilasa.qr.lerUrl(window.location.search)
+      const leitura = window.Plataforma && Plataforma.qr
+        ? Plataforma.qr.lerUrl(window.location.search)
         : { id: '', etiquetaAntiga: true };
       if (!leitura || leitura.etiquetaAntiga || !leitura.id) {
         mostrarEtiquetaAntiga();
@@ -314,7 +315,7 @@
       try {
         let salvo = null;
         if (typeof cacheLerDados === 'function') salvo = await cacheLerDados(chaveCacheEquip());
-        if (!salvo) salvo = JSON.parse(localStorage.getItem('vilasa_cache_' + chaveCacheEquip()) || 'null');
+        if (!salvo) salvo = JSON.parse(localStorage.getItem(PlataformaProduto.chave('cache_' + chaveCacheEquip())) || 'null');
         if (salvo && salvo.id === equipAtualQR.id) equipAtualQR = { ...equipAtualQR, ...salvo };
       } catch (e) {}
 
@@ -393,8 +394,8 @@
 
       enviandoQR = true;
       try {
-        const payloadOs = (window.Vilasa && Vilasa.qr && Vilasa.qr.payloadAbrirOs)
-          ? Vilasa.qr.payloadAbrirOs({
+        const payloadOs = (window.Plataforma && Plataforma.qr && Plataforma.qr.payloadAbrirOs)
+          ? Plataforma.qr.payloadAbrirOs({
             equipamentoId: equipAtualQR.id,
             problema,
             localizacao,
@@ -462,7 +463,10 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', carregarEquipamentoDoQR);
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar(lerSessaoLocal() || null);
+      carregarEquipamentoDoQR();
+    });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e)));
     }
@@ -470,8 +474,8 @@
     // Ponto de extensão do QR. Quem vê "Abrir OS" continua em podeAbrirOSNoQR(),
     // para as etiquetas e os cargos atuais desta página não mudarem.
     window.acoesQrDoRegistro = function () {
-      if (!window.Vilasa || !Vilasa.extensoes) return [];
-      return Vilasa.extensoes.qr();
+      if (!window.Plataforma || !Plataforma.extensoes) return [];
+      return Plataforma.extensoes.qr();
     };
   </script>
 </body>

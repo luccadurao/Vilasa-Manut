@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS - PREVENTIVAS ESTILO SAP PM
+// PREVENTIVAS ESTILO SAP PM
 //  Estratégia (intervalo base H/KM + pacotes por múltiplo) → Lista de tarefas/peças
 //  → Plano por equipamento (contador + histórico) → Chamada: gera OS preventiva no horizonte.
 //  Cadastros (estratégia/lista/plano) são feitos pelo PCM com internet; a execução (OS + checklist)
@@ -483,6 +483,6 @@ function exportarHistoricoProprioPreventivasCSV() {
   const blob = new Blob(['﻿' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_PREVENTIVAS_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_PREVENTIVAS_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }

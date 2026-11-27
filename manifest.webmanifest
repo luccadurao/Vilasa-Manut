@@ -1,6 +1,6 @@
 {
-  "name": "Vilasa CMMS - Gestão de Manutenção",
-  "short_name": "Vilasa CMMS",
+  "name": "Manut - Gestão de Manutenção",
+  "short_name": "Manut",
   "description": "Gestão de manutenção, frota e almoxarifado - funciona sem internet",
   "start_url": "./index.html",
   "scope": "./",

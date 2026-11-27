@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS - SERVICE WORKER
+// SERVICE WORKER DA PLATAFORMA
 //
 //  • Arquivos do próprio site: tenta a rede por até 4 s; se falhar/demorar, usa a cópia
 //    guardada no celular (sinal "fraco" não trava a tela).
@@ -11,15 +11,18 @@
 // ============================================================================
 importScripts('./nucleo/versao.js');
 
-const VERSAO = VILASA_VERSAO_APP;
-const CACHE_NAME = `vilasa-pwa-${VERSAO}`;
+const VERSAO = PLATAFORMA_VERSAO_APP;
+// Mesmo prefixo de nucleo/produto.js (prefixoCacheSw). O antigo "vilasa-pwa-" também é apagado.
+const PREFIXO_CACHE = 'plat-pwa-';
+const PREFIXOS_CACHE_ANTIGOS = ['vilasa-pwa-'];
+const CACHE_NAME = `${PREFIXO_CACHE}${VERSAO}`;
 const TEMPO_LIMITE_REDE_MS = 4000;
 const CHAVE_MODULOS = './nucleo/precache-modulos.json';
 
 const ARQUIVOS_NUCLEO = [
   './', './index.html', './qr.html', './manifest.webmanifest',
   './config.js', './core.js', './offline_sync.js',
-  './nucleo/versao.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
+  './nucleo/versao.js', './nucleo/produto.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
   './modulos/os/manifesto.js', './modulos/frota/manifesto.js',
   './modulos/preventivas/manifesto.js', './modulos/estoque/manifesto.js',
   './modulos/diesel/manifesto.js', './modulos/painel/manifesto.js',
@@ -65,7 +68,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const nomes = await caches.keys();
-    await Promise.all(nomes.filter(n => n.startsWith('vilasa-pwa-') && n !== CACHE_NAME).map(n => caches.delete(n)));
+    await Promise.all(nomes.filter(n => (n.startsWith(PREFIXO_CACHE) || PREFIXOS_CACHE_ANTIGOS.some(p => n.startsWith(p))) && n !== CACHE_NAME).map(n => caches.delete(n)));
     await self.clients.claim();
   })());
 });

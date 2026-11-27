@@ -5,17 +5,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
 test('evento local é síncrono e também acorda o ouvinte do manifesto', () => {
-  const { Vilasa, sandbox } = carregarVilasa(raiz, { manifestos: false });
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
   /** @type {any[]} */
   const recebidos = [];
   sandbox.reagirOsConcluida = (dados) => recebidos.push(dados);
-  const cancelar = Vilasa.eventos.ouvir('os.concluida', (dados) => recebidos.push(['direto', dados]));
-  Vilasa.modulos.registrar({
+  const cancelar = Plataforma.eventos.ouvir('os.concluida', (dados) => recebidos.push(['direto', dados]));
+  Plataforma.modulos.registrar({
     id: 'ouvinte',
     nome: 'Ouvinte',
     versao: '1.0.0',
@@ -26,21 +26,21 @@ test('evento local é síncrono e também acorda o ouvinte do manifesto', () => 
     permissoes: {},
     extensoes: { ouve: { 'os.concluida': 'reagirOsConcluida' } }
   });
-  Vilasa.eventos.emitir('os.concluida', { id: 7 });
+  Plataforma.eventos.emitir('os.concluida', { id: 7 });
   assert.deepEqual(recebidos, [['direto', { id: 7 }], { id: 7 }]);
   cancelar();
-  Vilasa.eventos.emitir('os.concluida', { id: 8 });
+  Plataforma.eventos.emitir('os.concluida', { id: 8 });
   assert.equal(recebidos.length, 3);
   assert.deepEqual(recebidos[2], { id: 8 });
 });
 
 test('sem id a etiqueta é antiga e não vira busca por tag', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
-  const antiga = Vilasa.qr.lerUrl('?tag=CB-05&nome=PA');
+  const { Plataforma } = carregarPlataforma(raiz, { manifestos: false });
+  const antiga = Plataforma.qr.lerUrl('?tag=CB-05&nome=PA');
   assert.equal(antiga.etiquetaAntiga, true);
   assert.equal(antiga.id, '');
   assert.equal(antiga.mensagem, 'Etiqueta antiga: peça a reimpressão');
-  const comId = Vilasa.qr.lerUrl('?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05');
+  const comId = Plataforma.qr.lerUrl('?id=3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f&tag=CB-05');
   assert.equal(comId.etiquetaAntiga, false);
   assert.equal(comId.id, '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f');
   assert.equal(comId.tag, 'CB-05');
@@ -52,21 +52,36 @@ test('sem id a etiqueta é antiga e não vira busca por tag', () => {
   assert.equal(html.includes('digitar a máquina'), false);
 });
 
-test('a URL canônica do QR identifica a máquina só pelo id', () => {
-  const { Vilasa } = carregarVilasa(raiz, { manifestos: false });
+test('a URL canônica do QR identifica a máquina só pelo id, no site do ambiente', () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
   const id = '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f';
-  assert.equal(
-    Vilasa.qr.urlCanonica(id),
-    `https://vilasa-manut.vercel.app/qr.html?id=${id}`
-  );
-  assert.equal(Vilasa.qr.URL_BASE, 'https://vilasa-manut.vercel.app/qr.html');
+  // Produção: o site oficial do ambiente (config.js), venha de onde vier a página.
+  sandbox.AMBIENTE_ATUAL = { site: 'https://vilasa-manut.vercel.app/' };
+  sandbox.location = { origin: 'https://outro-endereco.vercel.app', protocol: 'https:' };
+  assert.equal(Plataforma.qr.urlCanonica(id), `https://vilasa-manut.vercel.app/qr.html?id=${id}`);
+  assert.equal(Plataforma.qr.URL_BASE, 'https://vilasa-manut.vercel.app/qr.html');
+  // Homologação (site null): o endereço em que a página abriu.
+  sandbox.AMBIENTE_ATUAL = { site: null };
+  assert.equal(Plataforma.qr.URL_BASE, 'https://outro-endereco.vercel.app/qr.html');
+  // Sem ambiente nem endereço http: caminho relativo.
+  sandbox.AMBIENTE_ATUAL = undefined;
+  sandbox.location = { origin: 'null', protocol: 'file:' };
+  assert.equal(Plataforma.qr.URL_BASE, '/qr.html');
+});
+
+test('o núcleo e as telas não têm endereço nem nome de cliente fixo', () => {
+  for (const rel of ['nucleo/nucleo.js', 'nucleo/qr.js', 'nucleo/contexto.js', 'nucleo/produto.js', 'frota.js', 'core.js', 'index.html', 'qr.html', 'manifest.webmanifest']) {
+    const texto = fs.readFileSync(path.join(raiz, rel), 'utf8');
+    assert.equal(texto.includes('vilasa-manut.vercel.app'), false, `${rel}: endereço fixo`);
+    assert.equal(/VILASA/.test(texto), false, `${rel}: nome de cliente fixo`);
+  }
 });
 
 test('as etiquetas atuais continuam com id, tag, nome e unidade', () => {
   const frota = fs.readFileSync(path.join(raiz, 'frota.js'), 'utf8');
-  const inicio = frota.indexOf('const URL_BASE_QR_PRODUCAO');
+  const inicio = frota.indexOf('function gerarUrlQRCodeOfflineReady');
   const fim = frota.indexOf('function abrirEtiquetaQRIndividual');
-  const sandbox = { URLSearchParams };
+  const sandbox = { URLSearchParams, Plataforma: { qr: { URL_BASE: 'https://vilasa-manut.vercel.app/qr.html' } } };
   vm.runInContext(frota.slice(inicio, fim), vm.createContext(sandbox));
   const url = sandbox.gerarUrlQRCodeOfflineReady({
     id: '3f1a2c4e-8b7d-4e6a-9c0d-1a2b3c4d5e6f',
@@ -81,8 +96,8 @@ test('as etiquetas atuais continuam com id, tag, nome e unidade', () => {
 });
 
 test('o QR declara leitura sem login e abertura de OS com os.abrir', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const acoes = Vilasa.extensoes.qr();
+  const { Plataforma } = carregarPlataforma(raiz);
+  const acoes = Plataforma.extensoes.qr();
   const leitura = acoes.find((acao) => acao.id === 'lancar_leitura');
   const abrir = acoes.find((acao) => acao.id === 'abrir_os');
   assert.equal(leitura && leitura.exige_login, false);

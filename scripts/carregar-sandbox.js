@@ -9,7 +9,7 @@ const vm = require('vm');
  * @param {string} raiz
  * @param {{ manifestos?: boolean }} [opcoes]
  */
-function carregarVilasa(raiz, opcoes = {}) {
+function carregarPlataforma(raiz, opcoes = {}) {
   /** @type {Record<string, any>} */
   const sandbox = { console };
   sandbox.globalThis = sandbox;
@@ -21,6 +21,7 @@ function carregarVilasa(raiz, opcoes = {}) {
     vm.runInContext(fs.readFileSync(arquivo, 'utf8'), contexto, { filename: arquivo });
   }
 
+  rodar('nucleo/produto.js');
   rodar('nucleo/nucleo.js');
   rodar('nucleo/contexto.js');
   rodar('nucleo/ativos.js');
@@ -35,7 +36,7 @@ function carregarVilasa(raiz, opcoes = {}) {
       if (fs.existsSync(path.join(raiz, manifesto))) rodar(manifesto);
     }
   }
-  return { Vilasa: sandbox.Vilasa, sandbox, contexto };
+  return { Plataforma: sandbox.Plataforma, sandbox, contexto };
 }
 
-module.exports = { carregarVilasa };
+module.exports = { carregarPlataforma };

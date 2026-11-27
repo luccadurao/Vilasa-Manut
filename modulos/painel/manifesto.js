@@ -73,5 +73,5 @@
     }
   };
 
-  Vilasa.modulos.registrar(manifesto);
+  Plataforma.modulos.registrar(manifesto);
 })();

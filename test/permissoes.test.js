@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
@@ -33,40 +33,40 @@ const ABAS = {
 };
 
 test('traduz cada ação da matriz atual para um id de permissão', () => {
-  const { Vilasa } = carregarVilasa(raiz);
+  const { Plataforma } = carregarPlataforma(raiz);
   for (const [acao, id] of Object.entries(TRADUCAO)) {
-    assert.equal(Vilasa.permissoes.traduzirAcao(acao), id, acao);
+    assert.equal(Plataforma.permissoes.traduzirAcao(acao), id, acao);
   }
   for (const [aba, id] of Object.entries(ABAS)) {
-    assert.equal(Vilasa.permissoes.traduzirAba(aba), id, aba);
+    assert.equal(Plataforma.permissoes.traduzirAba(aba), id, aba);
   }
 });
 
 test('a matriz traduzida não tem operador e o almoxarife não abre OS', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const matriz = Vilasa.permissoes.matrizTraduzida();
+  const { Plataforma } = carregarPlataforma(raiz);
+  const matriz = Plataforma.permissoes.matrizTraduzida();
   assert.equal(Object.hasOwn(matriz, 'operador'), false);
   assert.equal(matriz.almoxarife.permissoes.includes('os.abrir'), false);
   assert.equal(matriz.almoxarife.acoes.includes('abrir_os'), false);
-  assert.equal(Vilasa.permissoes.pode('os.abrir', { cargos_lista: ['almoxarife'] }), false);
-  assert.equal(Vilasa.permissoes.pode('os.ver', { cargos_lista: ['almoxarife'] }), true);
-  assert.equal(Vilasa.permissoes.podeVerTela('os', { cargos_lista: ['operador'] }), false);
+  assert.equal(Plataforma.permissoes.pode('os.abrir', { cargos_lista: ['almoxarife'] }), false);
+  assert.equal(Plataforma.permissoes.pode('os.ver', { cargos_lista: ['almoxarife'] }), true);
+  assert.equal(Plataforma.permissoes.podeVerTela('os', { cargos_lista: ['operador'] }), false);
 });
 
 test('o admin da empresa recebe todas as permissões declaradas', () => {
-  const { Vilasa } = carregarVilasa(raiz);
-  const todas = Vilasa.modulos.lista().flatMap((item) => Object.keys(item.permissoes));
-  const efetivas = Vilasa.permissoes.efetivas(['admin']);
+  const { Plataforma } = carregarPlataforma(raiz);
+  const todas = Plataforma.modulos.lista().flatMap((item) => Object.keys(item.permissoes));
+  const efetivas = Plataforma.permissoes.efetivas(['admin']);
   for (const id of todas) assert.equal(efetivas.includes(id), true, id);
-  assert.equal(Vilasa.permissoes.pode('admin.modo_deus', { cargos_lista: ['admin'] }), true);
-  assert.equal(Vilasa.permissoes.pode('admin.modo_deus', { cargos_lista: ['engenheiro'] }), false);
+  assert.equal(Plataforma.permissoes.pode('admin.modo_deus', { cargos_lista: ['admin'] }), true);
+  assert.equal(Plataforma.permissoes.pode('admin.modo_deus', { cargos_lista: ['engenheiro'] }), false);
 });
 
 test('cargos combinados somam as permissões', () => {
-  const { Vilasa } = carregarVilasa(raiz);
+  const { Plataforma } = carregarPlataforma(raiz);
   const usuario = { cargos_lista: ['mecanico', 'gestor'] };
-  assert.equal(Vilasa.permissoes.pode('os.abrir', usuario), true);
-  assert.equal(Vilasa.permissoes.pode('relatorios.exportar', usuario), true);
-  assert.equal(Vilasa.permissoes.podeVerTela('kpis', usuario), true);
-  assert.equal(Vilasa.permissoes.podeVerTela('admin', usuario), false);
+  assert.equal(Plataforma.permissoes.pode('os.abrir', usuario), true);
+  assert.equal(Plataforma.permissoes.pode('relatorios.exportar', usuario), true);
+  assert.equal(Plataforma.permissoes.podeVerTela('kpis', usuario), true);
+  assert.equal(Plataforma.permissoes.podeVerTela('admin', usuario), false);
 });

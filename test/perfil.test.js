@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
-const { carregarVilasa } = require('../scripts/carregar-sandbox');
+const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
 
@@ -29,20 +29,20 @@ function memoria(inicial) {
 }
 
 test('sem módulos nem permissões, o contrato e o pode seguem os manifestos', () => {
-  const { Vilasa } = carregarVilasa(raiz);
+  const { Plataforma } = carregarPlataforma(raiz);
   const usuario = { id: '1', cargos_lista: ['almoxarife'], ativo: true };
-  igual(Vilasa.sessao.contratoDe(usuario), { todos: true });
-  assert.equal(Vilasa.permissoes.pode('os.abrir', usuario), false);
-  assert.equal(Vilasa.permissoes.pode('os.ver', usuario), true);
-  assert.equal(Vilasa.permissoes.pode('estoque.baixar', usuario), true);
-  assert.equal(Vilasa.permissoes.pode('admin.modo_deus', { cargos_lista: ['admin'] }), true);
-  const todos = Vilasa.modulos.resolver(Vilasa.sessao.contratoDe(usuario), Vilasa.modulos.lista());
+  igual(Plataforma.sessao.contratoDe(usuario), { todos: true });
+  assert.equal(Plataforma.permissoes.pode('os.abrir', usuario), false);
+  assert.equal(Plataforma.permissoes.pode('os.ver', usuario), true);
+  assert.equal(Plataforma.permissoes.pode('estoque.baixar', usuario), true);
+  assert.equal(Plataforma.permissoes.pode('admin.modo_deus', { cargos_lista: ['admin'] }), true);
+  const todos = Plataforma.modulos.resolver(Plataforma.sessao.contratoDe(usuario), Plataforma.modulos.lista());
   assert.equal(todos.bloqueados.length, 0);
   assert.ok(todos.ordem.length > 1);
 });
 
 test('o perfil novo manda no contrato e nas permissões', () => {
-  const { Vilasa } = carregarVilasa(raiz);
+  const { Plataforma } = carregarPlataforma(raiz);
   const perfil = {
     id: '9',
     matricula: '9',
@@ -57,25 +57,25 @@ test('o perfil novo manda no contrato e nas permissões', () => {
     ],
     permissoes: ['os.ver', 'estoque.ver']
   };
-  const sessao = Vilasa.sessao.embrulhar(perfil);
-  const usuario = Vilasa.sessao.usuarioDe(sessao);
+  const sessao = Plataforma.sessao.embrulhar(perfil);
+  const usuario = Plataforma.sessao.usuarioDe(sessao);
   assert.equal(usuario.nome, 'Ana');
   assert.equal(usuario.empresa.codigo, 'VILASA');
-  igual(Vilasa.sessao.contratoDe(usuario), {
+  igual(Plataforma.sessao.contratoDe(usuario), {
     ativos: ['os', 'estoque'],
     permissoes: ['os.ver', 'estoque.ver']
   });
-  assert.equal(Vilasa.permissoes.pode('os.ver', usuario), true);
-  assert.equal(Vilasa.permissoes.pode('os.abrir', usuario), false);
-  assert.equal(Vilasa.permissoes.pode('admin.modo_deus', usuario), false);
-  const resolucao = Vilasa.modulos.resolver(Vilasa.sessao.contratoDe(usuario), Vilasa.modulos.lista());
+  assert.equal(Plataforma.permissoes.pode('os.ver', usuario), true);
+  assert.equal(Plataforma.permissoes.pode('os.abrir', usuario), false);
+  assert.equal(Plataforma.permissoes.pode('admin.modo_deus', usuario), false);
+  const resolucao = Plataforma.modulos.resolver(Plataforma.sessao.contratoDe(usuario), Plataforma.modulos.lista());
   igual(resolucao.ordem, ['os', 'estoque']);
 });
 
 test('a sessão v2 migra para a v3 e continua no padrão dos manifestos', () => {
-  const { Vilasa } = carregarVilasa(raiz);
+  const { Plataforma } = carregarPlataforma(raiz);
   const store = memoria({
-    vilasa_sessao_v2: JSON.stringify({
+    plat_sessao_v2: JSON.stringify({
       id: 'abc',
       matricula: '1',
       nome: 'Bia',
@@ -84,24 +84,24 @@ test('a sessão v2 migra para a v3 e continua no padrão dos manifestos', () => 
       ativo: true
     })
   });
-  const sessao = Vilasa.sessao.ler(store);
-  assert.equal(store.getItem('vilasa_sessao_v2'), null);
-  const guardada = JSON.parse(store.getItem('vilasa_sessao_v3') || 'null');
+  const sessao = Plataforma.sessao.ler(store);
+  assert.equal(store.getItem('plat_sessao_v2'), null);
+  const guardada = JSON.parse(store.getItem('plat_sessao_v3') || 'null');
   assert.equal(guardada.perfil.nome, 'Bia');
   assert.equal(guardada.modulos, null);
   assert.equal(guardada.permissoes, null);
-  const usuario = Vilasa.sessao.usuarioDe(sessao);
+  const usuario = Plataforma.sessao.usuarioDe(sessao);
   assert.equal(usuario.id, 'abc');
   assert.equal(Object.prototype.hasOwnProperty.call(usuario, 'permissoes'), false);
-  igual(Vilasa.sessao.contratoDe(usuario), { todos: true });
-  assert.equal(Vilasa.permissoes.pode('os.abrir', usuario), true);
-  assert.equal(Vilasa.permissoes.pode('diesel.ver', usuario), false);
+  igual(Plataforma.sessao.contratoDe(usuario), { todos: true });
+  assert.equal(Plataforma.permissoes.pode('os.abrir', usuario), true);
+  assert.equal(Plataforma.permissoes.pode('diesel.ver', usuario), false);
 });
 
 test('o core grava a v3 e lê a v2 migrada', () => {
-  const { sandbox, contexto } = carregarVilasa(raiz);
+  const { sandbox, contexto } = carregarPlataforma(raiz);
   const store = memoria({
-    vilasa_sessao_v2: JSON.stringify({
+    plat_sessao_v2: JSON.stringify({
       id: 'p1',
       matricula: '4',
       nome: 'Caio',
@@ -116,8 +116,8 @@ test('o core grava a v3 e lê a v2 migrada', () => {
 
   const lido = sandbox.lerPerfilDaSessao();
   assert.equal(lido.nome, 'Caio');
-  assert.equal(store.getItem('vilasa_sessao_v2'), null);
-  assert.match(store.getItem('vilasa_sessao_v3') || '', /vilasa_sessao_v3|gestor|"perfil"/);
+  assert.equal(store.getItem('plat_sessao_v2'), null);
+  assert.match(store.getItem('plat_sessao_v3') || '', /plat_sessao_v3|gestor|"perfil"/);
 
   sandbox.guardarPerfilNaSessao({
     id: 'p1',
@@ -131,15 +131,15 @@ test('o core grava a v3 e lê a v2 migrada', () => {
   });
   const usuario = vm.runInContext('usuarioLogado', contexto);
   assert.equal(usuario.permissoes[0], 'os.ver');
-  igual(sandbox.Vilasa.sessao.contratoDe(usuario), {
+  igual(sandbox.Plataforma.sessao.contratoDe(usuario), {
     ativos: ['os'],
     permissoes: ['os.ver']
   });
-  assert.equal(sandbox.Vilasa.permissoes.pode('diesel.ver', usuario), false);
+  assert.equal(sandbox.Plataforma.permissoes.pode('diesel.ver', usuario), false);
 });
 
 test('o portal QR lê a sessão v3', () => {
   const html = fs.readFileSync(path.join(raiz, 'qr.html'), 'utf8');
-  assert.match(html, /Vilasa\.sessao\.ler\(localStorage\)/);
-  assert.match(html, /vilasa_sessao_v2/);
+  assert.match(html, /Plataforma\.sessao\.ler\(localStorage\)/);
+  assert.match(html, /plat_sessao_v2/);
 });

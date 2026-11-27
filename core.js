@@ -1,8 +1,8 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 1: CORE.JS (COMPLETO, VALIDADO E PRONTO PARA USO)
+// CORE.JS — LOGIN, SESSÃO, MENU E EXPORTAÇÃO COMUM
 // ============================================================================
 
-// O estado compartilhado (usuarioLogado, obraAtivaId, abaAtivaGlobal e os
+// O estado compartilhado (usuarioLogado, localAtivoId, abaAtivaGlobal e os
 // cache*) mora em nucleo/contexto.js, como propriedade de window. Não declare
 // esses nomes aqui com let/const: o núcleo deixaria de enxergar o valor.
 abaAtivaGlobal = 'os';
@@ -77,8 +77,8 @@ function podeVerAba(abaId, user = usuarioLogado) {
   if (!user) return false;
   const cargos = obterCargosUsuario(user);
   if (cargos.includes('admin')) return true;
-  if (window.Vilasa && Vilasa.permissoes && typeof Vilasa.permissoes.podeVerTela === 'function') {
-    return Vilasa.permissoes.podeVerTela(abaId, user);
+  if (window.Plataforma && Plataforma.permissoes && typeof Plataforma.permissoes.podeVerTela === 'function') {
+    return Plataforma.permissoes.podeVerTela(abaId, user);
   }
   if (abaId === 'admin') return false;
   return cargos.some(cargo => MATRIZ_PERMISSOES_CARGOS[cargo]?.abas_visiveis.includes(abaId));
@@ -94,8 +94,8 @@ function podeExecutarAcao(acao, exibirAlerta = false) {
   }
 
   let resultado = false;
-  if (window.Vilasa && Vilasa.permissoes && typeof Vilasa.permissoes.podeAcaoLegada === 'function') {
-    resultado = Vilasa.permissoes.podeAcaoLegada(acao, usuarioLogado);
+  if (window.Plataforma && Plataforma.permissoes && typeof Plataforma.permissoes.podeAcaoLegada === 'function') {
+    resultado = Plataforma.permissoes.podeAcaoLegada(acao, usuarioLogado);
   } else {
     resultado = cargos.some(cargo => {
       const cfg = MATRIZ_PERMISSOES_CARGOS[cargo];
@@ -126,16 +126,21 @@ function csvCelula(v) {
 // 2. AUTENTICAÇÃO E SESSÃO (Supabase Auth)
 // Login real: o servidor confere a senha (hash). O celular guarda uma cópia do perfil para
 // continuar funcionando SEM SINAL; só o PRIMEIRO acesso no aparelho precisa de internet.
-const CHAVE_SESSAO_LOCAL = 'vilasa_sessao_v3';
-const CHAVE_SESSAO_ANTERIOR = 'vilasa_sessao_v2';
+// Chaves do localStorage com o prefixo do produto (nucleo/produto.js).
+function chaveLocalCore(nome) {
+  return window.PlataformaProduto ? PlataformaProduto.chave(nome) : 'plat_' + nome;
+}
+const CHAVE_SESSAO_LOCAL = chaveLocalCore('sessao_v3');
+const CHAVE_SESSAO_ANTERIOR = chaveLocalCore('sessao_v2');
+const CHAVE_LOCAL_ATIVO = chaveLocalCore('local_ativo');
 const COLUNAS_PERFIL_SEGURAS = 'id, matricula, nome, cargos_lista, obras_permitidas, ativo';
 
-function sessaoVilasa() {
-  return window.Vilasa && Vilasa.sessao ? Vilasa.sessao : null;
+function sessaoPlataforma() {
+  return window.Plataforma && Plataforma.sessao ? Plataforma.sessao : null;
 }
 
 function guardarPerfilNaSessao(perfil) {
-  const api = sessaoVilasa();
+  const api = sessaoPlataforma();
   if (!api) {
     usuarioLogado = perfil;
     localStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(perfil));
@@ -146,7 +151,7 @@ function guardarPerfilNaSessao(perfil) {
 }
 
 function lerPerfilDaSessao() {
-  const api = sessaoVilasa();
+  const api = sessaoPlataforma();
   if (!api) {
     try {
       const bruto = localStorage.getItem(CHAVE_SESSAO_LOCAL) || localStorage.getItem(CHAVE_SESSAO_ANTERIOR);
@@ -160,17 +165,21 @@ function lerPerfilDaSessao() {
   return api.usuarioDe(api.ler(localStorage));
 }
 
-function apagarSessaoLocal(limparObra) {
+function apagarSessaoLocal(limparLocal) {
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
-  if (limparObra) localStorage.removeItem('vilasa_obra_ativa_v2');
+  if (limparLocal) localStorage.removeItem(CHAVE_LOCAL_ATIVO);
+  // Cópias com o nome antigo (aba antiga): sem isto o "sair" voltaria a logar.
+  if (window.PlataformaProduto && typeof PlataformaProduto.esquecerLegado === 'function') {
+    PlataformaProduto.esquecerLegado(limparLocal ? ['sessao_v3', 'sessao_v2', 'local_ativo'] : ['sessao_v3', 'sessao_v2']);
+  }
 }
 
 let trocaEmpresaAberta = false;
 
 function prepararCampoEmpresa(trocando) {
   trocaEmpresaAberta = !!trocando;
-  const api = sessaoVilasa();
+  const api = sessaoPlataforma();
   const estado = api && api.estadoLoginEmpresa
     ? api.estadoLoginEmpresa(localStorage, trocaEmpresaAberta)
     : { lembrada: null, mostrarCampo: true, mostrarLembrada: false, codigo: '' };
@@ -190,7 +199,7 @@ function abrirTrocaEmpresa() {
 }
 
 function codigoEmpresaDoLogin() {
-  const api = sessaoVilasa();
+  const api = sessaoPlataforma();
   const campo = document.getElementById('loginEmpresaCampo');
   const visivel = !campo || !campo.classList.contains('hidden');
   const texto = visivel
@@ -198,7 +207,7 @@ function codigoEmpresaDoLogin() {
     : ((api && api.lerEmpresaLembrada && api.lerEmpresaLembrada(localStorage)) || '');
   if (api && api.codigoEmpresa) return api.codigoEmpresa(texto);
   const limpo = String(texto || '').trim().toUpperCase();
-  return limpo || 'VILASA';
+  return limpo;
 }
 
 function erroDeRedeAuth(err) {
@@ -247,9 +256,9 @@ async function realizarLogin(event) {
       return alert('Seu cadastro está inativo ou incompleto. Procure o administrador.');
     }
 
-    const apiSessao = sessaoVilasa();
+    const apiSessao = sessaoPlataforma();
     if (apiSessao && apiSessao.lembrarEmpresa) apiSessao.lembrarEmpresa(localStorage, codigoEmpresa);
-    else localStorage.setItem('vilasa_empresa_codigo', codigoEmpresa);
+    else localStorage.setItem(chaveLocalCore('empresa_codigo'), codigoEmpresa);
     guardarPerfilNaSessao(perfil);
     await inicializarSistemaPosLogin();
   } catch (e) {
@@ -346,8 +355,8 @@ function montarBotoesBarraExportacaoUniversal() {
     barraCard.appendChild(containerBotoes);
   }
 
-  if (window.Vilasa && Vilasa.extensoes) {
-    Vilasa.extensoes.montarBarra(containerBotoes, abaAtivaGlobal, (rel) => acionarRelatorioDoRegistro(rel));
+  if (window.Plataforma && Plataforma.extensoes) {
+    Plataforma.extensoes.montarBarra(containerBotoes, abaAtivaGlobal, (rel) => acionarRelatorioDoRegistro(rel));
     return;
   }
 
@@ -399,12 +408,13 @@ function mostrarAvisoModulosBloqueados(carga) {
 }
 
 async function inicializarSistemaPosLogin() {
+  if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar();
   if (typeof aplicarContextoOffline === 'function') {
     try { await aplicarContextoOffline(); } catch (e) { console.warn('Contexto offline:', e); }
   }
   let carga = null;
-  if (window.Vilasa && Vilasa.modulos && typeof Vilasa.modulos.garantirCarregados === 'function') {
-    carga = await Vilasa.modulos.garantirCarregados(usuarioLogado);
+  if (window.Plataforma && Plataforma.modulos && typeof Plataforma.modulos.garantirCarregados === 'function') {
+    carga = await Plataforma.modulos.garantirCarregados(usuarioLogado);
   }
   document.getElementById('telaLogin')?.classList.add('hidden');
   document.getElementById('appPrincipal')?.classList.remove('hidden');
@@ -418,89 +428,90 @@ async function inicializarSistemaPosLogin() {
   if (elNome) elNome.innerText = usuarioLogado.nome || usuarioLogado.matricula;
   if (elCargo) elCargo.innerText = `${usuarioLogado.matricula || ''} • ${nomesCargos}`;
 
-  await carregarObrasEMontarSeletorTopo();
-  if (window.Vilasa && Vilasa.modulos && Vilasa.telas) {
-    const contrato = window.Vilasa.sessao ? Vilasa.sessao.contratoDe(usuarioLogado) : { todos: true };
-    Vilasa.modulos.resolverEGuardar(contrato);
+  await montarSeletorDeLocal();
+  if (window.Plataforma && Plataforma.modulos && Plataforma.telas) {
+    const contrato = window.Plataforma.sessao ? Plataforma.sessao.contratoDe(usuarioLogado) : { todos: true };
+    Plataforma.modulos.resolverEGuardar(contrato);
     const menu = document.getElementById('menuLateralModulos');
-    if (menu) Vilasa.telas.montarMenu(menu);
+    if (menu) Plataforma.telas.montarMenu(menu);
     const painel = document.querySelector('#appPrincipal main');
-    if (painel) Vilasa.telas.garantirSecoes(painel);
+    if (painel) Plataforma.telas.garantirSecoes(painel);
   }
 
   mostrarAvisoModulosBloqueados(carga);
-  const primeiraAba = window.Vilasa && Vilasa.telas ? Vilasa.telas.primeiraVisivel() : null;
+  const primeiraAba = window.Plataforma && Plataforma.telas ? Plataforma.telas.primeiraVisivel() : null;
   if (primeiraAba) navegarPara(primeiraAba);
 }
 
-// 3. SELETOR GLOBAL DE OBRAS
-async function carregarObrasEMontarSeletorTopo() {
+// 3. SELETOR GLOBAL DE LOCAL (o nome na tela vem de Plataforma.termo)
+async function montarSeletorDeLocal() {
   try {
     const res = await lerDadosComFallbackOffline('obras_ativas', () => db.from('obras').select('*').eq('ativa', true).order('codigo'));
-    cacheObras = Array.isArray(res.data) ? res.data : [];
+    cacheLocais = Array.isArray(res.data) ? res.data : [];
   } catch (e) {
-    cacheObras = [];
+    cacheLocais = [];
   }
 
-  const permissoesObra = Array.isArray(usuarioLogado?.obras_permitidas) && usuarioLogado.obras_permitidas.length > 0
-    ? usuarioLogado.obras_permitidas
-    : ['TODAS'];
+  // locais_permitidos vem do meu_perfil a partir da 0006; obras_permitidas é o nome antigo.
+  const listaPermitida = Array.isArray(usuarioLogado?.locais_permitidos) ? usuarioLogado.locais_permitidos
+    : (Array.isArray(usuarioLogado?.obras_permitidas) ? usuarioLogado.obras_permitidas : []);
+  const permissoesLocal = listaPermitida.length > 0 ? listaPermitida : ['TODAS'];
 
   const cargos = obterCargosUsuario();
-  const temAcessoGlobal = cargos.includes('admin') || cargos.includes('engenheiro') || cargos.includes('gestor') || permissoesObra.includes('TODAS');
+  const temAcessoGlobal = cargos.includes('admin') || cargos.includes('engenheiro') || cargos.includes('gestor') || permissoesLocal.includes('TODAS');
 
-  const obrasLiberadas = temAcessoGlobal
-    ? cacheObras
-    : cacheObras.filter(o => permissoesObra.includes(o.id) || permissoesObra.includes(o.codigo));
+  const locaisLiberados = temAcessoGlobal
+    ? cacheLocais
+    : cacheLocais.filter(o => permissoesLocal.includes(o.id) || permissoesLocal.includes(o.codigo));
 
-  const salva = localStorage.getItem('vilasa_obra_ativa_v2');
-  if (obrasLiberadas.length === 1 && !temAcessoGlobal) {
-    obraAtivaId = obrasLiberadas[0].id;
-  } else if (salva && (salva === 'TODAS' || obrasLiberadas.some(o => o.id === salva))) {
-    obraAtivaId = salva;
+  const salva = localStorage.getItem(CHAVE_LOCAL_ATIVO);
+  if (locaisLiberados.length === 1 && !temAcessoGlobal) {
+    localAtivoId = locaisLiberados[0].id;
+  } else if (salva && (salva === 'TODAS' || locaisLiberados.some(o => o.id === salva))) {
+    localAtivoId = salva;
   } else {
-    obraAtivaId = 'TODAS';
+    localAtivoId = 'TODAS';
   }
 
-  injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal);
+  injetarSeletorDeLocal(locaisLiberados, temAcessoGlobal);
 }
 
-function textosDoSeletorDeObra() {
-  if (window.Vilasa && Vilasa.termo && typeof Vilasa.termo.textos === 'function') {
-    return Vilasa.termo.textos();
+function textosDoSeletorDeLocal() {
+  if (window.Plataforma && Plataforma.termo && typeof Plataforma.termo.textos === 'function') {
+    return Plataforma.termo.textos();
   }
   return {
-    etiqueta: 'Frente / Obra Ativa:',
-    consolidado: 'TODAS AS OBRAS (CONSOLIDADO)',
-    selecionada: 'Obra Selecionada',
+    etiqueta: 'Setor / Local Ativo:',
+    consolidado: 'TODOS OS LOCAIS (CONSOLIDADO)',
+    selecionada: 'Local Selecionado',
     unica(codigo, nome) {
-      return codigo ? `Obra: ${codigo} - ${nome || ''}` : 'Obra: Matriz Geral';
+      return codigo ? `Local: ${codigo} - ${nome || ''}` : 'Local: Matriz Geral';
     }
   };
 }
 
-function obterNomeObraAtiva() {
-  const textos = textosDoSeletorDeObra();
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return textos.consolidado;
-  const ob = (cacheObras || []).find(o => String(o.id) === String(obraAtivaId));
+function nomeDoLocalAtivo() {
+  const textos = textosDoSeletorDeLocal();
+  if (!localAtivoId || localAtivoId === 'TODAS') return textos.consolidado;
+  const ob = (cacheLocais || []).find(o => String(o.id) === String(localAtivoId));
   return ob ? `${ob.codigo} - ${ob.nome}` : textos.selecionada;
 }
 
-function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
-  let container = document.getElementById('containerSeletorObraGlobal');
+function injetarSeletorDeLocal(locaisLiberados, temAcessoGlobal) {
+  let container = document.getElementById('containerSeletorLocal');
   if (!container) {
     const headerUser = document.getElementById('headerNomeUsuario')?.parentElement;
     if (!headerUser) return;
     container = document.createElement('div');
-    container.id = 'containerSeletorObraGlobal';
+    container.id = 'containerSeletorLocal';
     container.className = 'mt-2 pt-2 border-t border-slate-200';
     headerUser.appendChild(container);
   }
 
-  const textos = textosDoSeletorDeObra();
-  const podeVerConsolidado = temAcessoGlobal || obrasLiberadas.length > 1;
-  if (obrasLiberadas.length <= 1 && !podeVerConsolidado) {
-    const unica = obrasLiberadas[0];
+  const textos = textosDoSeletorDeLocal();
+  const podeVerConsolidado = temAcessoGlobal || locaisLiberados.length > 1;
+  if (locaisLiberados.length <= 1 && !podeVerConsolidado) {
+    const unica = locaisLiberados[0];
     const rotulo = textos.unica(unica ? unica.codigo : '', unica ? unica.nome : '');
     container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 ${esc(rotulo)}</div>`;
     return;
@@ -508,28 +519,37 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
 
   container.innerHTML = `
     <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">${esc(textos.etiqueta)}</label>
-    <select id="selectObraGlobalTopo" onchange="trocarObraAtivaGlobal(this.value)"
+    <select id="selectLocalAtivo" onchange="trocarLocalAtivo(this.value)"
       class="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-extrabold">
-      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
-      ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
+      ${podeVerConsolidado ? `<option value="TODAS" ${localAtivoId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
+      ${locaisLiberados.map(o => `<option value="${o.id}" ${localAtivoId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
     </select>
   `;
 }
 
-function trocarObraAtivaGlobal(novoId) {
-  obraAtivaId = novoId || 'TODAS';
-  localStorage.setItem('vilasa_obra_ativa_v2', obraAtivaId);
+function trocarLocalAtivo(novoId) {
+  localAtivoId = novoId || 'TODAS';
+  localStorage.setItem(CHAVE_LOCAL_ATIVO, localAtivoId);
   navegarPara(abaAtivaGlobal);
 }
 
-function filtrarListaPorObraAtiva(lista) {
+function filtrarPorLocalAtivo(lista) {
   if (!Array.isArray(lista)) return [];
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return lista;
+  if (!localAtivoId || localAtivoId === 'TODAS') return lista;
   return lista.filter(item => {
-    const idObraItem = item.obra_id || item.equipamentos?.obra_id || item.equipamento?.obra_id || null;
-    return !idObraItem || String(idObraItem) === String(obraAtivaId);
+    const idLocalItem = item.local_id || item.obra_id
+      || item.equipamentos?.local_id || item.equipamentos?.obra_id
+      || item.equipamento?.local_id || item.equipamento?.obra_id || null;
+    return !idLocalItem || String(idLocalItem) === String(localAtivoId);
   });
 }
+
+// Apelidos com os nomes antigos. Os módulos da raiz ainda chamam por eles;
+// saem quando todos usarem os nomes novos.
+function carregarObrasEMontarSeletorTopo() { return montarSeletorDeLocal(); }
+function obterNomeObraAtiva() { return nomeDoLocalAtivo(); }
+function trocarObraAtivaGlobal(novoId) { return trocarLocalAtivo(novoId); }
+function filtrarListaPorObraAtiva(lista) { return filtrarPorLocalAtivo(lista); }
 
 // 4. NAVEGAÇÃO ENTRE MÓDULOS
 function navegarPara(modulo) {
@@ -537,7 +557,7 @@ function navegarPara(modulo) {
   abaAtivaGlobal = modulo;
   montarBotoesBarraExportacaoUniversal();
 
-  const telas = window.Vilasa && Vilasa.telas ? Vilasa.telas.ordenadas() : [];
+  const telas = window.Plataforma && Plataforma.telas ? Plataforma.telas.ordenadas() : [];
   const meta = telas.find(t => t.id === modulo) || null;
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
   if (elTit) elTit.innerText = `Relatórios: ${(meta && meta.titulo_relatorio) || String(modulo).toUpperCase()}`;
@@ -558,8 +578,8 @@ function navegarPara(modulo) {
     btnAtivo.classList.add('bg-amber-500', 'text-slate-950', 'font-black', 'shadow-sm');
   }
 
-  if (!meta || !meta.abrir || !window.Vilasa) return;
-  const fn = Vilasa.resolverFuncao(meta.abrir, meta.moduloId);
+  if (!meta || !meta.abrir || !window.Plataforma) return;
+  const fn = Plataforma.resolverFuncao(meta.abrir, meta.moduloId);
   if (typeof fn !== 'function') return;
   const args = Array.isArray(meta.abrirArgs) ? meta.abrirArgs : [];
   return fn(...args);
@@ -573,11 +593,11 @@ function navegarPara(modulo) {
 
 async function acionarExportacaoUniversalCSV() {
   if (!podeExecutarAcao('exportar_relatorios', true)) return;
-  const rel = window.Vilasa && Vilasa.extensoes
-    ? Vilasa.extensoes.relatoriosDaTela(abaAtivaGlobal).find(item => item.formato === 'csv')
+  const rel = window.Plataforma && Plataforma.extensoes
+    ? Plataforma.extensoes.relatoriosDaTela(abaAtivaGlobal).find(item => item.formato === 'csv')
     : null;
-  if (rel && window.Vilasa) {
-    const fn = Vilasa.resolverFuncao(rel.funcao, rel.moduloId);
+  if (rel && window.Plataforma) {
+    const fn = Plataforma.resolverFuncao(rel.funcao, rel.moduloId);
     if (typeof fn === 'function') return fn();
   }
   return exportarTabelaVisivelCSV();
@@ -586,7 +606,7 @@ async function acionarExportacaoUniversalCSV() {
 function acionarRelatorioDoRegistro(rel) {
   if (!rel) return;
   if (!podeExecutarAcao('exportar_relatorios', true)) return;
-  const fn = window.Vilasa ? Vilasa.resolverFuncao(rel.funcao, rel.moduloId) : null;
+  const fn = window.Plataforma ? Plataforma.resolverFuncao(rel.funcao, rel.moduloId) : null;
   if (rel.formato === 'csv') {
     if (typeof fn === 'function') return fn();
     return exportarTabelaVisivelCSV();
@@ -609,21 +629,22 @@ function exportarTabelaVisivelCSV() {
   const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_${String(abaAtivaGlobal).toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_${String(abaAtivaGlobal).toUpperCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 
 function coletarRelatorioGenericoDaTela() {
-  const obraNome = obterNomeObraAtiva();
+  const nomeLocal = nomeDoLocalAtivo();
+  const textosLocal = textosDoSeletorDeLocal();
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const trs = Array.from(sec?.querySelectorAll('table tbody tr') || []);
   const ths = Array.from(sec?.querySelectorAll('table thead th') || []).map(th => th.innerText.trim());
   return {
-    titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || 'Relatório Gerencial Vilasa',
-    subtitulo: `Obra: ${obraNome} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
+    titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || `Relatório Gerencial ${Plataforma.marca.nome()}`,
+    subtitulo: `${textosLocal.nivel1 || 'Local'}: ${nomeLocal} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
     kpisResumo: [
       { label: 'Registros Filtrados', valor: trs.length },
-      { label: 'Obra / Frente', valor: obraNome.split(' ')[0] },
+      { label: `${textosLocal.nivel1 || 'Local'} / ${textosLocal.nivel2 || 'Setor'}`, valor: nomeLocal.split(' ')[0] },
       { label: 'Data', valor: new Date().toLocaleDateString('pt-BR') },
       { label: 'Emitido por', valor: usuarioLogado?.nome || 'Engenharia' }
     ],
@@ -634,10 +655,10 @@ function coletarRelatorioGenericoDaTela() {
 
 function coletarDadosFiltradosDaAbaAtualParaRelatorio(modo = 'enxuto_rep') {
   const coleta = modo === 'completo' ? 'completo' : 'enxuto';
-  if (window.Vilasa && Vilasa.extensoes) {
-    const item = Vilasa.extensoes.relatoriosDaTela(abaAtivaGlobal).find(rel => rel.coleta === coleta);
+  if (window.Plataforma && Plataforma.extensoes) {
+    const item = Plataforma.extensoes.relatoriosDaTela(abaAtivaGlobal).find(rel => rel.coleta === coleta);
     if (item) {
-      const fn = Vilasa.resolverFuncao(item.funcao, item.moduloId);
+      const fn = Plataforma.resolverFuncao(item.funcao, item.moduloId);
       if (typeof fn === 'function') {
         const dados = fn(modo);
         if (dados && Array.isArray(dados.colunas)) return dados;
@@ -692,7 +713,7 @@ function abrirJanelaImpressaoFormatada(rel, modoCompactoUmaPagina = true) {
       <body onload="setTimeout(() => { window.print(); window.onafterprint = () => window.close(); }, 350)">
         <div style="border-bottom:2px solid #f59e0b; padding-bottom:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:10px; font-weight:900; color:#d97706;">VILASA CONSTRUTORA • ENGENHARIA DE MANUTENÇÃO</div>
+            <div style="font-size:10px; font-weight:900; color:#d97706;">${esc(Plataforma.marca.nome().toUpperCase())} • ENGENHARIA DE MANUTENÇÃO</div>
             <h1 style="margin:2px 0; font-size:15px;">${esc(rel.titulo)}</h1>
             <div style="font-size:10px; color:#475569; font-weight:700;">${esc(rel.subtitulo)}</div>
           </div>
@@ -720,7 +741,7 @@ async function gerarResumoExecutivoPNG(dadosProntos) {
   cardExecutivo.innerHTML = `
     <div style="background:#0f172a; color:#ffffff; padding:12px 18px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div>
-        <div style="color:#fbbf24; font-size:10px; font-weight:900;">VILASA CMMS • QUADRO EXECUTIVO (1 PÁGINA)</div>
+        <div style="color:#fbbf24; font-size:10px; font-weight:900;">${esc(Plataforma.marca.nome().toUpperCase())} • QUADRO EXECUTIVO (1 PÁGINA)</div>
         <div style="font-size:17px; font-weight:900; margin-top:2px;">${esc(rel.titulo)}</div>
         <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">${esc(rel.subtitulo)}</div>
       </div>
@@ -743,7 +764,7 @@ async function gerarResumoExecutivoPNG(dadosProntos) {
   try {
     const canvas = await html2canvas(cardExecutivo, { scale: 2, backgroundColor: '#ffffff' });
     const link = document.createElement('a');
-    link.download = `REP_VILASA_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
+    link.download = `REP_${Plataforma.marca.prefixoArquivo()}_${abaAtivaGlobal.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   } finally {
@@ -783,7 +804,7 @@ function bateComPrefixoEquipamento(tagOuTexto, termoDigitado) {
 
 function ativarBuscaPorPrefixoEmSelect(selectEl) {
   if (!selectEl || selectEl.dataset.prefixSearchBound === '1') return;
-  if (selectEl.id === 'selectObraGlobalTopo' || selectEl.id === 'editorTabelaSelect') return;
+  if (selectEl.id === 'selectLocalAtivo' || selectEl.id === 'editorTabelaSelect') return;
   selectEl.dataset.prefixSearchBound = '1';
 
   const wrapper = document.createElement('div');
@@ -824,12 +845,12 @@ window.lerDadosComFallbackOffline = window.lerDadosComFallbackOffline || async f
     if (navigator.onLine && typeof fnQuerySupabase === 'function') {
       const res = await fnQuerySupabase();
       if (res && !res.error && res.data) {
-        try { localStorage.setItem(`vilasa_cache_${chaveCache}`, JSON.stringify(res.data)); } catch (e) {}
+        try { localStorage.setItem(chaveLocalCore(`cache_${chaveCache}`), JSON.stringify(res.data)); } catch (e) {}
         return { data: res.data, error: null, offline: false };
       }
     }
   } catch (err) {}
-  const salvo = localStorage.getItem(`vilasa_cache_${chaveCache}`);
+  const salvo = localStorage.getItem(chaveLocalCore(`cache_${chaveCache}`));
   return { data: salvo ? JSON.parse(salvo) : [], error: null, offline: true };
 };
 
@@ -841,5 +862,6 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar();
   await restaurarSessaoSalva();
 });

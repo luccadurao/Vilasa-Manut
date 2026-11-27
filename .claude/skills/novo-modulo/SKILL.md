@@ -23,8 +23,9 @@ módulo que depende de outro.
 1. `modulos/<id>/manifesto.js` — siga o tipo `Manifesto`; comece com
    `estagio: 'beta'` e `versao: '0.1.0'`.
 2. Script da tela: `modulos/<id>/<id>.js` (módulo novo não vai para a raiz).
-   Use `Vilasa.permissoes.pode(...)` para cada ação e `Vilasa.termo(...)` para
-   textos como obra/equipamento. Lançamento de campo passa pela fila do
+   Use `Plataforma.permissoes.pode(...)` para cada ação e `Plataforma.termo(...)`
+   para textos como local/ativo (nunca "Obra" ou nome de cliente fixo). Chave
+   no localStorage só por `PlataformaProduto.chave(...)`. Lançamento de campo passa pela fila do
    `offline_sync.js`, levando `empresa_id` e `modulo`.
 3. Inclua o `<script src="modulos/<id>/manifesto.js">` no `index.html` (e no
    `qr.html` se tiver ação de QR), junto dos outros manifestos.

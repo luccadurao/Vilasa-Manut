@@ -1,5 +1,5 @@
 // ============================================================================
-// VILASA CMMS V2 - MÓDULO 6: FROTA.JS (FILTRO POR COLUNA ESTILO EXCEL + QR CODE)
+// MÓDULO 6: FROTA.JS (FILTRO POR COLUNA ESTILO EXCEL + QR CODE)
 // ============================================================================
 
 let filtroSituacaoFrota = 'ativo';
@@ -365,12 +365,11 @@ async function abrirModalTransferirObraEquipamento(equipId) {
     </div>`);
 }
 
-// QR impresso no escritório sempre aponta para produção, mesmo se gerado a partir de teste/preview.
+// QR impresso aponta para o site oficial do ambiente (config.js: site), ou,
+// quando o ambiente não tem site (homologação), para o endereço aberto.
 // O id (uuid) identifica a máquina. O formato estável está em docs/qr-url.md.
-const URL_BASE_QR_PRODUCAO = 'https://vilasa-manut.vercel.app/';
-
 function gerarUrlQRCodeOfflineReady(eq) {
-  const base = URL_BASE_QR_PRODUCAO + 'qr.html';
+  const base = Plataforma.qr.URL_BASE;
   const params = new URLSearchParams({ id: eq.id, tag: eq.tag || '', nome: eq.nome || '', un: eq.unidade_medida || 'H' });
   return `${base}?${params.toString()}`;
 }
@@ -423,7 +422,7 @@ function exportarRelatorioFrotaCSV() {
   const blob = new Blob(['\uFEFF' + [cab.join(';'), ...linhas].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `VILASA_FROTA_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${Plataforma.marca.prefixoArquivo()}_FROTA_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 
