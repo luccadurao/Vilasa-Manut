@@ -156,7 +156,7 @@
   }
 
   function obrasDoCache() {
-    return Array.isArray(root.cacheObras) ? root.cacheObras : [];
+    return Array.isArray(root.cacheLocais) ? root.cacheLocais : [];
   }
 
   function abrirCadastro() {
@@ -166,7 +166,7 @@
       return;
     }
     const obras = obrasDoCache();
-    const obraAtiva = root.obraAtivaId;
+    const obraAtiva = root.localAtivoId;
     abrirCaixa('modalNovoEquipV2', `
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border my-8 max-h-[90vh] overflow-y-auto">
       <h3 class="text-lg font-black text-slate-900 border-b pb-2 mb-4">Cadastrar ${escapar(termoAtivo())} na Frota</h3>
@@ -248,7 +248,7 @@
     if (root.navigator && root.navigator.onLine === false) {
       return root.alert('Equipamento só pode ser cadastrado com internet (somente PCM). Tente novamente quando estiver online.');
     }
-    const cache = Array.isArray(root.cacheEquipamentos) ? root.cacheEquipamentos : [];
+    const cache = Array.isArray(root.cacheAtivos) ? root.cacheAtivos : [];
     if (cache.some((/** @type {{ tag?: string }} */ item) => chaveTag(item.tag) === chaveTag(tag))) {
       return root.alert('Já existe um equipamento com esse prefixo (' + tag + ').');
     }
@@ -277,7 +277,7 @@
    */
   function abrirEdicao(equipId) {
     if (!podeCadastrar()) return;
-    const cache = Array.isArray(root.cacheEquipamentos) ? root.cacheEquipamentos : [];
+    const cache = Array.isArray(root.cacheAtivos) ? root.cacheAtivos : [];
     const eq = cache.find((/** @type {{ id?: string }} */ item) => String(item.id) === String(equipId));
     if (!eq) return;
     /**

@@ -8,8 +8,9 @@ const vm = require('node:vm');
 const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
-const CAMPOS = ['usuarioLogado', 'obraAtivaId', 'abaAtivaGlobal', 'cacheObras',
-  'cacheEquipamentos', 'cacheUsuarios', 'cachePecas', 'cacheOrdens'];
+const CAMPOS = ['usuarioLogado', 'localAtivoId', 'abaAtivaGlobal', 'cacheLocais',
+  'cacheAtivos', 'cacheUsuarios', 'cachePecas', 'cacheOrdens'];
+const APELIDOS = ['obraAtivaId', 'cacheObras', 'cacheEquipamentos'];
 
 test('o que o código antigo grava sem declarar chega ao núcleo', () => {
   const { Plataforma, sandbox, contexto } = carregarPlataforma(raiz);
@@ -29,6 +30,18 @@ test('o que o código antigo grava sem declarar chega ao núcleo', () => {
   assert.equal(Plataforma.termo('local.nivel1'), 'Fazenda');
 });
 
+test('nome antigo e nome novo são o mesmo valor', () => {
+  const { Plataforma, sandbox, contexto } = carregarPlataforma(raiz);
+  vm.runInContext("obraAtivaId = 'L7'; cacheEquipamentos = [{ id: 'A' }];", contexto);
+  assert.equal(sandbox.localAtivoId, 'L7');
+  assert.equal(Plataforma.contexto.ler('cacheAtivos')[0].id, 'A');
+  vm.runInContext("localAtivoId = 'L8'; cacheLocais = [{ id: 'L8' }];", contexto);
+  assert.equal(sandbox.obraAtivaId, 'L8');
+  assert.equal(sandbox.cacheObras[0].id, 'L8');
+  assert.equal(Plataforma.contexto.ler('obraAtivaId'), 'L8');
+  assert.equal(JSON.stringify(Plataforma.contexto.apelidos()), JSON.stringify({ obraAtivaId: 'localAtivoId', cacheObras: 'cacheLocais', cacheEquipamentos: 'cacheAtivos' }));
+});
+
 test('valores iniciais e campo desconhecido', () => {
   const { Plataforma, sandbox } = carregarPlataforma(raiz);
   assert.equal(sandbox.usuarioLogado, null);
@@ -45,13 +58,13 @@ test('trocar usuário ou local avisa nucleo.contexto_mudou; cache não avisa', (
   const avisos = [];
   Plataforma.eventos.ouvir('nucleo.contexto_mudou', (dados) => avisos.push(dados));
   vm.runInContext("usuarioLogado = { id: '9' }; obraAtivaId = 'L2'; obraAtivaId = 'L2'; cacheOrdens = [1];", contexto);
-  assert.equal(JSON.stringify(avisos.map((a) => a.campo)), JSON.stringify(['usuarioLogado', 'obraAtivaId']));
+  assert.equal(JSON.stringify(avisos.map((a) => a.campo)), JSON.stringify(['usuarioLogado', 'localAtivoId']));
   assert.equal(avisos[1].anterior, 'TODAS');
   assert.equal(avisos[1].atual, 'L2');
 });
 
 test('ninguém declara o estado compartilhado com let/const/var', () => {
-  const declaracao = new RegExp(`^\\s*(let|const|var)\\s+(${CAMPOS.join('|')})\\b`, 'm');
+  const declaracao = new RegExp(`^\\s*(let|const|var)\\s+(${[...CAMPOS, ...APELIDOS].join('|')})\\b`, 'm');
   const arquivos = fs.readdirSync(raiz).filter((n) => n.endsWith('.js') || n.endsWith('.html'));
   for (const pasta of ['nucleo', ...fs.readdirSync(path.join(raiz, 'modulos')).map((m) => path.join('modulos', m))]) {
     for (const n of fs.readdirSync(path.join(raiz, pasta))) {

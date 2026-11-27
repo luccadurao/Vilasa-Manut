@@ -461,7 +461,9 @@
       matricula: entrada.matricula,
       nome: entrada.nome,
       cargos_lista: entrada.cargos_lista,
-      obras_permitidas: entrada.obras_permitidas,
+      // locais_permitidos é o nome novo (meu_perfil, 0006); obras_permitidas, o antigo.
+      locais_permitidos: entrada.locais_permitidos !== undefined ? entrada.locais_permitidos : entrada.obras_permitidas,
+      obras_permitidas: entrada.obras_permitidas !== undefined ? entrada.obras_permitidas : entrada.locais_permitidos,
       ativo: entrada.ativo
     };
   }
@@ -516,7 +518,8 @@
       matricula: sessao.perfil.matricula,
       nome: sessao.perfil.nome,
       cargos_lista: sessao.perfil.cargos_lista,
-      obras_permitidas: sessao.perfil.obras_permitidas,
+      locais_permitidos: sessao.perfil.locais_permitidos !== undefined ? sessao.perfil.locais_permitidos : sessao.perfil.obras_permitidas,
+      obras_permitidas: sessao.perfil.obras_permitidas !== undefined ? sessao.perfil.obras_permitidas : sessao.perfil.locais_permitidos,
       ativo: sessao.perfil.ativo
     };
     if (sessao.empresa) usuario.empresa = sessao.empresa;
@@ -1303,12 +1306,16 @@
 
   /** Termos da empresa 1. Outra empresa só muda o que gravar em empresas.termos. */
   /** @type {Record<string, string>} */
+  // Termos genéricos. Cada empresa troca em empresas.termos (ex.: Obra/Frente
+  // com gênero 'f' numa construtora, Fazenda/Talhão numa empresa agrícola).
+  // 'local.nivel1.genero': 'm' (o local) ou 'f' (a obra), para as frases.
   const TERMOS_PADRAO = {
-    'local.nivel1': 'Obra',
-    'local.nivel2': 'Frente',
-    'local.nivel1.plural': 'Obras',
-    'ativo': 'Equipamento',
-    'ativo.plural': 'Equipamentos',
+    'local.nivel1': 'Local',
+    'local.nivel2': 'Setor',
+    'local.nivel1.plural': 'Locais',
+    'local.nivel1.genero': 'm',
+    'ativo': 'Ativo',
+    'ativo.plural': 'Ativos',
     'os': 'Ordem de Serviço'
   };
 
@@ -1342,13 +1349,14 @@
     const nivel1 = lerTermo('local.nivel1', termos);
     const nivel2 = lerTermo('local.nivel2', termos);
     const plural = lerTermo('local.nivel1.plural', termos);
+    const feminino = String(lerTermo('local.nivel1.genero', termos)).trim().toLowerCase() === 'f';
     return {
       nivel1,
       nivel2,
       plural,
-      etiqueta: `${nivel2} / ${nivel1} Ativa:`,
-      consolidado: `TODAS AS ${plural.toUpperCase()} (CONSOLIDADO)`,
-      selecionada: `${nivel1} Selecionada`,
+      etiqueta: `${nivel2} / ${nivel1} ${feminino ? 'Ativa' : 'Ativo'}:`,
+      consolidado: `${feminino ? 'TODAS AS' : 'TODOS OS'} ${plural.toUpperCase()} (CONSOLIDADO)`,
+      selecionada: `${nivel1} ${feminino ? 'Selecionada' : 'Selecionado'}`,
       /**
        * @param {string | null | undefined} codigo
        * @param {string | null | undefined} nome

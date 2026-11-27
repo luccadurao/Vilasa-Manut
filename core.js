@@ -2,7 +2,7 @@
 // CORE.JS — LOGIN, SESSÃO, MENU E EXPORTAÇÃO COMUM
 // ============================================================================
 
-// O estado compartilhado (usuarioLogado, obraAtivaId, abaAtivaGlobal e os
+// O estado compartilhado (usuarioLogado, localAtivoId, abaAtivaGlobal e os
 // cache*) mora em nucleo/contexto.js, como propriedade de window. Não declare
 // esses nomes aqui com let/const: o núcleo deixaria de enxergar o valor.
 abaAtivaGlobal = 'os';
@@ -165,10 +165,10 @@ function lerPerfilDaSessao() {
   return api.usuarioDe(api.ler(localStorage));
 }
 
-function apagarSessaoLocal(limparObra) {
+function apagarSessaoLocal(limparLocal) {
   localStorage.removeItem(CHAVE_SESSAO_LOCAL);
   localStorage.removeItem(CHAVE_SESSAO_ANTERIOR);
-  if (limparObra) localStorage.removeItem(CHAVE_LOCAL_ATIVO);
+  if (limparLocal) localStorage.removeItem(CHAVE_LOCAL_ATIVO);
 }
 
 let trocaEmpresaAberta = false;
@@ -424,7 +424,7 @@ async function inicializarSistemaPosLogin() {
   if (elNome) elNome.innerText = usuarioLogado.nome || usuarioLogado.matricula;
   if (elCargo) elCargo.innerText = `${usuarioLogado.matricula || ''} • ${nomesCargos}`;
 
-  await carregarObrasEMontarSeletorTopo();
+  await montarSeletorDeLocal();
   if (window.Plataforma && Plataforma.modulos && Plataforma.telas) {
     const contrato = window.Plataforma.sessao ? Plataforma.sessao.contratoDe(usuarioLogado) : { todos: true };
     Plataforma.modulos.resolverEGuardar(contrato);
@@ -439,74 +439,75 @@ async function inicializarSistemaPosLogin() {
   if (primeiraAba) navegarPara(primeiraAba);
 }
 
-// 3. SELETOR GLOBAL DE OBRAS
-async function carregarObrasEMontarSeletorTopo() {
+// 3. SELETOR GLOBAL DE LOCAL (o nome na tela vem de Plataforma.termo)
+async function montarSeletorDeLocal() {
   try {
     const res = await lerDadosComFallbackOffline('obras_ativas', () => db.from('obras').select('*').eq('ativa', true).order('codigo'));
-    cacheObras = Array.isArray(res.data) ? res.data : [];
+    cacheLocais = Array.isArray(res.data) ? res.data : [];
   } catch (e) {
-    cacheObras = [];
+    cacheLocais = [];
   }
 
-  const permissoesObra = Array.isArray(usuarioLogado?.obras_permitidas) && usuarioLogado.obras_permitidas.length > 0
-    ? usuarioLogado.obras_permitidas
-    : ['TODAS'];
+  // locais_permitidos vem do meu_perfil a partir da 0006; obras_permitidas é o nome antigo.
+  const listaPermitida = Array.isArray(usuarioLogado?.locais_permitidos) ? usuarioLogado.locais_permitidos
+    : (Array.isArray(usuarioLogado?.obras_permitidas) ? usuarioLogado.obras_permitidas : []);
+  const permissoesLocal = listaPermitida.length > 0 ? listaPermitida : ['TODAS'];
 
   const cargos = obterCargosUsuario();
-  const temAcessoGlobal = cargos.includes('admin') || cargos.includes('engenheiro') || cargos.includes('gestor') || permissoesObra.includes('TODAS');
+  const temAcessoGlobal = cargos.includes('admin') || cargos.includes('engenheiro') || cargos.includes('gestor') || permissoesLocal.includes('TODAS');
 
-  const obrasLiberadas = temAcessoGlobal
-    ? cacheObras
-    : cacheObras.filter(o => permissoesObra.includes(o.id) || permissoesObra.includes(o.codigo));
+  const locaisLiberados = temAcessoGlobal
+    ? cacheLocais
+    : cacheLocais.filter(o => permissoesLocal.includes(o.id) || permissoesLocal.includes(o.codigo));
 
   const salva = localStorage.getItem(CHAVE_LOCAL_ATIVO);
-  if (obrasLiberadas.length === 1 && !temAcessoGlobal) {
-    obraAtivaId = obrasLiberadas[0].id;
-  } else if (salva && (salva === 'TODAS' || obrasLiberadas.some(o => o.id === salva))) {
-    obraAtivaId = salva;
+  if (locaisLiberados.length === 1 && !temAcessoGlobal) {
+    localAtivoId = locaisLiberados[0].id;
+  } else if (salva && (salva === 'TODAS' || locaisLiberados.some(o => o.id === salva))) {
+    localAtivoId = salva;
   } else {
-    obraAtivaId = 'TODAS';
+    localAtivoId = 'TODAS';
   }
 
-  injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal);
+  injetarSeletorDeLocal(locaisLiberados, temAcessoGlobal);
 }
 
-function textosDoSeletorDeObra() {
+function textosDoSeletorDeLocal() {
   if (window.Plataforma && Plataforma.termo && typeof Plataforma.termo.textos === 'function') {
     return Plataforma.termo.textos();
   }
   return {
-    etiqueta: 'Frente / Obra Ativa:',
-    consolidado: 'TODAS AS OBRAS (CONSOLIDADO)',
-    selecionada: 'Obra Selecionada',
+    etiqueta: 'Setor / Local Ativo:',
+    consolidado: 'TODOS OS LOCAIS (CONSOLIDADO)',
+    selecionada: 'Local Selecionado',
     unica(codigo, nome) {
-      return codigo ? `Obra: ${codigo} - ${nome || ''}` : 'Obra: Matriz Geral';
+      return codigo ? `Local: ${codigo} - ${nome || ''}` : 'Local: Matriz Geral';
     }
   };
 }
 
-function obterNomeObraAtiva() {
-  const textos = textosDoSeletorDeObra();
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return textos.consolidado;
-  const ob = (cacheObras || []).find(o => String(o.id) === String(obraAtivaId));
+function nomeDoLocalAtivo() {
+  const textos = textosDoSeletorDeLocal();
+  if (!localAtivoId || localAtivoId === 'TODAS') return textos.consolidado;
+  const ob = (cacheLocais || []).find(o => String(o.id) === String(localAtivoId));
   return ob ? `${ob.codigo} - ${ob.nome}` : textos.selecionada;
 }
 
-function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
-  let container = document.getElementById('containerSeletorObraGlobal');
+function injetarSeletorDeLocal(locaisLiberados, temAcessoGlobal) {
+  let container = document.getElementById('containerSeletorLocal');
   if (!container) {
     const headerUser = document.getElementById('headerNomeUsuario')?.parentElement;
     if (!headerUser) return;
     container = document.createElement('div');
-    container.id = 'containerSeletorObraGlobal';
+    container.id = 'containerSeletorLocal';
     container.className = 'mt-2 pt-2 border-t border-slate-200';
     headerUser.appendChild(container);
   }
 
-  const textos = textosDoSeletorDeObra();
-  const podeVerConsolidado = temAcessoGlobal || obrasLiberadas.length > 1;
-  if (obrasLiberadas.length <= 1 && !podeVerConsolidado) {
-    const unica = obrasLiberadas[0];
+  const textos = textosDoSeletorDeLocal();
+  const podeVerConsolidado = temAcessoGlobal || locaisLiberados.length > 1;
+  if (locaisLiberados.length <= 1 && !podeVerConsolidado) {
+    const unica = locaisLiberados[0];
     const rotulo = textos.unica(unica ? unica.codigo : '', unica ? unica.nome : '');
     container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 ${esc(rotulo)}</div>`;
     return;
@@ -514,28 +515,37 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
 
   container.innerHTML = `
     <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">${esc(textos.etiqueta)}</label>
-    <select id="selectObraGlobalTopo" onchange="trocarObraAtivaGlobal(this.value)"
+    <select id="selectLocalAtivo" onchange="trocarLocalAtivo(this.value)"
       class="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-extrabold">
-      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
-      ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
+      ${podeVerConsolidado ? `<option value="TODAS" ${localAtivoId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
+      ${locaisLiberados.map(o => `<option value="${o.id}" ${localAtivoId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
     </select>
   `;
 }
 
-function trocarObraAtivaGlobal(novoId) {
-  obraAtivaId = novoId || 'TODAS';
-  localStorage.setItem(CHAVE_LOCAL_ATIVO, obraAtivaId);
+function trocarLocalAtivo(novoId) {
+  localAtivoId = novoId || 'TODAS';
+  localStorage.setItem(CHAVE_LOCAL_ATIVO, localAtivoId);
   navegarPara(abaAtivaGlobal);
 }
 
-function filtrarListaPorObraAtiva(lista) {
+function filtrarPorLocalAtivo(lista) {
   if (!Array.isArray(lista)) return [];
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return lista;
+  if (!localAtivoId || localAtivoId === 'TODAS') return lista;
   return lista.filter(item => {
-    const idObraItem = item.obra_id || item.equipamentos?.obra_id || item.equipamento?.obra_id || null;
-    return !idObraItem || String(idObraItem) === String(obraAtivaId);
+    const idLocalItem = item.local_id || item.obra_id
+      || item.equipamentos?.local_id || item.equipamentos?.obra_id
+      || item.equipamento?.local_id || item.equipamento?.obra_id || null;
+    return !idLocalItem || String(idLocalItem) === String(localAtivoId);
   });
 }
+
+// Apelidos com os nomes antigos. Os módulos da raiz ainda chamam por eles;
+// saem quando todos usarem os nomes novos.
+function carregarObrasEMontarSeletorTopo() { return montarSeletorDeLocal(); }
+function obterNomeObraAtiva() { return nomeDoLocalAtivo(); }
+function trocarObraAtivaGlobal(novoId) { return trocarLocalAtivo(novoId); }
+function filtrarListaPorObraAtiva(lista) { return filtrarPorLocalAtivo(lista); }
 
 // 4. NAVEGAÇÃO ENTRE MÓDULOS
 function navegarPara(modulo) {
@@ -620,16 +630,17 @@ function exportarTabelaVisivelCSV() {
 }
 
 function coletarRelatorioGenericoDaTela() {
-  const obraNome = obterNomeObraAtiva();
+  const nomeLocal = nomeDoLocalAtivo();
+  const textosLocal = textosDoSeletorDeLocal();
   const sec = document.getElementById(`sec-${abaAtivaGlobal}`);
   const trs = Array.from(sec?.querySelectorAll('table tbody tr') || []);
   const ths = Array.from(sec?.querySelectorAll('table thead th') || []).map(th => th.innerText.trim());
   return {
     titulo: document.getElementById('tituloAbaExportacaoUniversal')?.innerText || `Relatório Gerencial ${Plataforma.marca.nome()}`,
-    subtitulo: `Obra: ${obraNome} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
+    subtitulo: `${textosLocal.nivel1 || 'Local'}: ${nomeLocal} | Emitido em: ${new Date().toLocaleString('pt-BR')}`,
     kpisResumo: [
       { label: 'Registros Filtrados', valor: trs.length },
-      { label: 'Obra / Frente', valor: obraNome.split(' ')[0] },
+      { label: `${textosLocal.nivel1 || 'Local'} / ${textosLocal.nivel2 || 'Setor'}`, valor: nomeLocal.split(' ')[0] },
       { label: 'Data', valor: new Date().toLocaleDateString('pt-BR') },
       { label: 'Emitido por', valor: usuarioLogado?.nome || 'Engenharia' }
     ],
@@ -789,7 +800,7 @@ function bateComPrefixoEquipamento(tagOuTexto, termoDigitado) {
 
 function ativarBuscaPorPrefixoEmSelect(selectEl) {
   if (!selectEl || selectEl.dataset.prefixSearchBound === '1') return;
-  if (selectEl.id === 'selectObraGlobalTopo' || selectEl.id === 'editorTabelaSelect') return;
+  if (selectEl.id === 'selectLocalAtivo' || selectEl.id === 'editorTabelaSelect') return;
   selectEl.dataset.prefixSearchBound = '1';
 
   const wrapper = document.createElement('div');

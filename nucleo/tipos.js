@@ -182,7 +182,7 @@
 
 /**
  * @typedef {Object} SessaoGuardada
- * @property {{ id: string, matricula?: string, nome?: string, cargos_lista?: any, obras_permitidas?: any, ativo?: boolean }} perfil
+ * @property {{ id: string, matricula?: string, nome?: string, cargos_lista?: any, locais_permitidos?: any, obras_permitidas?: any, ativo?: boolean }} perfil
  * @property {any} empresa
  * @property {string | null} empresa_id
  * @property {any[] | null} modulos
