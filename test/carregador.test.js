@@ -156,7 +156,7 @@ test('o index não fixa os scripts dos módulos e o cache lê a versão única',
     assert.equal(html.includes(`src="${src}"`), false, src);
   }
   assert.equal(html.includes('src="nucleo/versao.js"'), true);
-  assert.equal(html.includes('src="vendor/xlsx.mini.min.js"'), true);
+  assert.equal(html.includes('src="vendor/xlsx.mini.min.js"'), false);
 
   const versao = fs.readFileSync(path.join(raiz, 'nucleo/versao.js'), 'utf8');
   assert.match(versao, /var VILASA_VERSAO_APP = 'v23'/);
