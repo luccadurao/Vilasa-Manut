@@ -1211,6 +1211,68 @@
     extensoes: {}
   });
 
+  /** Termos da empresa 1. Outra empresa só muda o que gravar em empresas.termos. */
+  /** @type {Record<string, string>} */
+  const TERMOS_PADRAO = {
+    'local.nivel1': 'Obra',
+    'local.nivel2': 'Frente',
+    'local.nivel1.plural': 'Obras',
+    'ativo': 'Equipamento',
+    'ativo.plural': 'Equipamentos',
+    'os': 'Ordem de Serviço'
+  };
+
+  /**
+   * @param {any} pessoa
+   * @returns {Record<string, string> | null}
+   */
+  function termosDaPessoa(pessoa) {
+    const origem = pessoa === undefined ? root.usuarioLogado : pessoa;
+    const empresa = origem && origem.empresa && typeof origem.empresa === 'object' ? origem.empresa : null;
+    const termos = empresa && empresa.termos && typeof empresa.termos === 'object' ? empresa.termos : null;
+    return termos;
+  }
+
+  /**
+   * @param {string} chave
+   * @param {Record<string, string> | null | undefined} termos
+   */
+  function lerTermo(chave, termos) {
+    const fonte = termos === undefined ? termosDaPessoa(undefined) : termos;
+    const bruto = fonte && typeof fonte[chave] === 'string' ? fonte[chave].trim() : '';
+    if (bruto) return bruto;
+    return TERMOS_PADRAO[chave] || chave;
+  }
+
+  /**
+   * @param {Record<string, string> | null | undefined} termos
+   * @returns {import('./tipos.js').TextosLocal}
+   */
+  function textosDoLocal(termos) {
+    const nivel1 = lerTermo('local.nivel1', termos);
+    const nivel2 = lerTermo('local.nivel2', termos);
+    const plural = lerTermo('local.nivel1.plural', termos);
+    return {
+      nivel1,
+      nivel2,
+      plural,
+      etiqueta: `${nivel2} / ${nivel1} Ativa:`,
+      consolidado: `TODAS AS ${plural.toUpperCase()} (CONSOLIDADO)`,
+      selecionada: `${nivel1} Selecionada`,
+      /**
+       * @param {string | null | undefined} codigo
+       * @param {string | null | undefined} nome
+       */
+      unica(codigo, nome) {
+        if (codigo) return `${nivel1}: ${codigo} - ${nome || ''}`;
+        return `${nivel1}: Matriz Geral`;
+      }
+    };
+  }
+
+  /** @type {import('./tipos.js').TermoFn} */
+  const termo = Object.assign(lerTermo, { textos: textosDoLocal, padrao: TERMOS_PADRAO });
+
   /** @type {import('./tipos.js').ApiNucleo} */
   const api = {
     modulos: {
@@ -1251,7 +1313,8 @@
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
     telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel },
     resolverFuncao,
-    qr: { URL_BASE: URL_BASE_QR, urlCanonica, lerUrl: lerUrlQr }
+    qr: { URL_BASE: URL_BASE_QR, urlCanonica, lerUrl: lerUrlQr },
+    termo
   };
 
   root.Vilasa = api;

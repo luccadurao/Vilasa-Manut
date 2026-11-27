@@ -466,10 +466,25 @@ async function carregarObrasEMontarSeletorTopo() {
   injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal);
 }
 
+function textosDoSeletorDeObra() {
+  if (window.Vilasa && Vilasa.termo && typeof Vilasa.termo.textos === 'function') {
+    return Vilasa.termo.textos();
+  }
+  return {
+    etiqueta: 'Frente / Obra Ativa:',
+    consolidado: 'TODAS AS OBRAS (CONSOLIDADO)',
+    selecionada: 'Obra Selecionada',
+    unica(codigo, nome) {
+      return codigo ? `Obra: ${codigo} - ${nome || ''}` : 'Obra: Matriz Geral';
+    }
+  };
+}
+
 function obterNomeObraAtiva() {
-  if (!obraAtivaId || obraAtivaId === 'TODAS') return 'TODAS AS OBRAS (CONSOLIDADO)';
+  const textos = textosDoSeletorDeObra();
+  if (!obraAtivaId || obraAtivaId === 'TODAS') return textos.consolidado;
   const ob = (cacheObras || []).find(o => String(o.id) === String(obraAtivaId));
-  return ob ? `${ob.codigo} - ${ob.nome}` : 'Obra Selecionada';
+  return ob ? `${ob.codigo} - ${ob.nome}` : textos.selecionada;
 }
 
 function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
@@ -483,18 +498,20 @@ function injetarSeletorObraNoHeader(obrasLiberadas, temAcessoGlobal) {
     headerUser.appendChild(container);
   }
 
+  const textos = textosDoSeletorDeObra();
   const podeVerConsolidado = temAcessoGlobal || obrasLiberadas.length > 1;
   if (obrasLiberadas.length <= 1 && !podeVerConsolidado) {
     const unica = obrasLiberadas[0];
-    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 Obra: ${unica ? `${esc(unica.codigo)} - ${esc(unica.nome)}` : 'Matriz Geral'}</div>`;
+    const rotulo = textos.unica(unica ? unica.codigo : '', unica ? unica.nome : '');
+    container.innerHTML = `<div class="text-[11px] font-bold text-amber-700">📍 ${esc(rotulo)}</div>`;
     return;
   }
 
   container.innerHTML = `
-    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Frente / Obra Ativa:</label>
+    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">${esc(textos.etiqueta)}</label>
     <select id="selectObraGlobalTopo" onchange="trocarObraAtivaGlobal(this.value)"
       class="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-extrabold">
-      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 TODAS AS OBRAS (CONSOLIDADO)</option>` : ''}
+      ${podeVerConsolidado ? `<option value="TODAS" ${obraAtivaId === 'TODAS' ? 'selected' : ''}>🌐 ${esc(textos.consolidado)}</option>` : ''}
       ${obrasLiberadas.map(o => `<option value="${o.id}" ${obraAtivaId === o.id ? 'selected' : ''}>📍 ${esc(o.codigo)} - ${esc(o.nome)}</option>`).join('')}
     </select>
   `;
