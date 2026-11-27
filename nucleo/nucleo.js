@@ -450,9 +450,14 @@
     const perfil = copiarPerfil(brutoPerfil);
     if (!perfil) return null;
     const origem = entrada.perfil && typeof entrada.perfil === 'object' ? entrada : entrada;
+    const empresa = origem.empresa && typeof origem.empresa === 'object' ? origem.empresa : null;
+    const empresaIdBruto = empresa && empresa.id != null && empresa.id !== ''
+      ? empresa.id
+      : origem.empresa_id;
     return {
       perfil,
-      empresa: origem.empresa && typeof origem.empresa === 'object' ? origem.empresa : null,
+      empresa,
+      empresa_id: empresaIdBruto != null && empresaIdBruto !== '' ? String(empresaIdBruto) : null,
       modulos: Array.isArray(origem.modulos) ? origem.modulos : null,
       permissoes: Array.isArray(origem.permissoes) ? origem.permissoes.map((/** @type {unknown} */ id) => String(id)) : null,
       flags: copiarFlags(origem.flags),
@@ -475,6 +480,10 @@
       ativo: sessao.perfil.ativo
     };
     if (sessao.empresa) usuario.empresa = sessao.empresa;
+    if (sessao.empresa_id) usuario.empresa_id = sessao.empresa_id;
+    else if (sessao.empresa && sessao.empresa.id != null && sessao.empresa.id !== '') {
+      usuario.empresa_id = String(sessao.empresa.id);
+    }
     if (Array.isArray(sessao.modulos)) usuario.modulos = sessao.modulos;
     if (Array.isArray(sessao.permissoes)) usuario.permissoes = sessao.permissoes;
     return usuario;
@@ -870,6 +879,101 @@
     return `${URL_BASE_QR}?id=${encodeURIComponent(texto)}`;
   }
 
+  const CHAVE_EMPRESA = 'vilasa_empresa_codigo';
+  const CODIGO_EMPRESA_PADRAO = 'VILASA';
+
+  /**
+   * Código digitado no login. Vazio vira a empresa 1.
+   * @param {unknown} texto
+   * @returns {string}
+   */
+  function codigoEmpresa(texto) {
+    const limpo = String(texto == null ? '' : texto).trim().toUpperCase();
+    return limpo || CODIGO_EMPRESA_PADRAO;
+  }
+
+  /**
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @returns {string | null}
+   */
+  function lerEmpresaLembrada(storage) {
+    const limpo = String(storage.getItem(CHAVE_EMPRESA) || '').trim().toUpperCase();
+    return limpo || null;
+  }
+
+  /**
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @param {unknown} codigo
+   */
+  function lembrarEmpresa(storage, codigo) {
+    storage.setItem(CHAVE_EMPRESA, codigoEmpresa(codigo));
+  }
+
+  /**
+   * No primeiro acesso o campo aparece. Depois fica a empresa lembrada,
+   * com o campo só se a pessoa pedir para trocar.
+   * @param {import('./tipos.js').ArmazemSessao} storage
+   * @param {boolean} [trocando]
+   */
+  function estadoLoginEmpresa(storage, trocando) {
+    const lembrada = lerEmpresaLembrada(storage);
+    const mostrarCampo = !lembrada || trocando === true;
+    return {
+      lembrada,
+      mostrarCampo,
+      mostrarLembrada: !!lembrada && trocando !== true,
+      codigo: lembrada || ''
+    };
+  }
+
+  /**
+   * @param {string} search
+   * @param {string} nome
+   * @returns {string}
+   */
+  function parametroUrl(search, nome) {
+    const texto = String(search || '').replace(/^\?/, '');
+    const partes = texto.split('&');
+    for (let i = 0; i < partes.length; i += 1) {
+      const parte = partes[i];
+      if (!parte) continue;
+      const idx = parte.indexOf('=');
+      const bruto = idx === -1 ? parte : parte.slice(0, idx);
+      let chave = bruto;
+      try { chave = decodeURIComponent(bruto.replace(/\+/g, ' ')); } catch (erro) { chave = bruto; }
+      if (chave !== nome) continue;
+      const valorBruto = idx === -1 ? '' : parte.slice(idx + 1);
+      try { return decodeURIComponent(valorBruto.replace(/\+/g, ' ')); } catch (erro) { return valorBruto; }
+    }
+    return '';
+  }
+
+  /**
+   * A máquina só entra pelo id. Sem id, a etiqueta antiga não vira campo para digitar.
+   * @param {string} search
+   */
+  function lerUrlQr(search) {
+    const id = parametroUrl(search, 'id').trim();
+    if (!id) {
+      return {
+        id: '',
+        etiquetaAntiga: true,
+        mensagem: 'Etiqueta antiga: peça a reimpressão',
+        tag: '',
+        nome: '',
+        un: ''
+      };
+    }
+    return {
+      id,
+      etiquetaAntiga: false,
+      mensagem: '',
+      tag: parametroUrl(search, 'tag'),
+      nome: parametroUrl(search, 'nome'),
+      un: parametroUrl(search, 'un') || 'H'
+    };
+  }
+
   /**
    * @returns {string}
    */
@@ -1131,6 +1235,12 @@
     sessao: {
       CHAVE: CHAVE_SESSAO,
       CHAVE_ANTERIOR: CHAVE_SESSAO_ANTERIOR,
+      CHAVE_EMPRESA,
+      CODIGO_EMPRESA_PADRAO,
+      codigoEmpresa,
+      lerEmpresaLembrada,
+      lembrarEmpresa,
+      estadoLoginEmpresa,
       embrulhar: embrulharSessao,
       gravar: gravarSessao,
       ler: lerSessao,
@@ -1141,7 +1251,7 @@
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
     telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel },
     resolverFuncao,
-    qr: { URL_BASE: URL_BASE_QR, urlCanonica }
+    qr: { URL_BASE: URL_BASE_QR, urlCanonica, lerUrl: lerUrlQr }
   };
 
   root.Vilasa = api;

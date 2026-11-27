@@ -42,8 +42,8 @@
       </button>
     </div>
 
-    <!-- Identificação Rápida e Leitura Obrigatória -->
-    <div class="space-y-3 text-xs">
+    <!-- Identificação Rápida e Leitura Obrigatória. Sem id na URL este bloco fica escondido. -->
+    <div id="qrCorpo" class="space-y-3 text-xs">
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block font-black uppercase text-slate-400 mb-1">Sua Matrícula ou Nome</label>
@@ -117,8 +117,24 @@
     // ========================================================================
     const CARGOS_QUE_ABREM_OS = ['mecanico', 'encarregado', 'pcm', 'engenheiro', 'admin'];
 
-    let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null };
+    let equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null, empresa_id: null };
     let enviandoQR = false;
+
+    function publicarEquipamentoQR() { window.equipAtualQR = equipAtualQR; }
+
+    function mostrarEtiquetaAntiga() {
+      equipAtualQR = { id: '', tag: '', nome: '', unidade_medida: 'H', horimetro_atual: 0, obra_id: null, empresa_id: null };
+      publicarEquipamentoQR();
+      document.getElementById('qrTagBadge').innerText = '—';
+      document.getElementById('qrNomeEquip').innerText = 'Etiqueta antiga: peça a reimpressão';
+      document.getElementById('qrAbasContainer')?.classList.add('hidden');
+      document.getElementById('qrCorpo')?.classList.add('hidden');
+      const aviso = document.getElementById('qrAvisoPerfil');
+      if (aviso) {
+        aviso.textContent = 'Etiqueta antiga: peça a reimpressão';
+        aviso.classList.remove('hidden');
+      }
+    }
 
     // Mesmo papel do core.js (o portal não carrega o core): garante o cliente do banco.
     function obterClienteSupabase() {
@@ -223,33 +239,42 @@
     }
 
     async function carregarEquipamentoDoQR() {
+      const leitura = window.Vilasa && Vilasa.qr
+        ? Vilasa.qr.lerUrl(window.location.search)
+        : { id: '', etiquetaAntiga: true };
+      if (!leitura || leitura.etiquetaAntiga || !leitura.id) {
+        mostrarEtiquetaAntiga();
+        return;
+      }
+
       configurarTelaPorPerfil();
-      const params = new URLSearchParams(window.location.search);
-      equipAtualQR.id = params.get('id') || '';
-      equipAtualQR.tag = (params.get('tag') || 'EQUIP').toUpperCase();
-      equipAtualQR.nome = (params.get('nome') || 'Equipamento').toUpperCase();
-      equipAtualQR.unidade_medida = (params.get('un') || 'H').toUpperCase();
+      equipAtualQR.id = leitura.id;
+      equipAtualQR.tag = (leitura.tag || '').toUpperCase();
+      equipAtualQR.nome = (leitura.nome || 'Equipamento').toUpperCase();
+      equipAtualQR.unidade_medida = (leitura.un || 'H').toUpperCase();
+      publicarEquipamentoQR();
 
       // 1) Última leitura guardada neste celular (vale mesmo sem sinal)
       try {
         const salvo = JSON.parse(localStorage.getItem(chaveCacheEquip()) || 'null');
-        if (salvo) equipAtualQR = { ...equipAtualQR, ...salvo };
+        if (salvo && salvo.id === equipAtualQR.id) equipAtualQR = { ...equipAtualQR, ...salvo };
       } catch (e) {}
 
-      // 2) Leitura mais recente do servidor (quando houver sinal)
+      // 2) Leitura mais recente do servidor (quando houver sinal). Só o id.
       const cliente = obterClienteSupabase();
       if (navigator.onLine && cliente) {
         try {
-          const { data, error } = await cliente.rpc('qr_equipamento', { p_id: equipAtualQR.id || null, p_tag: equipAtualQR.id ? null : equipAtualQR.tag });
-          if (!error && data) {
+          const { data, error } = await cliente.rpc('qr_equipamento', { p_id: equipAtualQR.id });
+          if (!error && data && data.id) {
             equipAtualQR = { ...equipAtualQR, ...data };
             guardarCacheEquip();
           }
         } catch (e) {}
       }
 
-      document.getElementById('qrTagBadge').innerText = equipAtualQR.tag;
-      document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome;
+      publicarEquipamentoQR();
+      document.getElementById('qrTagBadge').innerText = equipAtualQR.tag || '—';
+      document.getElementById('qrNomeEquip').innerText = equipAtualQR.nome || 'Equipamento';
       atualizarTextoHorimetro();
       atualizarBadgeStatusRede();
     }
@@ -280,6 +305,7 @@
       equipAtualQR.horimetro_atual = horNovo;
       equipAtualQR.horimetro_atualizado_em = new Date().toISOString();
       guardarCacheEquip();
+      publicarEquipamentoQR();
       atualizarTextoHorimetro();
       return { ok: true, offline: r.offline };
     }
@@ -308,7 +334,7 @@
 
       enviandoQR = true;
       try {
-        const rOS = await gravarDadosOfflineSafe('ordens_servico', 'INSERT', {
+        const dadosOS = {
           equipamento_id: equipAtualQR.id,
           obra_id: equipAtualQR.obra_id || null,
           status: ehMecanico ? 'em_execucao' : 'aberta',
@@ -318,7 +344,9 @@
           mecanico_nome: ehMecanico ? usuarioNome : '',
           horimetro_os: horNovo,
           aberta_em: new Date().toISOString()
-        });
+        };
+        if (equipAtualQR.empresa_id) dadosOS.empresa_id = equipAtualQR.empresa_id;
+        const rOS = await gravarDadosOfflineSafe('ordens_servico', 'INSERT', dadosOS);
         if (rOS.error) return mostrarStatusQR('❌ A OS NÃO foi registrada. Tente novamente.', 'erro');
 
         const rHor = await gravarLeituraHorimetro(horNovo, usuarioNome);

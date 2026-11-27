@@ -30,6 +30,18 @@
       </div>
 
       <form onsubmit="realizarLogin(event)" class="space-y-4">
+        <div id="loginEmpresaBloco" class="space-y-1">
+          <div id="loginEmpresaLembrada" class="hidden flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+            <span>Empresa <span id="loginEmpresaCodigo" class="font-black text-slate-700"></span></span>
+            <button type="button" onclick="abrirTrocaEmpresa()" class="text-[10px] uppercase tracking-wide text-slate-400 hover:text-amber-600 font-bold">Trocar</button>
+          </div>
+          <div id="loginEmpresaCampo">
+            <label class="block text-[11px] font-black uppercase text-slate-600 mb-1" for="loginEmpresa">Empresa</label>
+            <input id="loginEmpresa" type="text" autocapitalize="characters" autocorrect="off" spellcheck="false"
+              placeholder="VILASA"
+              class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white" />
+          </div>
+        </div>
         <div>
           <label class="block text-[11px] font-black uppercase text-slate-600 mb-1">Matrícula / Usuário</label>
           <input id="loginMatricula" type="text" required autocapitalize="none" autocorrect="off" spellcheck="false"

@@ -170,6 +170,41 @@ function apagarSessaoLocal(limparObra) {
   if (limparObra) localStorage.removeItem('vilasa_obra_ativa_v2');
 }
 
+let trocaEmpresaAberta = false;
+
+function prepararCampoEmpresa(trocando) {
+  trocaEmpresaAberta = !!trocando;
+  const api = sessaoVilasa();
+  const estado = api && api.estadoLoginEmpresa
+    ? api.estadoLoginEmpresa(localStorage, trocaEmpresaAberta)
+    : { lembrada: null, mostrarCampo: true, mostrarLembrada: false, codigo: '' };
+  document.getElementById('loginEmpresaCampo')?.classList.toggle('hidden', !estado.mostrarCampo);
+  document.getElementById('loginEmpresaLembrada')?.classList.toggle('hidden', !estado.mostrarLembrada);
+  const rotulo = document.getElementById('loginEmpresaCodigo');
+  if (rotulo) rotulo.textContent = estado.codigo || '';
+  const input = document.getElementById('loginEmpresa');
+  if (input && estado.mostrarCampo && !input.value && estado.codigo) input.value = estado.codigo;
+}
+
+function abrirTrocaEmpresa() {
+  const input = document.getElementById('loginEmpresa');
+  if (input) input.value = '';
+  prepararCampoEmpresa(true);
+  input?.focus();
+}
+
+function codigoEmpresaDoLogin() {
+  const api = sessaoVilasa();
+  const campo = document.getElementById('loginEmpresaCampo');
+  const visivel = !campo || !campo.classList.contains('hidden');
+  const texto = visivel
+    ? (document.getElementById('loginEmpresa')?.value || '')
+    : ((api && api.lerEmpresaLembrada && api.lerEmpresaLembrada(localStorage)) || '');
+  if (api && api.codigoEmpresa) return api.codigoEmpresa(texto);
+  const limpo = String(texto || '').trim().toUpperCase();
+  return limpo || 'VILASA';
+}
+
 function erroDeRedeAuth(err) {
   if (!err) return false;
   const t = String((err.name || '') + ' ' + (err.message || '')).toLowerCase();
@@ -183,13 +218,14 @@ async function realizarLogin(event) {
 
   const loginDigitado = (document.getElementById('loginMatricula')?.value || '').trim();
   const senhaDigitada = (document.getElementById('loginSenha')?.value || '').trim();
+  const codigoEmpresa = codigoEmpresaDoLogin();
   if (!loginDigitado || !senhaDigitada) return alert('Informe usuário e senha!');
   if (!navigator.onLine) {
     return alert('📵 Sem sinal. O primeiro acesso neste aparelho precisa de internet. Depois dele o sistema funciona sem sinal.');
   }
 
   try {
-    const rEmail = await clienteDB.rpc('resolver_login', { p_texto: loginDigitado });
+    const rEmail = await clienteDB.rpc('resolver_login', { p_texto: loginDigitado, p_empresa: codigoEmpresa });
     if (rEmail.error) {
       return alert(erroDeRedeAuth(rEmail.error)
         ? 'Sem conexão com o servidor. Tente de novo com sinal.'
@@ -215,6 +251,9 @@ async function realizarLogin(event) {
       return alert('Seu cadastro está inativo ou incompleto. Procure o administrador.');
     }
 
+    const apiSessao = sessaoVilasa();
+    if (apiSessao && apiSessao.lembrarEmpresa) apiSessao.lembrarEmpresa(localStorage, codigoEmpresa);
+    else localStorage.setItem('vilasa_empresa_codigo', codigoEmpresa);
     guardarPerfilNaSessao(perfil);
     await inicializarSistemaPosLogin();
   } catch (e) {
@@ -246,6 +285,7 @@ async function encerrarSessaoSemPerguntar() {
 async function restaurarSessaoSalva() {
   obterClienteSupabase();
   const mostrarLogin = () => {
+    prepararCampoEmpresa(false);
     document.getElementById('telaLogin')?.classList.remove('hidden');
     document.getElementById('appPrincipal')?.classList.add('hidden');
   };
