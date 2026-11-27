@@ -24,13 +24,8 @@ function obterClienteSupabase() {
   return null;
 }
 
-// 1. MATRIZ DE PERMISSÕES POR CARGO (RBAC) - SEM RELATÓRIOS P/ OPERADOR, MECÂNICO E ENCARREGADO
+// 1. MATRIZ DE PERMISSÕES POR CARGO (RBAC) - SEM RELATÓRIOS P/ MECÂNICO E ENCARREGADO
 const MATRIZ_PERMISSOES_CARGOS = {
-  operador: {
-    label: 'Operador de Equipamento',
-    abas_visiveis: ['os'],
-    acoes: ['lancar_horimetro_qr']
-  },
   mecanico: {
     label: 'Mecânico / Eletricista',
     abas_visiveis: ['os', 'preventivas', 'estoque'],
@@ -332,7 +327,7 @@ async function restaurarSessaoSalva() {
   }
 }
 
-// Monta a barra de relatórios e oculta automaticamente para Operador, Mecânico e Encarregado
+// Monta a barra de relatórios e oculta automaticamente para Mecânico e Encarregado
 function montarBotoesBarraExportacaoUniversal() {
   const elTit = document.getElementById('tituloAbaExportacaoUniversal');
   if (!elTit) return;
