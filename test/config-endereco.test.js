@@ -16,7 +16,7 @@ const REF_HOMOLOGACAO = 'zqjgruwmqomgguxoxiuv';
  * @param {string} hostname
  */
 function abrirEm(hostname) {
-  /** @type {Record<string, any>} */
+  /** @type {any[]} */
   const criados = [];
   const sandbox = {
     console: { warn() {} },
@@ -73,6 +73,15 @@ test('cada chave pertence ao projeto da própria URL e é só anon/publishable',
   // Nenhum endereço aparece em dois clientes.
   const todos = sandbox.AMBIENTES.producao.flatMap((a) => a.enderecos);
   assert.equal(new Set(todos).size, todos.length);
+});
+
+test('a lista de ambientes não pode ser trocada depois de carregada', () => {
+  const { sandbox } = abrirEm('localhost');
+  assert.equal(Object.isFrozen(sandbox.AMBIENTES), true);
+  assert.equal(Object.isFrozen(sandbox.AMBIENTES.homologacao), true);
+  for (const amb of sandbox.AMBIENTES.producao) {
+    assert.equal(Object.isFrozen(amb) && Object.isFrozen(amb.enderecos), true, amb.id);
+  }
 });
 
 test('sem a biblioteca do Supabase (offline) o config.js não quebra', () => {

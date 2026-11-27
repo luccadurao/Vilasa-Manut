@@ -31,6 +31,12 @@ var AMBIENTES = {
   ]
 };
 
+// Congelado: nenhum outro script troca o banco depois que a página abriu.
+Object.freeze(AMBIENTES.homologacao);
+AMBIENTES.producao.forEach(function (amb) { Object.freeze(amb.enderecos); Object.freeze(amb); });
+Object.freeze(AMBIENTES.producao);
+Object.freeze(AMBIENTES);
+
 /**
  * Escolhe o ambiente pelo hostname. Comparação exata, sem curinga:
  * "vilasa-manut-git-x.vercel.app" (preview) não é produção.

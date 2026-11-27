@@ -53,6 +53,12 @@ test('trocar usuário ou local avisa nucleo.contexto_mudou; cache não avisa', (
 test('ninguém declara o estado compartilhado com let/const/var', () => {
   const declaracao = new RegExp(`^\\s*(let|const|var)\\s+(${CAMPOS.join('|')})\\b`, 'm');
   const arquivos = fs.readdirSync(raiz).filter((n) => n.endsWith('.js') || n.endsWith('.html'));
+  for (const pasta of ['nucleo', ...fs.readdirSync(path.join(raiz, 'modulos')).map((m) => path.join('modulos', m))]) {
+    for (const n of fs.readdirSync(path.join(raiz, pasta))) {
+      const rel = path.join(pasta, n);
+      if (n.endsWith('.js') && rel !== path.join('nucleo', 'contexto.js')) arquivos.push(rel);
+    }
+  }
   for (const nome of arquivos) {
     const texto = fs.readFileSync(path.join(raiz, nome), 'utf8');
     assert.equal(declaracao.test(texto), false, `${nome} declara um campo do contexto`);
