@@ -1,16 +1,25 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { carregarVilasa } = require('../scripts/carregar-sandbox');
-const { validarRegistros, validarRepositorio } = require('../scripts/validar-manifestos');
+const { validarRegistros, validarRepositorio, validarCatalogoSql } = require('../scripts/validar-manifestos');
 
 const raiz = path.resolve(__dirname, '..');
 
 test('os manifestos do repositório passam no validador', () => {
   const erros = validarRepositorio(raiz);
   assert.deepEqual(erros, []);
+});
+
+test('o validador recusa catálogo SQL sem uma permissão do manifesto', () => {
+  const { Vilasa } = carregarVilasa(raiz);
+  const sql = fs.readFileSync(path.join(raiz, 'banco', 'migracoes', '0002_plataforma_empresas_modulos.sql'), 'utf8')
+    .replace("('os.abrir', 'os', 'Abrir ordem de serviço'),\n", '');
+  const erros = validarCatalogoSql(sql, Vilasa.modulos.lista(), Vilasa.permissoes.matrizTraduzida());
+  assert.ok(erros.some((erro) => erro.includes('os.abrir')));
 });
 
 test('o validador recusa ciclo, prefixo errado e script ausente', () => {

@@ -130,7 +130,10 @@
     }
 
     function lerSessaoLocal() {
-      try { return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null'); } catch (e) { return null; }
+      try {
+        if (window.Vilasa && Vilasa.sessao) return Vilasa.sessao.usuarioDe(Vilasa.sessao.ler(localStorage));
+        return JSON.parse(localStorage.getItem('vilasa_sessao_v2') || 'null');
+      } catch (e) { return null; }
     }
     function cargosDaSessao() {
       const s = lerSessaoLocal();
