@@ -141,7 +141,11 @@ test('manifesto que não responde vira falha por tempo e a página segue', async
   relogio[0]();
   await sandbox.Plataforma.modulos.manifestosProntos();
   assert.match(sandbox.Plataforma.modulos.manifestosComFalha()[0].motivo, /tempo esgotado/);
-  // O arquivo que chega atrasado não muda o resultado nem quebra.
+  // Chegou atrasado sem registrar: continua falha.
   doc.injetados[0].onload();
   assert.equal(sandbox.Plataforma.modulos.manifestosComFalha().length, 1);
+  // Chegou atrasado e registrou: deixa de ser falha.
+  vm.runInContext(ler('modulos/os/manifesto.js'), contexto, { filename: 'modulos/os/manifesto.js' });
+  doc.injetados[0].onload();
+  assert.equal(sandbox.Plataforma.modulos.manifestosComFalha().length, 0);
 });

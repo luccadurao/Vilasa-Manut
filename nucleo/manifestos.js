@@ -79,7 +79,13 @@
       script.async = false;
       script.onload = () => {
         limpar();
-        if (terminou) return;
+        if (terminou) {
+          // Chegou depois do tempo limite: se registrou, deixa de ser falha
+          // (a fila volta a andar; o módulo entra ao recarregar a carga).
+          const i = falhas.findIndex((f) => f.id === id && /tempo esgotado/.test(f.motivo));
+          if (i >= 0 && registrado()) falhas.splice(i, 1);
+          return;
+        }
         if (!registrado()) falhas.push({ id, motivo: 'o arquivo carregou, mas não registrou o manifesto' });
         resolve();
       };
