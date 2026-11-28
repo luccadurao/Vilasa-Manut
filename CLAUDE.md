@@ -31,8 +31,14 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   `AMBIENTES.producao` usam produção; preview, `localhost` e endereço novo caem
   na homologação. Cliente novo em produção = endereço novo nessa lista, com
   `site`, `empresa_padrao` e `marca` dele.
-- `modulos/<id>/manifesto.js` — manifesto declarativo de cada módulo
-  (dependências, permissões, cargos padrão, telas, relatórios, ações de QR).
+- `modulos/<id>/manifesto.js` — manifesto declarativo de cada módulo, no
+  contrato v2 (`nucleo/tipos.js`): dependências (`depende.nucleo` sempre),
+  permissões, cargos padrão, telas, relatórios, ações de QR e também as
+  `tabelas` e `rpcs` de que é dono, os serviços que `fornece` e `consome`,
+  `eventos`, `config` e `offline`. `modulos/indice.js` lista os módulos.
+  `scripts/contrato-v2.js` (no validador) recusa tabela sem dono ou com dois
+  donos, `consome` sem fornecedor nas dependências, evento ouvido que ninguém
+  emite e função citada que não existe.
   A tela do módulo ainda vive no arquivo da raiz que o manifesto aponta
   (`os_rep.js`, `frota.js`, `pcm_sap.js`, `estoque.js`, `diesel.js`, `kpis.js`, `admin.js`).
 - `offline_sync.js` — fila offline (por empresa e módulo) e cache.

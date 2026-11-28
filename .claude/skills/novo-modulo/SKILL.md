@@ -16,12 +16,18 @@ módulo que depende de outro.
 - Permissões no formato `<id>.<acao>` (ex.: `pneus.ver`, `pneus.gerenciar`) e
   quais cargos recebem cada uma por padrão (`cargos_padrao`).
 - Telas, relatórios e ações de QR que o módulo vai ter.
-- Tabelas novas no banco.
+- Tabelas e RPCs novas no banco (o módulo é dono delas: `tabelas`, `rpcs`).
+- O que usa de outro módulo (`consome`) e o que oferece (`fornece`). Ler
+  tabela de outro módulo direto não vale: peça o serviço dele. Cadastros comuns
+  (local, ativo) são do núcleo.
+- Eventos que emite e ouve, configuração por empresa (`config`) e o que vai
+  para a fila offline (`offline`).
 
 ## 2. Arquivos
 
-1. `modulos/<id>/manifesto.js` — siga o tipo `Manifesto`; comece com
-   `estagio: 'beta'` e `versao: '0.1.0'`.
+1. `modulos/<id>/manifesto.js` — siga o tipo `Manifesto` (contrato v2); comece
+   com `estagio: 'beta'` e `versao: '0.1.0'`, `depende: { nucleo: '^1.0.0', … }`
+   e `tabelas` (mesmo que vazia). Acrescente o id em `modulos/indice.js`.
 2. Script da tela: `modulos/<id>/<id>.js` (módulo novo não vai para a raiz).
    Use `Plataforma.permissoes.pode(...)` para cada ação e `Plataforma.termo(...)`
    para textos como local/ativo (nunca "Obra" ou nome de cliente fixo). Chave
@@ -30,7 +36,10 @@ módulo que depende de outro.
 3. Inclua o `<script src="modulos/<id>/manifesto.js">` no `index.html` (e no
    `qr.html` se tiver ação de QR), junto dos outros manifestos.
 4. `sw.js`: o manifesto entra em `ARQUIVOS_NUCLEO`; o script do módulo é
-   precacheado pelo contrato, não precisa entrar lá.
+   precacheado pelo contrato, não precisa entrar lá. Se o módulo usa a fila
+   offline, acrescente as tabelas e chaves dele em `MODULO_POR_TABELA` e
+   `MODULO_POR_CHAVE` do `offline_sync.js` (até a fase 3, o validador exige que
+   batam com `offline` do manifesto).
 5. Banco: use a skill `nova-migracao` para criar as tabelas e semear o módulo em
    `modulos`, as permissões em `permissoes` e a matriz em `cargo_permissoes`.
 6. Testes em `test/`: o manifesto valida, o resolver aceita e recusa conforme
