@@ -8,6 +8,7 @@ const vm = require('node:vm');
 const { carregarPlataforma } = require('../scripts/carregar-sandbox');
 
 const raiz = path.resolve(__dirname, '..');
+const { PARTES_DO_NUCLEO: PARTES } = require('../scripts/carregar-sandbox');
 
 test('evento local é síncrono e também acorda o ouvinte do manifesto', () => {
   const { Plataforma, sandbox } = carregarPlataforma(raiz, { manifestos: false });
@@ -70,7 +71,7 @@ test('a URL canônica do QR identifica a máquina só pelo id, no site do ambien
 });
 
 test('o núcleo e as telas não têm endereço nem nome de cliente fixo', () => {
-  for (const rel of ['nucleo/nucleo.js', 'nucleo/qr.js', 'nucleo/contexto.js', 'nucleo/produto.js', 'frota.js', 'core.js', 'index.html', 'qr.html', 'manifest.webmanifest']) {
+  for (const rel of [...PARTES.map((p) => `nucleo/${p}.js`), 'nucleo/nucleo.js', 'nucleo/qr.js', 'nucleo/contexto.js', 'nucleo/produto.js', 'frota.js', 'core.js', 'index.html', 'qr.html', 'manifest.webmanifest']) {
     const texto = fs.readFileSync(path.join(raiz, rel), 'utf8');
     assert.equal(texto.includes('vilasa-manut.vercel.app'), false, `${rel}: endereço fixo`);
     assert.equal(/VILASA/.test(texto), false, `${rel}: nome de cliente fixo`);

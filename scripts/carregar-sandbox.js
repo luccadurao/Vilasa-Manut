@@ -4,6 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+/** Partes do núcleo, na ordem de carga (antes de nucleo/nucleo.js). */
+const PARTES_DO_NUCLEO = ['base', 'resolver', 'permissoes', 'sessao', 'telas', 'marca', 'carregador', 'termos'];
+
 /**
  * Carrega o núcleo (e, por padrão, os manifestos) num sandbox, sem navegador e sem rede.
  * @param {string} raiz
@@ -22,6 +25,7 @@ function carregarPlataforma(raiz, opcoes = {}) {
   }
 
   rodar('nucleo/produto.js');
+  for (const parte of PARTES_DO_NUCLEO) rodar(`nucleo/${parte}.js`);
   rodar('nucleo/nucleo.js');
   rodar('nucleo/contexto.js');
   rodar('nucleo/ctx.js');
@@ -40,4 +44,4 @@ function carregarPlataforma(raiz, opcoes = {}) {
   return { Plataforma: sandbox.Plataforma, sandbox, contexto };
 }
 
-module.exports = { carregarPlataforma };
+module.exports = { carregarPlataforma, PARTES_DO_NUCLEO };
