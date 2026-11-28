@@ -730,8 +730,10 @@
       }
     }
     for (const manifesto of registros) {
-      const mapa = manifesto.extensoes && manifesto.extensoes.ouve;
-      const nomeFn = mapa && mapa[nome];
+      // Contrato v2: eventos.ouve; o antigo extensoes.ouve continua aceito.
+      const v2 = manifesto.eventos && manifesto.eventos.ouve;
+      const v1 = manifesto.extensoes && manifesto.extensoes.ouve;
+      const nomeFn = (v2 && v2[nome]) || (v1 && v1[nome]);
       if (!nomeFn) continue;
       const fn = resolverFuncao(nomeFn, manifesto.id);
       if (typeof fn !== 'function') continue;
@@ -1291,6 +1293,23 @@
     scripts: [],
     permissoes: {
       'relatorios.exportar': 'Exportar e imprimir os relatórios da tela atual'
+    },
+    // Contrato v2: o que é da plataforma (empresa, acesso, locais e ativos).
+    tabelas: [
+      'empresas', 'modulos', 'empresa_modulos', 'empresa_modulos_historico',
+      'permissoes', 'cargos', 'cargo_permissoes', 'plataforma_usuarios',
+      'migracoes_aplicadas', 'configuracoes_plataforma', 'configuracoes_sistema',
+      'perfis_usuarios', 'locais', 'locais_niveis', 'obras', 'obras_base',
+      'tipos_ativo', 'equipamentos', 'equipamentos_historico', 'ativos'
+    ],
+    rpcs: ['resolver_login', 'meu_perfil', 'qr_equipamento', 'rls_auto_enable'],
+    fornece: {
+      'nucleo.locais': 'Locais da empresa e o local ativo',
+      'nucleo.ativos': 'Ativos (equipamentos) da empresa'
+    },
+    offline: {
+      tabelas: ['equipamentos', 'obras'],
+      cache: ['obras_ativas', 'obras', 'equipamentos']
     },
     cargos_padrao: {
       almoxarife: ['relatorios.exportar'],
