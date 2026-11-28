@@ -270,6 +270,10 @@
     if (!N.estado.cargaPromise) {
       const pessoa = usuario === undefined ? root.usuarioLogado : usuario;
       N.estado.cargaPromise = (async () => {
+        // Manifestos injetados pelo índice (nucleo/manifestos.js): resolver
+        // antes de todos chegarem bloquearia módulo contratado.
+        const P = root.Plataforma;
+        if (P && P.modulos && typeof P.modulos.manifestosProntos === 'function') await P.modulos.manifestosProntos();
         const resolucao = resolverEGuardar(contratoDe(pessoa));
         const resultado = await carregar(resolucao, registros.slice(), {
           carregarScript: carregarScriptNoDocumento,

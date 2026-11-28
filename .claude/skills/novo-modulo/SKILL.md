@@ -38,13 +38,16 @@ módulo que depende de outro.
    para textos como local/ativo (nunca "Obra" ou nome de cliente fixo). Chave
    no localStorage só por `PlataformaProduto.chave(...)`. Lançamento de campo passa pela fila do
    `offline_sync.js`, levando `empresa_id` e `modulo`.
-3. Inclua o `<script src="modulos/<id>/manifesto.js">` no `index.html` e no
-   `qr.html` (sempre nos dois: o validador exige), junto dos outros manifestos.
-4. `sw.js`: o manifesto entra em `ARQUIVOS_NUCLEO`; o script do módulo é
-   precacheado pelo contrato, não precisa entrar lá. Se o módulo usa a fila
-   offline, acrescente as tabelas e chaves dele em `MODULO_POR_TABELA` e
-   `MODULO_POR_CHAVE` do `offline_sync.js` (até a fase 3, o validador exige que
-   batam com `offline` do manifesto).
+3. Páginas e service worker: não mexa. O `index.html` e o `qr.html` carregam
+   os manifestos pelo índice (`nucleo/manifestos.js`), e o `sw.js` monta o
+   precache com `PLATAFORMA_MODULOS`. O validador recusa manifesto fixo nesses
+   três arquivos.
+4. Fila offline: não mexa no `offline_sync.js`. O dono de cada item vem de
+   `offline.tabelas`, `offline.rpcs` e `offline.cache` do manifesto (e, como
+   reserva, de `tabelas`/`rpcs`). Ação de QR: o botão do `qr.html` chama
+   `executarAcaoQr('<id da ação>')`, que acha a `funcao` declarada no manifesto
+   pelo `Plataforma.resolverFuncao`. O portal não carrega o script do módulo,
+   então hoje essa função mora no `qr.html`.
 5. Banco: use a skill `nova-migracao` para criar as tabelas e semear o módulo em
    `modulos`, as permissões em `permissoes` e a matriz em `cargo_permissoes`.
 6. Testes em `test/`: o manifesto valida, o resolver aceita e recusa conforme

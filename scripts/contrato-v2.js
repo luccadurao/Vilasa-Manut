@@ -165,11 +165,24 @@ function validarContratoV2(manifestos, fontes) {
   }
   for (const id of indice) {
     if (!fontes.pastas.includes(id)) erros.push(`Índice: "${id}" não tem modulos/${id}/manifesto.js.`);
-    const rel = `modulos/${id}/manifesto.js`;
-    if (!fontes.paginas.index.includes(`src="${rel}"`)) erros.push(`Índice: index.html não carrega ${rel}.`);
-    if (!fontes.paginas.qr.includes(`src="${rel}"`)) erros.push(`Índice: qr.html não carrega ${rel}.`);
-    if (!fontes.paginas.sw.includes(`'./${rel}'`)) erros.push(`Índice: sw.js não guarda ${rel} no precache.`);
   }
+  // As páginas carregam o índice e o carregador (nucleo/manifestos.js), nunca
+  // uma lista fixa de manifestos; o sw.js monta o precache a partir do índice.
+  for (const [nome, html] of [['index.html', fontes.paginas.index], ['qr.html', fontes.paginas.qr]]) {
+    const pIndice = html.indexOf('src="modulos/indice.js"');
+    const pCarregador = html.indexOf('src="nucleo/manifestos.js"');
+    if (pIndice < 0) erros.push(`Índice: ${nome} não carrega modulos/indice.js.`);
+    if (pCarregador < 0) erros.push(`Índice: ${nome} não carrega nucleo/manifestos.js.`);
+    if (pIndice >= 0 && pCarregador >= 0 && pIndice > pCarregador) {
+      erros.push(`Índice: em ${nome}, modulos/indice.js tem que vir antes de nucleo/manifestos.js.`);
+    }
+    const fixo = /src="(?:\.\/)?modulos\/[^"\/]+\/manifesto\.js/.exec(html);
+    if (fixo) erros.push(`Índice: ${nome} carrega manifesto fixo (${fixo[0].slice(5)}); quem carrega é nucleo/manifestos.js.`);
+  }
+  const sw = fontes.paginas.sw;
+  if (!/importScripts\([^)]*['"]\.\/modulos\/indice\.js['"]/.test(sw)) erros.push('Índice: sw.js não faz importScripts de ./modulos/indice.js.');
+  if (!/PLATAFORMA_MODULOS\.map\(/.test(sw)) erros.push('Índice: sw.js não monta o precache dos manifestos a partir de PLATAFORMA_MODULOS.');
+  if (/['"]\.\/modulos\/[^'"\/]+\/manifesto\.js['"]/.test(sw)) erros.push('Índice: sw.js tem manifesto fixo no precache; use PLATAFORMA_MODULOS.');
   for (const id of porId.keys()) {
     if (id !== 'nucleo' && !noIndice.has(id)) erros.push(`Índice: o módulo ${id} está registrado, mas fora de modulos/indice.js.`);
   }
@@ -314,31 +327,21 @@ function validarContratoV2(manifestos, fontes) {
     for (const [ev, fn] of Object.entries(ouve)) conferir(String(fn), `o evento "${ev}" chama`);
   }
 
-  // 7. mapas fixos do offline_sync.js batem com o declarado (até a fase 3)
-  const porTabela = lerMapaDoScript(fontes.offlineSync, 'MODULO_POR_TABELA');
-  const porChave = lerMapaDoScript(fontes.offlineSync, 'MODULO_POR_CHAVE');
-  if (!porTabela || !porChave) {
-    erros.push('offline_sync.js: não achei MODULO_POR_TABELA ou MODULO_POR_CHAVE.');
-  } else {
-    for (const [nome, dono] of Object.entries(porTabela)) {
-      const off = objeto(objeto(porId.get(dono)).offline);
-      if (!lista(off.tabelas).includes(nome) && !lista(off.rpcs).includes(nome)) {
-        erros.push(`offline_sync.js põe "${nome}" no módulo ${dono}, mas o manifesto de ${dono} não declara em offline.`);
-      }
+  // 7. a fila offline acha o dono pelo manifesto: nada de mapa fixo de volta,
+  // e cada tabela ou RPC da fila tem um dono só.
+  for (const nome of ['MODULO_POR_TABELA', 'MODULO_POR_CHAVE']) {
+    if (lerMapaDoScript(fontes.offlineSync, nome)) {
+      erros.push(`offline_sync.js voltou a ter ${nome}; o dono vem de offline.* e tabelas/rpcs do manifesto.`);
     }
-    for (const [chave, dono] of Object.entries(porChave)) {
-      if (!lista(objeto(objeto(porId.get(dono)).offline).cache).includes(chave)) {
-        erros.push(`offline_sync.js põe a chave de cache "${chave}" no módulo ${dono}, mas o manifesto de ${dono} não declara.`);
-      }
-    }
-    for (const [id, m] of porId) {
-      const off = objeto(m.offline);
-      for (const nome of [...lista(off.tabelas), ...lista(off.rpcs)]) {
-        if (porTabela[nome] !== id) erros.push(`Módulo ${id}: offline declara "${nome}", mas offline_sync.js não o liga a ${id}.`);
-      }
-      for (const chave of lista(off.cache)) {
-        if (porChave[chave] !== id) erros.push(`Módulo ${id}: offline.cache declara "${chave}", mas offline_sync.js não o liga a ${id}.`);
-      }
+  }
+  /** @type {Map<string, string>} */
+  const donoNaFila = new Map();
+  for (const [id, m] of porId) {
+    const off = objeto(m.offline);
+    for (const nome of new Set([...lista(off.tabelas), ...lista(off.rpcs)])) {
+      const outro = donoNaFila.get(nome);
+      if (outro && outro !== id) erros.push(`Fila offline: "${nome}" está em offline de ${outro} e de ${id}; tem que ter um dono só.`);
+      else donoNaFila.set(nome, id);
     }
   }
 

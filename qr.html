@@ -79,14 +79,14 @@
             class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 font-bold uppercase text-white focus:border-amber-400 focus:outline-none"></textarea>
         </div>
 
-        <button onclick="enviarOSViaQRCode()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase shadow-lg">
+        <button onclick="executarAcaoQr('abrir_os')" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase shadow-lg">
           🚨 Confirmar Horímetro e Registrar OS
         </button>
       </div>
 
       <!-- Bloco Exclusivo de Diário de Horímetro -->
       <div id="blocoQRHorimetro" class="hidden space-y-3">
-        <button onclick="enviarApenasHorimetroViaQRCode()" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shadow-lg">
+        <button onclick="executarAcaoQr('lancar_leitura')" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase shadow-lg">
           ✅ Salvar Leitura de Horímetro
         </button>
       </div>
@@ -112,14 +112,9 @@
   <script src="nucleo/contexto.js"></script>
   <script src="nucleo/ctx.js"></script>
   <script src="nucleo/qr.js"></script>
+  <script src="modulos/indice.js"></script>
+  <script src="nucleo/manifestos.js"></script>
   <script src="offline_sync.js"></script>
-  <script src="modulos/os/manifesto.js"></script>
-  <script src="modulos/frota/manifesto.js"></script>
-  <script src="modulos/preventivas/manifesto.js"></script>
-  <script src="modulos/estoque/manifesto.js"></script>
-  <script src="modulos/diesel/manifesto.js"></script>
-  <script src="modulos/painel/manifesto.js"></script>
-  <script src="modulos/admin/manifesto.js"></script>
   <script>
     // ========================================================================
     // PORTAL QR
@@ -163,10 +158,6 @@
         return JSON.parse(localStorage.getItem(window.PlataformaProduto ? PlataformaProduto.chave('sessao_v2') : 'plat_sessao_v2') || 'null');
       } catch (e) { return null; }
     }
-    function cargosDaSessao() {
-      const s = lerSessaoLocal();
-      return s && Array.isArray(s.cargos_lista) ? s.cargos_lista.map(c => String(c).toLowerCase().trim()) : [];
-    }
     function idsDeModulos(lista) {
       if (!Array.isArray(lista)) return null;
       return lista.map(item => (typeof item === 'string' ? item : item && item.id)).filter(Boolean);
@@ -190,6 +181,40 @@
         });
       }
       return [];
+    }
+
+    // Botão do portal -> ação de QR do manifesto -> a função que ele declara
+    // (definirModulo do módulo, ou global por compatibilidade). Ação que não
+    // está liberada para este contexto não roda.
+    function executarAcaoQr(id) {
+      const acao = acoesQrNaTela().find(a => a.id === id);
+      if (!acao) {
+        if (id === 'abrir_os') return alert('Para abrir OS, entre no sistema com seu login (equipe de manutenção).');
+        return alert('Esta ação não está disponível para este ativo.');
+      }
+      const fn = (window.Plataforma && typeof Plataforma.resolverFuncao === 'function')
+        ? Plataforma.resolverFuncao(acao.funcao, acao.moduloId)
+        : null;
+      if (typeof fn !== 'function') {
+        console.error(`Ação de QR ${id}: a função "${acao.funcao}" do módulo ${acao.moduloId} não existe.`);
+        return alert('Esta ação não está disponível agora. Avise o administrador.');
+      }
+      return fn();
+    }
+
+    // Quem pode assumir a OS na hora é quem tem os.executar (o banco confere o
+    // mesmo em os_abrir_pelo_qr). Nada de nome de cargo.
+    function podeAssumirOSNoQR() {
+      const sessao = lerSessaoLocal();
+      return !!(sessao && window.Plataforma && Plataforma.permissoes && Plataforma.permissoes.pode('os.executar', sessao));
+    }
+    const CHAVE_FUNCAO_QR = (window.PlataformaProduto ? PlataformaProduto.chave('qr_funcao') : 'plat_qr_funcao');
+    function funcaoQrLembrada() {
+      // Sem escolha guardada, quem pode executar já assume (como era para o mecânico).
+      try { return localStorage.getItem(CHAVE_FUNCAO_QR) === 'encarregado' ? 'encarregado' : 'mecanico'; } catch (e) { return 'mecanico'; }
+    }
+    function lembrarFuncaoQr(valor) {
+      try { localStorage.setItem(CHAVE_FUNCAO_QR, valor === 'mecanico' ? 'mecanico' : 'encarregado'); } catch (e) { /* sem armazenamento */ }
     }
 
     function podeAbrirOSNoQR() {
@@ -226,7 +251,6 @@
 
     function configurarTelaPorPerfil() {
       const sessao = lerSessaoLocal();
-      const cargos = cargosDaSessao();
       const abreOs = podeAbrirOSNoQR();
       const lancaLeitura = podeLancarLeituraNoQR();
       const aviso = document.getElementById('qrAvisoPerfil');
@@ -235,9 +259,9 @@
 
       if (abreOs && lancaLeitura) {
         document.getElementById('qrAbasContainer').classList.remove('hidden');
-        const ehMecanico = cargos.includes('mecanico');
-        document.getElementById('qrFuncaoWrapper').classList.toggle('hidden', !ehMecanico);
-        document.getElementById('qrFuncaoSelect').value = ehMecanico ? 'mecanico' : 'encarregado';
+        const assume = podeAssumirOSNoQR();
+        document.getElementById('qrFuncaoWrapper').classList.toggle('hidden', !assume);
+        document.getElementById('qrFuncaoSelect').value = assume ? funcaoQrLembrada() : 'encarregado';
         trocarAbaQR('os');
         aviso.classList.add('hidden');
       } else if (abreOs) {
@@ -398,8 +422,9 @@
       const horNovo = parseFloat(horStr);
       if (v.semBase && !navigator.onLine && !confirmarSemBase(horNovo)) return;
 
-      // Só assume a OS se a pessoa realmente tem o cargo de mecânico no login.
-      const ehMecanico = funcaoSel === 'mecanico' && cargosDaSessao().includes('mecanico');
+      // Só assume a OS se a pessoa tem a permissão de executar no login.
+      const ehMecanico = funcaoSel === 'mecanico' && podeAssumirOSNoQR();
+      if (podeAssumirOSNoQR()) lembrarFuncaoQr(funcaoSel);
 
       enviandoQR = true;
       try {
@@ -472,8 +497,12 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar(lerSessaoLocal() || null);
+      // As ações de QR vêm dos manifestos, que o índice injeta depois do HTML.
+      if (window.Plataforma && Plataforma.modulos && typeof Plataforma.modulos.manifestosProntos === 'function') {
+        await Plataforma.modulos.manifestosProntos();
+      }
       carregarEquipamentoDoQR();
     });
     if ('serviceWorker' in navigator) {

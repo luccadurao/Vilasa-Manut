@@ -41,6 +41,10 @@ function carregarPlataforma(raiz, opcoes = {}) {
       if (fs.existsSync(path.join(raiz, manifesto))) rodar(manifesto);
     }
   }
+  // Como nas páginas: índice e carregador. Sem document, o carregador só marca
+  // os manifestos como prontos (quem chamou já os registrou acima).
+  rodar('modulos/indice.js');
+  rodar('nucleo/manifestos.js');
   return { Plataforma: sandbox.Plataforma, sandbox, contexto };
 }
 

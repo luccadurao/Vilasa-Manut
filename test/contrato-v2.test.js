@@ -52,9 +52,9 @@ function base() {
     indice: ['vendas', 'rh'],
     pastas: ['rh', 'vendas'],
     paginas: {
-      index: '<script src="modulos/vendas/manifesto.js"></script><script src="modulos/rh/manifesto.js"></script>',
-      qr: '<script src="modulos/vendas/manifesto.js"></script><script src="modulos/rh/manifesto.js"></script>',
-      sw: "'./modulos/vendas/manifesto.js', './modulos/rh/manifesto.js'"
+      index: '<script src="modulos/indice.js"></script><script src="nucleo/manifestos.js"></script>',
+      qr: '<script src="modulos/indice.js"></script><script src="nucleo/manifestos.js"></script>',
+      sw: "importScripts('./nucleo/versao.js', './modulos/indice.js');\nconst A = [...PLATAFORMA_MODULOS.map((id) => `./modulos/${id}/manifesto.js`)];"
     },
     sql: [
       'CREATE TABLE IF NOT EXISTS public.empresas (id uuid);',
@@ -65,10 +65,7 @@ function base() {
       'CREATE OR REPLACE FUNCTION public.pedido_fechar(uuid) RETURNS void AS $$ $$;',
       '-- CREATE TABLE public.so_no_comentario (id uuid);'
     ].join('\n'),
-    offlineSync: [
-      "const MODULO_POR_TABELA = {\n  pedidos: 'vendas',\n  pedido_fechar: 'vendas'\n};",
-      "const MODULO_POR_CHAVE = {\n  pedidos_abertos: 'vendas',\n  folhas: 'rh'\n};"
-    ].join('\n'),
+    offlineSync: 'function mapasOfflineDosManifestos() {}',
     /** @param {string} src */
     ler: (src) => /** @type {Record<string, string>} */ (arquivos)[src] || ''
   };
@@ -110,11 +107,20 @@ test('regra 1: índice, pastas e páginas batem', () => {
   b.fontes.indice.push('fantasma');
   acusa(erros(b), /"fantasma" não tem modulos\/fantasma\/manifesto.js/);
   b = base();
-  b.fontes.paginas.sw = "'./modulos/vendas/manifesto.js'";
-  acusa(erros(b), /sw.js não guarda modulos\/rh\/manifesto.js/);
-  b = base();
   b.fontes.paginas.qr = '';
-  acusa(erros(b), /qr.html não carrega modulos\/vendas/);
+  acusa(erros(b), /qr.html não carrega modulos\/indice.js/);
+  acusa(erros(b), /qr.html não carrega nucleo\/manifestos.js/);
+  b = base();
+  b.fontes.paginas.index = '<script src="nucleo/manifestos.js"></script><script src="modulos/indice.js"></script>';
+  acusa(erros(b), /em index.html, modulos\/indice.js tem que vir antes/);
+  b = base();
+  b.fontes.paginas.index += '<script src="modulos/vendas/manifesto.js"></script>';
+  acusa(erros(b), /index.html carrega manifesto fixo/);
+  b = base();
+  b.fontes.paginas.sw = "importScripts('./nucleo/versao.js');\nconst A = ['./modulos/vendas/manifesto.js'];";
+  acusa(erros(b), /sw.js não faz importScripts de .\/modulos\/indice.js/);
+  acusa(erros(b), /sw.js não monta o precache/);
+  acusa(erros(b), /sw.js tem manifesto fixo/);
 });
 
 test('regra 2: todo módulo declara depende.nucleo', () => {
@@ -219,7 +225,7 @@ test('regra 6: config com tipo, padrão e limites coerentes', () => {
   }
 });
 
-test('regra 7: offline só com o que é do módulo e igual ao offline_sync.js', () => {
+test('regra 7: offline só com o que é do módulo, um dono por item e sem mapa fixo', () => {
   let b = base();
   mod(b, 'rh').offline = { tabelas: ['pedidos'], cache: ['folhas'] };
   acusa(erros(b), /offline.tabelas tem "pedidos", que não é do módulo/);
@@ -227,12 +233,11 @@ test('regra 7: offline só com o que é do módulo e igual ao offline_sync.js', 
   mod(b, 'rh').offline = { cache: ['folhas', 'pedidos_abertos'] };
   acusa(erros(b), /Chave de cache pedidos_abertos tem dois donos/);
   b = base();
-  b.fontes.offlineSync = b.fontes.offlineSync.replace("pedidos: 'vendas'", "pedidos: 'rh'");
-  acusa(erros(b), /põe "pedidos" no módulo rh, mas o manifesto de rh não declara/);
-  acusa(erros(b), /offline declara "pedidos", mas offline_sync.js não o liga a vendas/);
+  mod(b, 'rh').offline = { tabelas: ['pedidos'], cache: ['folhas'] };
+  acusa(erros(b), /"pedidos" está em offline de vendas e de rh/);
   b = base();
-  b.fontes.offlineSync = '';
-  acusa(erros(b), /não achei MODULO_POR_TABELA/);
+  b.fontes.offlineSync = "const MODULO_POR_TABELA = {\n  pedidos: 'vendas'\n};";
+  acusa(erros(b), /offline_sync.js voltou a ter MODULO_POR_TABELA/);
 });
 
 test('leitor dos mapas do offline_sync.js', () => {

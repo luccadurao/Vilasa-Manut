@@ -9,7 +9,7 @@
 //  • ARQUIVOS_NUCLEO entra sempre no precache. Os scripts dos módulos entram depois,
 //    por postMessage, quando o núcleo resolve o contrato.
 // ============================================================================
-importScripts('./nucleo/versao.js');
+importScripts('./nucleo/versao.js', './modulos/indice.js');
 
 const VERSAO = PLATAFORMA_VERSAO_APP;
 // Mesmo prefixo de nucleo/produto.js (prefixoCacheSw). O antigo "vilasa-pwa-" também é apagado.
@@ -22,11 +22,10 @@ const CHAVE_MODULOS = './nucleo/precache-modulos.json';
 const ARQUIVOS_NUCLEO = [
   './', './index.html', './qr.html', './manifest.webmanifest',
   './config.js', './core.js', './offline_sync.js',
-  './nucleo/versao.js', './nucleo/produto.js', './nucleo/base.js', './nucleo/resolver.js', './nucleo/permissoes.js', './nucleo/sessao.js', './nucleo/telas.js', './nucleo/marca.js', './nucleo/carregador.js', './nucleo/termos.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/ctx.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
-  './modulos/os/manifesto.js', './modulos/frota/manifesto.js',
-  './modulos/preventivas/manifesto.js', './modulos/estoque/manifesto.js',
-  './modulos/diesel/manifesto.js', './modulos/painel/manifesto.js',
-  './modulos/admin/manifesto.js', './modulos/indice.js',
+  './nucleo/versao.js', './nucleo/produto.js', './nucleo/base.js', './nucleo/resolver.js', './nucleo/permissoes.js', './nucleo/sessao.js', './nucleo/telas.js', './nucleo/marca.js', './nucleo/carregador.js', './nucleo/termos.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/ctx.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/manifestos.js', './nucleo/globais.js', './nucleo/tipos.js',
+  './modulos/indice.js',
+  // Um manifesto por módulo do índice: módulo novo não mexe aqui.
+  ...PLATAFORMA_MODULOS.map((id) => `./modulos/${id}/manifesto.js`),
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
   './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
   './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',
