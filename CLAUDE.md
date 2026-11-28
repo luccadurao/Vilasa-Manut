@@ -39,8 +39,15 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   `scripts/contrato-v2.js` (no validador) recusa tabela sem dono ou com dois
   donos, `consome` sem fornecedor nas dependências, evento ouvido que ninguém
   emite e função citada que não existe.
-  A tela do módulo ainda vive no arquivo da raiz que o manifesto aponta
-  (`os_rep.js`, `frota.js`, `pcm_sap.js`, `estoque.js`, `diesel.js`, `kpis.js`, `admin.js`).
+  Em runtime, o módulo entrega suas funções por `Plataforma.definirModulo(id, {
+  iniciar(ctx), parar, telas, relatorios, qr, funcoes, servicos })` e recebe o
+  `ctx` de `nucleo/ctx.js`: `ctx.servico`, `ctx.eventos`, `ctx.offline`, `ctx.db`
+  e `ctx.config` só aceitam o que o manifesto declara. Módulo novo não põe
+  função solta no `window`. O núcleo isola a falha de cada tela
+  (`Plataforma.telas.abrir`) e mostra só os módulos carregados para a empresa.
+  A tela dos 7 módulos atuais ainda vive no arquivo da raiz que o manifesto
+  aponta (`os_rep.js`, `frota.js`, `pcm_sap.js`, `estoque.js`, `diesel.js`,
+  `kpis.js`, `admin.js`), por funções globais (compatibilidade, com aviso).
 - `offline_sync.js` — fila offline (por empresa e módulo) e cache.
 - `sw.js` — service worker; `nucleo/versao.js` — versão do app servido.
 - `banco/migracoes/` — migrações numeradas; `banco/migracoes/reverter/` — reversões;

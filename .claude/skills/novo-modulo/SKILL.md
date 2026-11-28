@@ -29,6 +29,11 @@ módulo que depende de outro.
    com `estagio: 'beta'` e `versao: '0.1.0'`, `depende: { nucleo: '^1.0.0', … }`
    e `tabelas` (mesmo que vazia). Acrescente o id em `modulos/indice.js`.
 2. Script da tela: `modulos/<id>/<id>.js` (módulo novo não vai para a raiz).
+   Registre tudo com `Plataforma.definirModulo('<id>', { iniciar(ctx), parar,
+   telas, relatorios, qr, funcoes, servicos })`, sem função solta no `window`.
+   Use o `ctx` para tudo que sai do módulo: `ctx.db` (só tabelas suas e do
+   núcleo), `ctx.servico` (o que está em `consome`), `ctx.eventos`,
+   `ctx.offline` e `ctx.config`. O modelo está em `test/fixtures/modulo-exemplo/`.
    Use `Plataforma.permissoes.pode(...)` para cada ação e `Plataforma.termo(...)`
    para textos como local/ativo (nunca "Obra" ou nome de cliente fixo). Chave
    no localStorage só por `PlataformaProduto.chave(...)`. Lançamento de campo passa pela fila do
