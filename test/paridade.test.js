@@ -168,6 +168,59 @@ test('o menu montado na página segue o cargo, sem pedir login', async () => {
   }
 });
 
+test('paridade com a carga real: só os módulos ligados da Vilasa, menu igual por cargo', async () => {
+  const { sandbox, contexto } = carregarPlataforma(raiz);
+  const doc = criarDocumento();
+  sandbox.document = doc;
+  sandbox.navigator = { onLine: false };
+  sandbox.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
+  sandbox.alert = () => {};
+  sandbox.confirm = () => false;
+  sandbox.URL = URL;
+  sandbox.Blob = class Blob {};
+  vm.runInContext(fs.readFileSync(path.join(raiz, 'core.js'), 'utf8'), contexto, { filename: 'core.js' });
+  for (const nome of ['carregarOrdensServico', 'carregarFrota', 'carregarPreventivas', 'carregarEstoque', 'carregarDiesel', 'calcularKPIs', 'carregarUsuariosAdmin']) {
+    sandbox[nome] = () => {};
+  }
+  const P = sandbox.Plataforma;
+  // A carga de verdade (resolver + carregar), só sem baixar os scripts.
+  P.modulos.garantirCarregados = async (usuario) => {
+    await P.modulos.descarregar();
+    const resolucao = P.modulos.resolverEGuardar(P.sessao.contratoDe(usuario));
+    return P.modulos.carregar(resolucao, P.modulos.lista(), { carregarScript: async () => {} });
+  };
+  // Os módulos da empresa 1 como o meu_perfil devolve (seed da 0002: os 8 ativos).
+  const modulosVilasa = ['nucleo', 'os', 'frota', 'preventivas', 'estoque', 'diesel', 'painel', 'admin']
+    .map((id) => ({ id, versao_config: 1, config: {} }));
+
+  for (const [cargo, esperado] of Object.entries(CARGOS)) {
+    const usuario = { id: 't', nome: 'Teste', matricula: '9', cargos_lista: [cargo], obras_permitidas: ['TODAS'], ativo: true, modulos: modulosVilasa };
+    vm.runInContext(`usuarioLogado = ${JSON.stringify(usuario)};`, contexto);
+    await sandbox.inicializarSistemaPosLogin();
+    assert.equal(P.modulos.carregados().length, 7, `${cargo}: os 7 módulos carregam`);
+    const botoes = doc.getElementById('menuLateralModulos').children.map((botao) => ({
+      id: botao.id,
+      oculto: botao.classList.contains('hidden')
+    }));
+    assert.deepEqual(botoes.map((botao) => botao.id), ROTULOS.map(([id]) => `nav-${id}`), cargo);
+    const visiveis = botoes.filter((botao) => !botao.oculto).map((botao) => botao.id.replace(/^nav-/, ''));
+    assert.deepEqual(visiveis, esperado.abas, cargo);
+    if (esperado.relatorios) {
+      const relatorios = doc.getElementById('containerBotoesExportacaoTopoV2').children.map((botao) => textoDe(botao));
+      assert.deepEqual(relatorios, BOTOES_RELATORIO, cargo);
+    }
+    for (const [id] of ROTULOS) assert.ok(doc.getElementById(`sec-${id}`), `${cargo}: seção sec-${id}`);
+  }
+});
+
+test('empresa sem um módulo contratado não vê a aba dele, nem o admin', async () => {
+  const { Plataforma: P, sandbox } = carregarPlataforma(raiz);
+  sandbox.usuarioLogado = { id: 'a', cargos_lista: ['admin'], ativo: true, modulos: [{ id: 'nucleo' }, { id: 'os' }, { id: 'admin' }] };
+  const resolucao = P.modulos.resolverEGuardar(P.sessao.contratoDe(sandbox.usuarioLogado));
+  await P.modulos.carregar(resolucao, P.modulos.lista(), { carregarScript: async () => {} });
+  igual(P.telas.ordenadas().map((t) => t.moduloId).filter((v, i, a) => a.indexOf(v) === i), ['os', 'admin'], 'só os contratados');
+});
+
 test('o núcleo não escolhe módulo por nome', () => {
   const fonte = fs.readFileSync(path.join(raiz, 'nucleo/nucleo.js'), 'utf8');
   for (const nome of ['preventivas', 'diesel', 'estoque', 'frota', 'kpis', 'pcm_sap', 'os_rep']) {

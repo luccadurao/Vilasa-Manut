@@ -24,6 +24,7 @@ function carregarPlataforma(raiz, opcoes = {}) {
   rodar('nucleo/produto.js');
   rodar('nucleo/nucleo.js');
   rodar('nucleo/contexto.js');
+  rodar('nucleo/ctx.js');
   rodar('nucleo/ativos.js');
   if (opcoes.manifestos !== false) {
     const pasta = path.join(raiz, 'modulos');

@@ -267,12 +267,25 @@ async function realizarLogin(event) {
   }
 }
 
+async function descarregarModulosComLimite() {
+  if (!window.Plataforma || !Plataforma.modulos || typeof Plataforma.modulos.descarregar !== 'function') return;
+  try {
+    await Promise.race([
+      Plataforma.modulos.descarregar(),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ]);
+  } catch (e) { /* segue para o sair */ }
+}
+
 async function encerrarSessao() {
   try {
     const pendentes = (typeof lerFilaOffline === 'function') ? lerFilaOffline().length : 0;
     if (pendentes > 0 && !confirm('Há ' + pendentes + ' registro(s) ainda NÃO enviados neste celular. Eles ficam guardados e são enviados quando alguém entrar com sinal. Sair mesmo assim?')) return;
   } catch (e) { /* segue */ }
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de apagar a sessão e o
+  // cache, com no máximo 2 s de espera: um parar travado não trava o sair.
+  await descarregarModulosComLimite();
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
@@ -281,6 +294,9 @@ async function encerrarSessao() {
 
 async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de apagar a sessão e o
+  // cache, com no máximo 2 s de espera: um parar travado não trava o sair.
+  await descarregarModulosComLimite();
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
   usuarioLogado = null;
@@ -579,6 +595,8 @@ function navegarPara(modulo) {
   }
 
   if (!meta || !meta.abrir || !window.Plataforma) return;
+  // O núcleo abre a tela isolando a falha: erro vira aviso só nesta seção.
+  if (Plataforma.telas && typeof Plataforma.telas.abrir === 'function') return Plataforma.telas.abrir(modulo);
   const fn = Plataforma.resolverFuncao(meta.abrir, meta.moduloId);
   if (typeof fn !== 'function') return;
   const args = Array.isArray(meta.abrirArgs) ? meta.abrirArgs : [];

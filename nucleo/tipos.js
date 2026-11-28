@@ -118,6 +118,37 @@
  */
 
 /**
+ * O que o módulo entrega ao núcleo por Plataforma.definirModulo.
+ * As funções de telas/relatorios/qr têm o mesmo nome citado no manifesto.
+ * @typedef {Object} ImplementacaoModulo
+ * @property {(ctx: CtxModulo) => (void | Promise<void>)} [iniciar]
+ * @property {(ctx: CtxModulo) => (void | Promise<void>)} [parar]
+ * @property {Record<string, Function>} [telas]
+ * @property {Record<string, Function>} [relatorios]
+ * @property {Record<string, Function>} [qr]
+ * @property {Record<string, Function>} [funcoes] tratadores de evento e outras
+ * @property {Record<string, any>} [servicos] um item para cada nome de fornece
+ */
+
+/**
+ * O que o núcleo entrega a cada módulo. Tudo escopado pelo manifesto: o
+ * módulo só emite, ouve, consome, grava e lê o que declarou.
+ * @typedef {Object} CtxModulo
+ * @property {string} id
+ * @property {Readonly<Manifesto>} manifesto
+ * @property {(permissao: string) => boolean} pode
+ * @property {(chave: string) => string} termo
+ * @property {{ nome: () => string, prefixoArquivo: () => string }} marca
+ * @property {{ readonly usuario: any, readonly empresa: any, readonly localAtivoId: string }} contexto
+ * @property {Readonly<Record<string, any>>} config
+ * @property {{ emitir: (nome: string, dados?: any) => void, ouvir: (nome: string, fn: (dados?: any) => void) => () => void }} eventos
+ * @property {(nome: string) => any} servico
+ * @property {{ gravar: (tabela: string, operacao: string, payload: any, idRegistro?: any, opcoes?: any) => Promise<any>, ler: (chave: string, consulta: () => any, meta?: any) => Promise<any> }} offline
+ * @property {{ from: (tabela: string) => any, rpc: (nome: string, args?: any) => any }} db
+ * @property {string[]} avisos avisos de config (valor inválido que caiu no padrão)
+ */
+
+/**
  * @typedef {Object} ContratoModulos
  * @property {string[]} [ativos]
  * @property {boolean} [todos]
@@ -152,8 +183,13 @@
  * @property {() => Manifesto[]} lista
  * @property {(contrato: ContratoModulos | string[], manifestos: Manifesto[]) => ResultadoResolucao} resolver
  * @property {(contrato: ContratoModulos | string[]) => ResultadoResolucao} resolverEGuardar
- * @property {(resolucao: ResultadoResolucao, manifestos: Manifesto[], io: { carregarScript: (src: string, tipo: TipoScriptModulo) => Promise<void> }) => Promise<ResultadoCarga>} carregar
+ * @property {(resolucao: ResultadoResolucao, manifestos: Manifesto[], io: { carregarScript: (src: string, tipo: TipoScriptModulo) => Promise<void>, criarCtx?: (manifesto: Manifesto) => any }) => Promise<ResultadoCarga>} carregar
  * @property {(usuario?: any) => Promise<ResultadoCarga>} garantirCarregados
+ * @property {() => Promise<void>} descarregar
+ * @property {(id: string, impl: ImplementacaoModulo) => void} definir
+ * @property {(id: string) => any} implementacao
+ * @property {() => string[]} carregados
+ * @property {(manifesto: Manifesto) => CtxModulo} [criarCtx]
  * @property {() => ResultadoResolucao | null} ultimaResolucao
  * @property {() => ResultadoCarga | null} ultimaCarga
  */
@@ -215,6 +251,7 @@
  * @property {(container: HTMLElement) => void} montarMenu
  * @property {(container: HTMLElement) => void} garantirSecoes
  * @property {() => string | null} primeiraVisivel
+ * @property {(telaId: string) => Promise<boolean>} abrir
  */
 
 /**
@@ -298,6 +335,7 @@
  * @property {ApiExtensoes} extensoes
  * @property {ApiTelas} telas
  * @property {(nome: string, moduloId?: string) => Function | null} resolverFuncao
+ * @property {(id: string, impl: ImplementacaoModulo) => void} definirModulo
  * @property {{ URL_BASE: string, urlCanonica: (id: string) => string, lerUrl: (search: string) => { id: string, etiquetaAntiga: boolean, mensagem: string, tag: string, nome: string, un: string } }} qr
  * @property {TermoFn} termo
  * @property {ApiContexto} [contexto]
