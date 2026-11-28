@@ -31,9 +31,6 @@
   const registros = [];
   /** @type {Map<string, Set<(dados?: any) => void>>} */
   const ouvintes = new Map();
-  /** @type {import('./tipos.js').ResultadoResolucao | null} */
-  /** @type {import('./tipos.js').ResultadoCarga | null} */
-  /** @type {Promise<import('./tipos.js').ResultadoCarga> | null} */
   /** O que cada módulo entregou por definirModulo. */
   /** @type {Map<string, any>} */
   const implementacoes = new Map();

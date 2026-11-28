@@ -18,6 +18,19 @@
   const N = root.__PlataformaInterno;
   if (!N) throw new Error('Carregue nucleo/base.js antes das outras partes do núcleo.');
 
+  // Antes um arquivo só carregava inteiro ou não carregava; com partes, uma
+  // pode faltar (ex.: precache incompleto). Melhor parar aqui, dizendo qual,
+  // do que publicar um Plataforma com buraco que quebra longe da causa.
+  const SINAL_DE_CADA_PARTE = {
+    base: 'registrar', resolver: 'resolver', permissoes: 'pode', sessao: 'lerSessao',
+    telas: 'abrirTela', marca: 'urlCanonica', carregador: 'carregar', termos: 'lerTermo'
+  };
+  for (const [parte, funcao] of Object.entries(SINAL_DE_CADA_PARTE)) {
+    if (typeof N[funcao] !== 'function') {
+      throw new Error(`Núcleo incompleto: a parte nucleo/${parte}.js não carregou.`);
+    }
+  }
+
   const VERSAO_NUCLEO = N.VERSAO_NUCLEO;
   const implementacoes = N.implementacoes;
   const CHAVE_EMPRESA = N.CHAVE_EMPRESA;

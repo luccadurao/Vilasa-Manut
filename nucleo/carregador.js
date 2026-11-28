@@ -22,7 +22,6 @@
   const scriptsJaCarregados = N.scriptsJaCarregados;
 
   /** @param {...any} a */ function contratoDe(...a) { return N.contratoDe(...a); }
-  /** @param {...any} a */ function lista(...a) { return N.lista(...a); }
   /** @param {...any} a */ function resolverEGuardar(...a) { return N.resolverEGuardar(...a); }
 
   /**

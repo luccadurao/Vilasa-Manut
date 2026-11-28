@@ -18,7 +18,6 @@
 
   const ouvintes = N.ouvintes;
 
-  /** @param {...any} a */ function lista(...a) { return N.lista(...a); }
   /** @param {...any} a */ function manifestosAtivos(...a) { return N.manifestosAtivos(...a); }
   /** @param {...any} a */ function pode(...a) { return N.pode(...a); }
   /** @param {...any} a */ function resolverFuncao(...a) { return N.resolverFuncao(...a); }

@@ -19,7 +19,6 @@
   const VERSAO_NUCLEO = N.VERSAO_NUCLEO;
   const registros = N.registros;
 
-  /** @param {...any} a */ function lista(...a) { return N.lista(...a); }
 
   /**
    * @param {string} versao
