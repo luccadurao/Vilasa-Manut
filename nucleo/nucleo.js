@@ -1342,7 +1342,9 @@
 
     bloqueados.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     avisos.sort();
-    return { carregados, bloqueados, avisos, arquivos };
+    // A carga feita passa a valer para menu, relatórios, QR, eventos e serviços.
+    resultadoCarga = { carregados, bloqueados, avisos, arquivos };
+    return resultadoCarga;
   }
 
   /**
