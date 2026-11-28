@@ -275,6 +275,8 @@ async function encerrarSessao() {
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de trocar de pessoa.
+  try { if (window.Plataforma && Plataforma.modulos.descarregar) await Plataforma.modulos.descarregar(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }
@@ -283,6 +285,8 @@ async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de trocar de pessoa.
+  try { if (window.Plataforma && Plataforma.modulos.descarregar) await Plataforma.modulos.descarregar(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }
@@ -579,6 +583,8 @@ function navegarPara(modulo) {
   }
 
   if (!meta || !meta.abrir || !window.Plataforma) return;
+  // O núcleo abre a tela isolando a falha: erro vira aviso só nesta seção.
+  if (Plataforma.telas && typeof Plataforma.telas.abrir === 'function') return Plataforma.telas.abrir(modulo);
   const fn = Plataforma.resolverFuncao(meta.abrir, meta.moduloId);
   if (typeof fn !== 'function') return;
   const args = Array.isArray(meta.abrirArgs) ? meta.abrirArgs : [];

@@ -970,6 +970,55 @@
     }
   }
 
+  /**
+   * Mostra, só na seção da tela, que ela falhou. As outras telas seguem.
+   * @param {import('./tipos.js').TelaResolvida} tela
+   * @param {unknown} erro
+   */
+  function mostrarFalhaDaTela(tela, erro) {
+    const detalhe = erro && /** @type {Error} */ (erro).message ? /** @type {Error} */ (erro).message : String(erro);
+    if (root.console) root.console.error(`Tela ${tela.id} (módulo ${tela.moduloId}) falhou:`, erro);
+    const doc = root.document;
+    const secao = doc && typeof doc.getElementById === 'function' ? doc.getElementById(`sec-${tela.id}`) : null;
+    if (!secao) return;
+    let aviso = doc.getElementById(`falha-${tela.id}`);
+    if (!aviso) {
+      aviso = doc.createElement('div');
+      aviso.id = `falha-${tela.id}`;
+      aviso.setAttribute('role', 'alert');
+      aviso.className = 'bg-rose-50 border border-rose-300 text-rose-900 rounded-2xl p-3 text-xs font-bold mb-3';
+      secao.prepend(aviso);
+    }
+    aviso.textContent = `Esta tela teve um erro e não abriu. As outras continuam funcionando. Detalhe: ${detalhe}`;
+  }
+
+  /**
+   * Abre a tela pelo que o manifesto diz, isolando a falha: erro (na hora ou
+   * na promessa) vira aviso na própria seção, sem derrubar o resto do app.
+   * @param {string} telaId
+   * @returns {Promise<boolean>} true se abriu sem erro
+   */
+  async function abrirTela(telaId) {
+    const tela = telasDe().find((t) => t.id === telaId);
+    if (!tela || !tela.abrir) return false;
+    const doc = root.document;
+    const anterior = doc && typeof doc.getElementById === 'function' ? doc.getElementById(`falha-${telaId}`) : null;
+    if (anterior && typeof anterior.remove === 'function') anterior.remove();
+    const fn = resolverFuncao(tela.abrir, tela.moduloId);
+    if (typeof fn !== 'function') {
+      mostrarFalhaDaTela(tela, new Error(`a função "${tela.abrir}" não foi encontrada`));
+      return false;
+    }
+    try {
+      const args = Array.isArray(tela.abrirArgs) ? tela.abrirArgs : [];
+      await fn(...args);
+      return true;
+    } catch (erro) {
+      mostrarFalhaDaTela(tela, erro);
+      return false;
+    }
+  }
+
   function idsBloqueados() {
     const lista = resultadoCarga && resultadoCarga.bloqueados;
     return new Set((lista || []).map((item) => item.id));
@@ -1572,7 +1621,7 @@
     },
     eventos: { emitir, ouvir },
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
-    telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel },
+    telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel, abrir: abrirTela },
     resolverFuncao,
     definirModulo,
     qr: { get URL_BASE() { return urlBaseQr(); }, urlCanonica, lerUrl: lerUrlQr },

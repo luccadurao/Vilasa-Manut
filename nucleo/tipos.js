@@ -251,6 +251,7 @@
  * @property {(container: HTMLElement) => void} montarMenu
  * @property {(container: HTMLElement) => void} garantirSecoes
  * @property {() => string | null} primeiraVisivel
+ * @property {(telaId: string) => Promise<boolean>} abrir
  */
 
 /**
