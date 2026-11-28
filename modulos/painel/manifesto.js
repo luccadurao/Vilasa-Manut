@@ -38,7 +38,7 @@
     categoria: 'manutencao',
     estagio: 'estavel',
     obrigatorio: false,
-    depende: { os: '^1.0.0' },
+    depende: { nucleo: '^1.0.0', os: '^1.0.0' },
     opcionais: { frota: '^1.0.0', preventivas: '^1.0.0', estoque: '^1.0.0' },
     scripts: [{ src: 'kpis.js', tipo: 'classico' }],
     vendor: [],
@@ -53,6 +53,12 @@
     },
     acoes_legadas: {},
     abas_legadas: { kpis: 'painel.ver' },
+    // Contrato v2: o painel não é dono de tabela; só lê pelos serviços dos outros.
+    tabelas: [],
+    consome: ['os.ordens', 'estoque.pecas', 'estoque.movimentos', 'preventivas.planos', 'frota.leituras'],
+    offline: {
+      cache: ['kpi_os', 'kpi_movs', 'kpi_leituras']
+    },
     telas: [{
       id: 'kpis',
       rotulo: 'Indicadores (KPIs)',

@@ -37,7 +37,7 @@
     categoria: 'manutencao',
     estagio: 'estavel',
     obrigatorio: false,
-    depende: { os: '^1.0.0', frota: '^1.0.0' },
+    depende: { nucleo: '^1.0.0', os: '^1.0.0', frota: '^1.0.0' },
     opcionais: { estoque: '^1.0.0' },
     scripts: [{ src: 'pcm_sap.js', tipo: 'classico' }],
     vendor: [],
@@ -55,6 +55,18 @@
     },
     acoes_legadas: { gerenciar_preventivas: 'preventivas.gerenciar' },
     abas_legadas: { preventivas: 'preventivas.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['planos_preventiva', 'execucoes_preventiva', 'preventiva_estrategias', 'preventiva_pacotes',
+      'preventiva_listas', 'preventiva_lista_tarefas', 'preventiva_lista_materiais'],
+    rpcs: ['preventiva_gerar_os'],
+    fornece: { 'preventivas.planos': 'Planos e execuções de preventiva' },
+    consome: ['os.ordens', 'estoque.pecas'],
+    offline: {
+      tabelas: ['planos_preventiva', 'execucoes_preventiva', 'preventiva_estrategias', 'preventiva_pacotes',
+        'preventiva_listas', 'preventiva_lista_tarefas', 'preventiva_lista_materiais'],
+      cache: ['execucoes_preventiva', 'planos_preventiva', 'preventiva_estrategias', 'preventiva_pacotes',
+        'preventiva_listas', 'preventiva_lista_tarefas', 'preventiva_lista_materiais']
+    },
     telas: [{
       id: 'preventivas',
       rotulo: 'Preventivas (SAP)',

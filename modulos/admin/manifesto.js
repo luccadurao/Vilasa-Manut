@@ -52,6 +52,9 @@
     },
     acoes_legadas: { acesso_modo_deus: 'admin.modo_deus' },
     abas_legadas: { admin: 'admin.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['admin_auditoria'],
+    rpcs: ['admin_salvar_usuario', 'admin_definir_ativo'],
     telas: [{
       id: 'admin',
       rotulo: 'Administração',

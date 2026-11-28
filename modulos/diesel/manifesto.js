@@ -38,7 +38,7 @@
     categoria: 'manutencao',
     estagio: 'estavel',
     obrigatorio: false,
-    depende: { frota: '^1.0.0' },
+    depende: { nucleo: '^1.0.0', frota: '^1.0.0' },
     opcionais: {},
     scripts: [{ src: 'diesel.js', tipo: 'classico' }],
     vendor: [],
@@ -54,6 +54,10 @@
     },
     acoes_legadas: { gerenciar_diesel: 'diesel.gerenciar' },
     abas_legadas: { diesel: 'diesel.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['diesel_tanques', 'diesel_abastecimentos', 'diesel_carregamentos', 'diesel_estoque_diario'],
+    rpcs: ['diesel_vincular_equipamentos', 'diesel_sincronizar_leituras'],
+    consome: ['frota.leituras'],
     telas: [{
       id: 'diesel',
       rotulo: 'Diesel',

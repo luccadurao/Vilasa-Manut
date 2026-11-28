@@ -5,6 +5,7 @@
 /**
  * @typedef {'beta' | 'estavel' | 'descontinuado'} EstagioModulo
  * @typedef {'manutencao' | 'producao' | 'suprimentos' | 'pessoas' | 'plataforma'} CategoriaModulo
+ * @typedef {'numero' | 'texto' | 'booleano' | 'lista'} TipoCampoConfig
  * @typedef {'classico' | 'esm'} TipoScriptModulo
  * @typedef {'csv' | 'pdf' | 'png'} FormatoRelatorio
  * @typedef {'csv' | 'impressao' | 'enxuto' | 'png'} EstiloRelatorio
@@ -60,6 +61,34 @@
  */
 
 /**
+ * Campo de configuração do módulo por empresa (empresa_modulos.config).
+ * @typedef {Object} CampoConfig
+ * @property {TipoCampoConfig} tipo
+ * @property {number | string | boolean | string[]} padrao
+ * @property {number} [min]
+ * @property {number} [max]
+ * @property {string} [descricao]
+ */
+
+/**
+ * Eventos do módulo. Nome sempre com o prefixo do módulo que emite ("os.concluida").
+ * @typedef {Object} EventosModulo
+ * @property {string[]} [emite]
+ * @property {Record<string, string>} [ouve] evento → nome da função que trata
+ */
+
+/**
+ * O que o módulo pode pôr na fila offline e as chaves de cache dele.
+ * @typedef {Object} OfflineModulo
+ * @property {string[]} [tabelas]
+ * @property {string[]} [rpcs]
+ * @property {string[]} [cache]
+ */
+
+/**
+ * Contrato v2. Campos novos: tabelas (obrigatório para o validador), rpcs,
+ * fornece, consome, eventos, config, offline e precache. Todo módulo declara
+ * depende.nucleo.
  * @typedef {Object} Manifesto
  * @property {string} id
  * @property {string} nome
@@ -78,6 +107,14 @@
  * @property {Record<string, string>} [abas_legadas]
  * @property {TelaModulo[]} [telas]
  * @property {ExtensoesModulo} [extensoes]
+ * @property {string[]} [tabelas] tabelas e views de que o módulo é dono
+ * @property {string[]} [rpcs] funções public.* de que o módulo é dono
+ * @property {Record<string, string>} [fornece] serviço ('<id>.<nome>') → descrição
+ * @property {string[]} [consome] serviços de outros módulos
+ * @property {EventosModulo} [eventos]
+ * @property {Record<string, CampoConfig>} [config]
+ * @property {OfflineModulo} [offline]
+ * @property {string[]} [precache]
  */
 
 /**

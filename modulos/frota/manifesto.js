@@ -59,6 +59,21 @@
       lancar_horimetro_qr: 'frota.lancar_leitura'
     },
     abas_legadas: { frota: 'frota.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['diario_horimetro'],
+    rpcs: ['lancar_horimetro', 'corrigir_leitura', 'importar_leituras', 'recalcular_horimetro_atual'],
+    fornece: { 'frota.leituras': 'Leituras de horímetro e quilometragem (diário)' },
+    config: {
+      limite_salto_horas: { tipo: 'numero', padrao: 300, min: 0, descricao: 'Maior salto de horímetro aceito numa leitura (h)' },
+      limite_salto_km: { tipo: 'numero', padrao: 5000, min: 0, descricao: 'Maior salto de hodômetro aceito numa leitura (km)' },
+      limite_km_dia: { tipo: 'numero', padrao: 100, min: 0, descricao: 'Quilômetros por dia aceitos sem alerta' },
+      tolerancia_horas: { tipo: 'numero', padrao: 0.5, min: 0, descricao: 'Tolerância de horas entre leituras' },
+      delta_maximo_horimetro: { tipo: 'numero', padrao: 24, min: 0, descricao: 'Horas por dia aceitas sem alerta' }
+    },
+    offline: {
+      tabelas: ['diario_horimetro'],
+      rpcs: ['lancar_horimetro']
+    },
     telas: [{
       id: 'frota',
       rotulo: 'Frota & QR Codes',
