@@ -2,7 +2,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { carregarPlataforma } = require('./carregar-sandbox');
+const { validarContratoV2 } = require('./contrato-v2');
 
 const CATEGORIAS = new Set(['manutencao', 'producao', 'suprimentos', 'pessoas', 'plataforma']);
 const ESTAGIOS = new Set(['beta', 'estavel', 'descontinuado']);
@@ -405,12 +407,53 @@ function validarCatalogo(raiz) {
     .concat(validarMatrizDoTeste(fs.readFileSync(teste, 'utf8'), matriz));
 }
 
+/**
+ * Lê os textos do repositório que as regras do contrato v2 precisam.
+ * @param {string} raiz
+ */
+function fontesDoRepositorio(raiz) {
+  const ler = (/** @type {string} */ rel) => {
+    const arquivo = path.join(raiz, rel);
+    return fs.existsSync(arquivo) ? fs.readFileSync(arquivo, 'utf8') : '';
+  };
+  /** @type {Record<string, any>} */
+  const sandbox = {};
+  const textoIndice = ler('modulos/indice.js');
+  let indice = [];
+  try {
+    vm.runInContext(textoIndice, vm.createContext(sandbox));
+    indice = Array.isArray(sandbox.PLATAFORMA_MODULOS) ? Array.from(sandbox.PLATAFORMA_MODULOS) : [];
+  } catch (e) {
+    indice = [];
+  }
+  const pastas = fs.readdirSync(path.join(raiz, 'modulos'), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && fs.existsSync(path.join(raiz, 'modulos', d.name, 'manifesto.js')))
+    .map((d) => d.name)
+    .sort();
+  const dirMig = path.join(raiz, 'banco', 'migracoes');
+  const sql = fs.readdirSync(dirMig)
+    .filter((n) => /^\d{4}_.*\.sql$/.test(n))
+    .sort()
+    .map((n) => fs.readFileSync(path.join(dirMig, n), 'utf8'))
+    .join('\n');
+  return {
+    indice,
+    pastas,
+    paginas: { index: ler('index.html'), qr: ler('qr.html'), sw: ler('sw.js') },
+    sql,
+    offlineSync: ler('offline_sync.js'),
+    ler
+  };
+}
+
 function validarRepositorio(raiz) {
   const { Plataforma } = carregarPlataforma(raiz);
-  return validarRegistros(Plataforma.modulos.lista(), {
+  const lista = Plataforma.modulos.lista();
+  return validarRegistros(lista, {
     existe: (rel) => fs.existsSync(path.join(raiz, rel)),
     resolver: Plataforma.modulos.resolver
-  }).concat(validarCatalogo(raiz));
+  }).concat(validarCatalogo(raiz))
+    .concat(validarContratoV2(lista, fontesDoRepositorio(raiz)));
 }
 
 function main() {
@@ -425,4 +468,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { validarRegistros, validarRepositorio, validarCatalogoSql, validarMatrizDoTeste, validarCatalogo };
+module.exports = { validarRegistros, validarRepositorio, validarCatalogoSql, validarMatrizDoTeste, validarCatalogo, fontesDoRepositorio };
