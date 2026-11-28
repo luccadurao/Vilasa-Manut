@@ -66,7 +66,8 @@ test('trocar usuário ou local avisa nucleo.contexto_mudou; cache não avisa', (
 test('ninguém declara o estado compartilhado com let/const/var', () => {
   const declaracao = new RegExp(`^\\s*(let|const|var)\\s+(${[...CAMPOS, ...APELIDOS].join('|')})\\b`, 'm');
   const arquivos = fs.readdirSync(raiz).filter((n) => n.endsWith('.js') || n.endsWith('.html'));
-  for (const pasta of ['nucleo', ...fs.readdirSync(path.join(raiz, 'modulos')).map((m) => path.join('modulos', m))]) {
+  arquivos.push(path.join('modulos', 'indice.js'));
+  for (const pasta of ['nucleo', ...fs.readdirSync(path.join(raiz, 'modulos'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => path.join('modulos', d.name))]) {
     for (const n of fs.readdirSync(path.join(raiz, pasta))) {
       const rel = path.join(pasta, n);
       if (n.endsWith('.js') && rel !== path.join('nucleo', 'contexto.js')) arquivos.push(rel);

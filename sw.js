@@ -26,7 +26,7 @@ const ARQUIVOS_NUCLEO = [
   './modulos/os/manifesto.js', './modulos/frota/manifesto.js',
   './modulos/preventivas/manifesto.js', './modulos/estoque/manifesto.js',
   './modulos/diesel/manifesto.js', './modulos/painel/manifesto.js',
-  './modulos/admin/manifesto.js',
+  './modulos/admin/manifesto.js', './modulos/indice.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
   './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
   './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',
