@@ -4,7 +4,7 @@
 
 /**
  * @typedef {'beta' | 'estavel' | 'descontinuado'} EstagioModulo
- * @typedef {'manutencao' | 'producao' | 'suprimentos' | 'pessoas' | 'comercial' | 'financeiro' | 'plataforma'} CategoriaModulo
+ * @typedef {'manutencao' | 'producao' | 'suprimentos' | 'pessoas' | 'plataforma'} CategoriaModulo
  * @typedef {'numero' | 'texto' | 'booleano' | 'lista'} TipoCampoConfig
  * @typedef {'classico' | 'esm'} TipoScriptModulo
  * @typedef {'csv' | 'pdf' | 'png'} FormatoRelatorio

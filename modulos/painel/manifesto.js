@@ -55,7 +55,7 @@
     abas_legadas: { kpis: 'painel.ver' },
     // Contrato v2: o painel não é dono de tabela; só lê pelos serviços dos outros.
     tabelas: [],
-    consome: ['os.ordens', 'estoque.pecas', 'estoque.movimentos', 'preventivas.planos'],
+    consome: ['os.ordens', 'estoque.pecas', 'estoque.movimentos', 'preventivas.planos', 'frota.leituras'],
     offline: {
       cache: ['kpi_os', 'kpi_movs', 'kpi_leituras']
     },

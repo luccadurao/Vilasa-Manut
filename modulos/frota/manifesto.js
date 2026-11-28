@@ -62,6 +62,7 @@
     // Contrato v2: o que o módulo é dono, oferece e usa.
     tabelas: ['diario_horimetro'],
     rpcs: ['lancar_horimetro', 'corrigir_leitura', 'importar_leituras', 'recalcular_horimetro_atual'],
+    fornece: { 'frota.leituras': 'Leituras de horímetro e quilometragem (diário)' },
     config: {
       limite_salto_horas: { tipo: 'numero', padrao: 300, min: 0, descricao: 'Maior salto de horímetro aceito numa leitura (h)' },
       limite_salto_km: { tipo: 'numero', padrao: 5000, min: 0, descricao: 'Maior salto de hodômetro aceito numa leitura (km)' },

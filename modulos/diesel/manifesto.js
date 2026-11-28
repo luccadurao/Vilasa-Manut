@@ -57,6 +57,7 @@
     // Contrato v2: o que o módulo é dono, oferece e usa.
     tabelas: ['diesel_tanques', 'diesel_abastecimentos', 'diesel_carregamentos', 'diesel_estoque_diario'],
     rpcs: ['diesel_vincular_equipamentos', 'diesel_sincronizar_leituras'],
+    consome: ['frota.leituras'],
     telas: [{
       id: 'diesel',
       rotulo: 'Diesel',

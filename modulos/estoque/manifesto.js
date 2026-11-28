@@ -62,7 +62,8 @@
     },
     abas_legadas: { estoque: 'estoque.ver' },
     // Contrato v2: o que o módulo é dono, oferece e usa.
-    tabelas: ['pecas_estoque', 'movimentacoes_almoxarifado', 'lotes_estoque', 'servicos_almoxarifado', 'notas_fora_do_custo'],
+    tabelas: ['pecas_estoque', 'movimentacoes_almoxarifado', 'lotes_estoque', 'servicos_almoxarifado',
+      'notas_fora_do_custo', 'itens_os_estoque'],
     rpcs: ['almox_movimentar'],
     fornece: {
       'estoque.pecas': 'Catálogo de peças e saldo',

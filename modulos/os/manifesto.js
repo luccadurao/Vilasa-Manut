@@ -69,7 +69,7 @@
     },
     abas_legadas: { os: 'os.ver' },
     // Contrato v2: o que o módulo é dono, oferece e usa.
-    tabelas: ['ordens_servico', 'os_pecas_previstas', 'apontamentos_os', 'itens_os_estoque'],
+    tabelas: ['ordens_servico', 'os_pecas_previstas', 'apontamentos_os'],
     rpcs: ['os_assumir', 'os_abrir_pelo_qr'],
     fornece: { 'os.ordens': 'Ordens de serviço abertas e concluídas, por local' },
     consome: ['estoque.movimentos'],

@@ -33,8 +33,8 @@ módulo que depende de outro.
    para textos como local/ativo (nunca "Obra" ou nome de cliente fixo). Chave
    no localStorage só por `PlataformaProduto.chave(...)`. Lançamento de campo passa pela fila do
    `offline_sync.js`, levando `empresa_id` e `modulo`.
-3. Inclua o `<script src="modulos/<id>/manifesto.js">` no `index.html` (e no
-   `qr.html` se tiver ação de QR), junto dos outros manifestos.
+3. Inclua o `<script src="modulos/<id>/manifesto.js">` no `index.html` e no
+   `qr.html` (sempre nos dois: o validador exige), junto dos outros manifestos.
 4. `sw.js`: o manifesto entra em `ARQUIVOS_NUCLEO`; o script do módulo é
    precacheado pelo contrato, não precisa entrar lá. Se o módulo usa a fila
    offline, acrescente as tabelas e chaves dele em `MODULO_POR_TABELA` e

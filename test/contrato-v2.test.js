@@ -150,6 +150,26 @@ test('leitor de SQL: renomeação conta e comentário não conta', () => {
   assert.equal(funcoes.has('pedido_fechar'), true);
 });
 
+test('leitor de SQL: sem esquema, com aspas, DROP e texto entre aspas', () => {
+  const { tabelas, funcoes } = objetosDoSql([
+    'CREATE TABLE sem_esquema (id int);',
+    'CREATE TABLE public."com_aspas" (id int);',
+    'CREATE TABLE app.de_outro_esquema (id int);',
+    'CREATE TABLE public.apagada (id int);',
+    'DROP TABLE IF EXISTS public.apagada;',
+    'CREATE FUNCTION public.f_apagada() RETURNS int AS $$ select 1 $$;',
+    'DROP FUNCTION IF EXISTS public.f_apagada();',
+    "SELECT 'CREATE TABLE AS', 'CREATE TABLE public.em_texto';"
+  ].join('\n'));
+  assert.equal(tabelas.has('sem_esquema'), true);
+  assert.equal(tabelas.has('com_aspas'), true);
+  assert.equal(tabelas.has('de_outro_esquema'), false);
+  assert.equal(tabelas.has('apagada'), false);
+  assert.equal(funcoes.has('f_apagada'), false);
+  assert.equal(tabelas.has('as'), false);
+  assert.equal(tabelas.has('em_texto'), false);
+});
+
 test('regra 4: consome aponta para serviço que existe e cujo dono está nas dependências', () => {
   let b = base();
   mod(b, 'rh').consome = ['estoque.pecas'];
@@ -171,6 +191,9 @@ test('regra 5: eventos com prefixo e só se ouve o que alguém emite', () => {
   mod(b, 'vendas').eventos.emite = ['pedido_fechado'];
   acusa(erros(b), /evento "pedido_fechado" não usa o prefixo "vendas."/);
   acusa(erros(b), /ouve "vendas.pedido_fechado", que nenhum módulo emite/);
+  b = base();
+  mod(b, 'rh').eventos.ouve['nucleo.contexto_mudou'] = 'aoFecharPedido';
+  assert.deepEqual(erros(b), [], 'evento do núcleo declarado pelo núcleo pode ser ouvido');
   b = base();
   mod(b, 'vendas').eventos = {};
   mod(b, 'vendas').extensoes.emite = ['vendas.pedido_fechado'];

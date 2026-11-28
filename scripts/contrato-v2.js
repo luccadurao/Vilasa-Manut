@@ -32,7 +32,11 @@ function objeto(v) {
  * @param {string} sql
  */
 function semComentarios(sql) {
-  return String(sql || '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+  return String(sql || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    // Texto entre aspas simples (ex.: a lista 'CREATE TABLE AS' do event trigger).
+    .replace(/'(?:[^']|'')*'/g, "''");
 }
 
 /**
@@ -47,20 +51,47 @@ function objetosDoSql(sql) {
   const tabelas = new Set();
   /** @type {Set<string>} */
   const funcoes = new Set();
-  // Um só padrão, percorrido em ordem: renomear tira o nome antigo, e um
-  // CREATE posterior com o mesmo nome (ex.: a view obras) devolve.
+  // Um só padrão, percorrido em ordem: renomear tira o nome antigo, DROP tira
+  // o objeto, e um CREATE posterior com o mesmo nome (ex.: a view obras) volta.
+  // Nome com ou sem esquema e com ou sem aspas; sem esquema conta como public
+  // (o search_path das migrações é vazio, mas o dump pode não qualificar).
+  const NOME = '((?:"?[a-z_][a-z0-9_]*"?\\.)?"?[a-z_][a-z0-9_]*"?)';
   const re = new RegExp([
-    'CREATE\\s+(?:UNLOGGED\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?public\\.([a-z_][a-z0-9_]*)',
-    'CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:MATERIALIZED\\s+)?VIEW\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?public\\.([a-z_][a-z0-9_]*)',
-    'ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?public\\.([a-z_][a-z0-9_]*)\\s+RENAME\\s+TO\\s+([a-z_][a-z0-9_]*)',
-    'CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+public\\.([a-z_][a-z0-9_]*)\\s*\\('
+    `CREATE\\s+(?:UNLOGGED\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${NOME}`,
+    `CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:MATERIALIZED\\s+)?VIEW\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${NOME}`,
+    `ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${NOME}\\s+RENAME\\s+TO\\s+"?([a-z_][a-z0-9_]*)"?`,
+    `CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+${NOME}\\s*\\(`,
+    `DROP\\s+(?:MATERIALIZED\\s+)?(?:TABLE|VIEW)\\s+(?:IF\\s+EXISTS\\s+)?${NOME}`,
+    `DROP\\s+FUNCTION\\s+(?:IF\\s+EXISTS\\s+)?${NOME}`
   ].join('|'), 'gi');
+  /**
+   * Nome em public, sem aspas; null se for de outro esquema.
+   * @param {string} bruto
+   */
+  const daPublic = (bruto) => {
+    const partes = bruto.replace(/"/g, '').toLowerCase().split('.');
+    if (partes.length === 2 && partes[0] !== 'public') return null;
+    const nome = partes[partes.length - 1];
+    return nome === 'as' ? null : nome;
+  };
   let m;
   while ((m = re.exec(texto))) {
-    if (m[1]) tabelas.add(m[1].toLowerCase());
-    else if (m[2]) tabelas.add(m[2].toLowerCase());
-    else if (m[3]) { tabelas.delete(m[3].toLowerCase()); tabelas.add(m[4].toLowerCase()); }
-    else if (m[5]) funcoes.add(m[5].toLowerCase());
+    if (m[1] || m[2]) {
+      const n = daPublic(m[1] || m[2]);
+      if (n) tabelas.add(n);
+    } else if (m[3]) {
+      const antigo = daPublic(m[3]);
+      if (antigo) { tabelas.delete(antigo); tabelas.add(m[4].toLowerCase()); }
+    } else if (m[5]) {
+      const n = daPublic(m[5]);
+      if (n) funcoes.add(n);
+    } else if (m[6]) {
+      const n = daPublic(m[6]);
+      if (n) tabelas.delete(n);
+    } else if (m[7]) {
+      const n = daPublic(m[7]);
+      if (n) funcoes.delete(n);
+    }
   }
   return { tabelas, funcoes };
 }

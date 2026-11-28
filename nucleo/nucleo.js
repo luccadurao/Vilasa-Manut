@@ -1307,6 +1307,7 @@
       'nucleo.locais': 'Locais da empresa e o local ativo',
       'nucleo.ativos': 'Ativos (equipamentos) da empresa'
     },
+    eventos: { emite: ['nucleo.contexto_mudou'] },
     offline: {
       tabelas: ['equipamentos', 'obras'],
       cache: ['obras_ativas', 'obras', 'equipamentos']
