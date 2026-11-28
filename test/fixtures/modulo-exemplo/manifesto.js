@@ -25,7 +25,7 @@
     permissoes: { 'exemplo.ver': 'Ver' },
     tabelas: ['exemplo_registros'],
     rpcs: ['exemplo_fechar'],
-    consome: ['fornecedor.dados', 'ausente.coisa'],
+    consome: ['fornecedor.dados', 'ausente.coisa', 'nucleo.locais'],
     eventos: { emite: ['exemplo.feito'], ouve: { 'fornecedor.pronto': 'aoFornecedorPronto' } },
     config: {
       limite: { tipo: 'numero', padrao: 10, min: 0, max: 100 },

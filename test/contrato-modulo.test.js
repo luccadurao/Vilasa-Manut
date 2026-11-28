@@ -164,6 +164,53 @@ test('descarregar chama o parar, solta os ouvintes e zera a carga', async () => 
   assert.equal(sandbox.__exemplo.recebido.length, 0, 'ouvinte do exemplo foi solto');
 });
 
+test('ctx: serviço do núcleo (nucleo.locais) responde', async () => {
+  const { sandbox, contexto } = await montar();
+  vm.runInContext("cacheLocais = [{ id: 'L1' }];", contexto);
+  const locais = sandbox.__exemplo.ctx.servico('nucleo.locais')();
+  assert.equal(locais.length, 1);
+  assert.equal(locais[0].id, 'L1');
+});
+
+test('descarregar e carregar de novo, sem recarregar a página, funciona', async () => {
+  const { Plataforma, sandbox } = await montar();
+  await Plataforma.modulos.descarregar();
+  const ordem = ['fornecedor', 'exemplo'];
+  let baixados = 0;
+  const carga = await Plataforma.modulos.carregar({ ordem, ativos: ['nucleo', ...ordem], bloqueados: [], avisos: [] },
+    Plataforma.modulos.lista(), { carregarScript: async () => { baixados += 1; }, criarCtx: (m) => Plataforma.modulos.criarCtx(m) });
+  assert.equal(JSON.stringify(carga.carregados), JSON.stringify(ordem));
+  assert.equal(baixados, 0, 'script já rodou nesta página: não injeta de novo');
+  assert.equal(carga.bloqueados.length, 0);
+  assert.equal(sandbox.__exemplo.parou, false, 'o iniciar rodou de novo com ctx novo');
+});
+
+test('ctx: manifesto e usuário são cópias congeladas; o registro não muda', async () => {
+  const { Plataforma, sandbox } = await montar();
+  const ctx = sandbox.__exemplo.ctx;
+  assert.throws(() => { 'use strict'; ctx.manifesto.permissoes['exemplo.novo'] = 'x'; });
+  assert.throws(() => { 'use strict'; ctx.contexto.usuario.cargos_lista.push('admin'); });
+  const original = Plataforma.modulos.lista().find((m) => m.id === 'exemplo');
+  assert.equal(Object.prototype.hasOwnProperty.call(original.permissoes, 'exemplo.novo'), false);
+  assert.equal(sandbox.usuarioLogado.cargos_lista.length, 1);
+});
+
+test('sessão sem módulos contratados (modulos: []) não reduz o menu ao Admin', async () => {
+  const { Plataforma, sandbox } = carregarPlataforma(raiz);
+  sandbox.usuarioLogado = { id: 'a', cargos_lista: ['admin'], ativo: true, modulos: [] };
+  const resolucao = Plataforma.modulos.resolverEGuardar(Plataforma.sessao.contratoDe(sandbox.usuarioLogado));
+  await Plataforma.modulos.carregar(resolucao, Plataforma.modulos.lista(), { carregarScript: async () => {} });
+  assert.equal(Plataforma.telas.ordenadas().length > 1, true);
+});
+
+test('carga vazia não esvazia o menu', () => {
+  const { Plataforma } = carregarPlataforma(raiz);
+  return Plataforma.modulos.carregar({ ordem: [], ativos: ['nucleo'], bloqueados: [], avisos: [] }, Plataforma.modulos.lista(),
+    { carregarScript: async () => {} }).then(() => {
+    assert.equal(Plataforma.telas.ordenadas().length > 0, true);
+  });
+});
+
 test('definirModulo recusa módulo sem manifesto, serviço fora do fornece e repetição', () => {
   const { Plataforma, contexto } = carregarPlataforma(raiz, { manifestos: false });
   vm.runInContext(fs.readFileSync(path.join(raiz, 'test/fixtures/modulo-exemplo/manifesto.js'), 'utf8'), contexto);

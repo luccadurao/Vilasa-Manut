@@ -36,6 +36,29 @@
   }
 
   /**
+   * Cópia profunda e congelada: o módulo lê, mas não altera o registro do
+   * núcleo nem a sessão de todos.
+   * @param {any} valor
+   */
+  function copiaCongelada(valor) {
+    if (valor === null || typeof valor !== 'object') return valor;
+    let copia;
+    try {
+      copia = typeof root.structuredClone === 'function' ? root.structuredClone(valor) : JSON.parse(JSON.stringify(valor));
+    } catch (e) {
+      copia = JSON.parse(JSON.stringify(valor));
+    }
+    const congelar = (/** @type {any} */ o) => {
+      if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+        Object.freeze(o);
+        for (const k of Object.keys(o)) congelar(o[k]);
+      }
+      return o;
+    };
+    return congelar(copia);
+  }
+
+  /**
    * @param {string} id
    */
   function manifestoDe(id) {
@@ -89,9 +112,10 @@
 
   /**
    * @param {any} manifesto
+   * @param {any} [usuario] quem está carregando; sem ele, o usuário logado
    * @returns {import('./tipos.js').CtxModulo & { __soltar: () => void }}
    */
-  function criarCtx(manifesto) {
+  function criarCtx(manifesto, usuario) {
     const P = plataforma();
     if (!P) throw new Error('criarCtx: Plataforma não carregou.');
     const id = String(manifesto.id);
@@ -112,7 +136,7 @@
     const tabelasLiberadas = new Set([...lista(manifesto.tabelas), ...lista(nucleo.tabelas)]);
     const rpcsLiberadas = new Set([...lista(manifesto.rpcs), ...lista(nucleo.rpcs)]);
 
-    const { config, avisos } = montarConfig(manifesto, root.usuarioLogado);
+    const { config, avisos } = montarConfig(manifesto, usuario === undefined ? root.usuarioLogado : usuario);
     for (const aviso of avisos) if (root.console) root.console.warn(`${onde}: ${aviso}`);
 
     function cliente() {
@@ -126,7 +150,7 @@
 
     const ctx = {
       id,
-      manifesto: Object.freeze(Object.assign({}, manifesto)),
+      manifesto: copiaCongelada(manifesto),
       pode: (/** @type {string} */ permissao) => P.permissoes.pode(permissao),
       termo: (/** @type {string} */ chave) => P.termo(chave),
       marca: Object.freeze({
@@ -134,8 +158,8 @@
         prefixoArquivo: () => P.marca.prefixoArquivo()
       }),
       contexto: Object.freeze({
-        get usuario() { return root.usuarioLogado || null; },
-        get empresa() { return (root.usuarioLogado && root.usuarioLogado.empresa) || null; },
+        get usuario() { return copiaCongelada(root.usuarioLogado || null); },
+        get empresa() { return copiaCongelada((root.usuarioLogado && root.usuarioLogado.empresa) || null); },
         get localAtivoId() { return root.localAtivoId; }
       }),
       config,
@@ -167,7 +191,10 @@
        */
       servico(nome) {
         if (!consome.has(nome)) throw new Error(`${onde}: o serviço "${nome}" não está em consome do manifesto.`);
-        const dono = nome.split('.')[0];
+        // O dono é quem declara o serviço em fornece (não só o prefixo do nome).
+        const donoManifesto = P.modulos.lista().find((/** @type {any} */ m) => Object.prototype.hasOwnProperty.call(objeto(m.fornece), nome));
+        if (!donoManifesto) return null;
+        const dono = donoManifesto.id;
         const carregados = P.modulos.carregados();
         if (dono !== 'nucleo' && !carregados.includes(dono)) return null;
         const impl = P.modulos.implementacao(dono);

@@ -267,26 +267,38 @@ async function realizarLogin(event) {
   }
 }
 
+async function descarregarModulosComLimite() {
+  if (!window.Plataforma || !Plataforma.modulos || typeof Plataforma.modulos.descarregar !== 'function') return;
+  try {
+    await Promise.race([
+      Plataforma.modulos.descarregar(),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ]);
+  } catch (e) { /* segue para o sair */ }
+}
+
 async function encerrarSessao() {
   try {
     const pendentes = (typeof lerFilaOffline === 'function') ? lerFilaOffline().length : 0;
     if (pendentes > 0 && !confirm('Há ' + pendentes + ' registro(s) ainda NÃO enviados neste celular. Eles ficam guardados e são enviados quando alguém entrar com sinal. Sair mesmo assim?')) return;
   } catch (e) { /* segue */ }
   try { await obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* offline: ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de apagar a sessão e o
+  // cache, com no máximo 2 s de espera: um parar travado não trava o sair.
+  await descarregarModulosComLimite();
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
-  // Cada módulo para (parar) e solta os ouvintes antes de trocar de pessoa.
-  try { if (window.Plataforma && Plataforma.modulos.descarregar) await Plataforma.modulos.descarregar(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }
 
 async function encerrarSessaoSemPerguntar() {
   try { obterClienteSupabase()?.auth.signOut({ scope: 'local' }); } catch (e) { /* ok */ }
+  // Cada módulo para (parar) e solta os ouvintes antes de apagar a sessão e o
+  // cache, com no máximo 2 s de espera: um parar travado não trava o sair.
+  await descarregarModulosComLimite();
   apagarSessaoLocal(true);
   try { await limparCacheLocalDeDados(); } catch (e) { /* ok */ }
-  // Cada módulo para (parar) e solta os ouvintes antes de trocar de pessoa.
-  try { if (window.Plataforma && Plataforma.modulos.descarregar) await Plataforma.modulos.descarregar(); } catch (e) { /* ok */ }
   usuarioLogado = null;
   window.location.reload();
 }

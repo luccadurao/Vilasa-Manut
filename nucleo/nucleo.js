@@ -32,6 +32,9 @@
   const contextos = new Map();
   /** Módulos que já receberam o aviso de compatibilidade. */
   const avisosGlobal = new Set();
+  /** Scripts já injetados nesta página: uma segunda carga não injeta de novo. */
+  /** @type {Set<string>} */
+  const scriptsJaCarregados = new Set();
 
   const VERSAO_NUCLEO = '1.0.0';
 
@@ -106,9 +109,10 @@
     // 3. Compatibilidade: função global solta. Avisa uma vez por módulo.
     if (typeof root[nome] === 'function') {
       const chaveAviso = moduloId || '(sem módulo)';
+      const naProducao = !!(root.AMBIENTE_ATUAL && root.AMBIENTE_ATUAL.producao);
       if (moduloId && !implementacoes.has(moduloId) && !avisosGlobal.has(chaveAviso)) {
         avisosGlobal.add(chaveAviso);
-        if (root.console) root.console.info(`Módulo ${moduloId} usa funções globais (compatibilidade). Migre para Plataforma.definirModulo.`);
+        if (root.console && !naProducao) root.console.info(`Módulo ${moduloId} usa funções globais (compatibilidade). Migre para Plataforma.definirModulo.`);
       }
       return root[nome];
     }
@@ -154,7 +158,15 @@
    * @returns {import('./tipos.js').Manifesto[]}
    */
   function manifestosAtivos() {
+    // Carga "vazia" (sessão sem módulos contratados por algum erro: só os
+    // obrigatórios entraram) não pode esvaziar a tela. Nesse caso vale o
+    // comportamento antigo: todos os registrados.
     if (!resultadoCarga) return registros;
+    const contratados = resultadoCarga.carregados.filter((id) => {
+      const m = registros.find((item) => item.id === id);
+      return m && !m.obrigatorio;
+    });
+    if (contratados.length === 0) return registros;
     const ok = new Set(['nucleo', ...resultadoCarga.carregados]);
     return registros.filter((m) => ok.has(m.id));
   }
@@ -1281,10 +1293,20 @@
      */
     async function baixarUm(src, tipo) {
       if (!src || vistos.has(src)) return;
-      if (typeof baixar !== 'function') throw new Error('Carregador de script ausente');
-      await baixar(src, tipo);
       vistos.add(src);
       arquivos.push(src);
+      // Já rodou nesta página (carga anterior): não roda de novo, senão o
+      // definirModulo do módulo seria chamado duas vezes.
+      if (scriptsJaCarregados.has(src)) return;
+      if (typeof baixar !== 'function') throw new Error('Carregador de script ausente');
+      try {
+        await baixar(src, tipo);
+      } catch (erro) {
+        vistos.delete(src);
+        arquivos.pop();
+        throw erro;
+      }
+      scriptsJaCarregados.add(src);
     }
 
     for (const id of resolucao.ordem || []) {
@@ -1389,10 +1411,11 @@
    * ctx do módulo. O completo vem de nucleo/ctx.js (Plataforma.modulos.criarCtx);
    * sem ele, um ctx mínimo só com o id.
    * @param {import('./tipos.js').Manifesto} manifesto
+   * @param {any} [usuario] quem está carregando (config da empresa dele)
    */
-  function criarCtxPadrao(manifesto) {
+  function criarCtxPadrao(manifesto, usuario) {
     const fabrica = root.Plataforma && root.Plataforma.modulos && root.Plataforma.modulos.criarCtx;
-    if (typeof fabrica === 'function') return fabrica(manifesto);
+    if (typeof fabrica === 'function') return fabrica(manifesto, usuario);
     return { id: manifesto.id };
   }
 
@@ -1429,7 +1452,7 @@
         const resolucao = resolverEGuardar(contratoDe(pessoa));
         const resultado = await carregar(resolucao, registros.slice(), {
           carregarScript: carregarScriptNoDocumento,
-          criarCtx: criarCtxPadrao
+          criarCtx: (/** @type {import('./tipos.js').Manifesto} */ m) => criarCtxPadrao(m, pessoa)
         });
         resultadoCarga = resultado;
         for (const bloqueio of resultado.bloqueados) {
@@ -1444,6 +1467,15 @@
     }
     return cargaPromise;
   }
+
+  // Serviços do núcleo, para ctx.servico('nucleo.locais' | 'nucleo.ativos').
+  implementacoes.set('nucleo', Object.freeze({
+    iniciar: null, parar: null, telas: {}, relatorios: {}, qr: {}, funcoes: {},
+    servicos: Object.freeze({
+      'nucleo.locais': () => (Array.isArray(root.cacheLocais) ? root.cacheLocais.slice() : []),
+      'nucleo.ativos': () => (Array.isArray(root.cacheAtivos) ? root.cacheAtivos.slice() : [])
+    })
+  }));
 
   registrar({
     id: 'nucleo',
