@@ -40,7 +40,10 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   contrato v2 (`nucleo/tipos.js`): dependências (`depende.nucleo` sempre),
   permissões, cargos padrão, telas, relatórios, ações de QR e também as
   `tabelas` e `rpcs` de que é dono, os serviços que `fornece` e `consome`,
-  `eventos`, `config` e `offline`. `modulos/indice.js` lista os módulos.
+  `eventos`, `config` e `offline`. `modulos/indice.js` lista os módulos e é a
+  única lista: as páginas carregam os manifestos por ele (`nucleo/manifestos.js`),
+  o `sw.js` monta o precache com ele e a fila offline acha o dono de cada item
+  pelo `offline` do manifesto. Nunca liste manifesto ou módulo à mão nesses lugares.
   `scripts/contrato-v2.js` (no validador) recusa tabela sem dono ou com dois
   donos, `consome` sem fornecedor nas dependências, evento ouvido que ninguém
   emite e função citada que não existe.

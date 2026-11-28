@@ -881,5 +881,9 @@ window.gravarDadosOfflineSafe = window.gravarDadosOfflineSafe || async function 
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.Plataforma && Plataforma.marca) Plataforma.marca.aplicar();
+  // Os manifestos vêm do índice (nucleo/manifestos.js), depois do HTML.
+  if (window.Plataforma && Plataforma.modulos && typeof Plataforma.modulos.manifestosProntos === 'function') {
+    await Plataforma.modulos.manifestosProntos();
+  }
   await restaurarSessaoSalva();
 });

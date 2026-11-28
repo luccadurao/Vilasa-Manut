@@ -5,9 +5,8 @@
 // modulos/<id>/manifesto.js. Módulo novo = uma linha aqui (e a pasta dele).
 //
 // Script clássico: funciona na página e no service worker (importScripts).
-// Nesta fase só o validador lê este arquivo (scripts/validar-manifestos.js
-// confere que index.html, qr.html e sw.js batem com ele). As próximas fases
-// passam a carregar os manifestos por aqui, sem lista fixa.
+// As páginas carregam os manifestos por aqui (nucleo/manifestos.js) e o
+// sw.js monta o precache com esta lista. Nenhum outro lugar lista módulos.
 // A ordem não importa: quem decide a ordem de carga são as dependências.
 // ============================================================================
 

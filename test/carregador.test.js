@@ -162,10 +162,11 @@ test('o index não fixa os scripts dos módulos e o cache lê a versão única',
   assert.match(versao, /var PLATAFORMA_VERSAO_APP = 'v\d+'/);
   const sw = fs.readFileSync(path.join(raiz, 'sw.js'), 'utf8');
   assert.match(sw, /importScripts\('\.\/nucleo\/versao\.js'\)/);
+  assert.match(sw, /importScripts\('\.\/modulos\/indice\.js'\)/);
   assert.match(sw, /const VERSAO = PLATAFORMA_VERSAO_APP/);
   assert.equal(/const VERSAO = 'v\d+'/.test(sw), false);
   assert.match(sw, /ARQUIVOS_NUCLEO/);
-  for (const arquivo of ['./offline_sync.js', './qr.html', './config.js', './nucleo/versao.js', './modulos/os/manifesto.js']) {
+  for (const arquivo of ['./offline_sync.js', './qr.html', './config.js', './nucleo/versao.js', './modulos/indice.js', './nucleo/manifestos.js']) {
     assert.equal(sw.includes(`'${arquivo}'`), true, arquivo);
   }
   for (const arquivo of ['./os_rep.js', './pcm_sap.js', './frota.js', './estoque.js', './kpis.js', './diesel.js', './admin.js']) {

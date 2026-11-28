@@ -28,50 +28,58 @@ const PREFIXO_QR_EQUIP_LOCAL = chaveLocalApp('qr_equip_');
 const EMPRESA_1 = '00000000-0000-0000-0000-000000000001';
 const INTERVALO_TENTATIVA_MS = 30000;
 
-// Tabela ou RPC -> módulo dono. Equipamento novo nasce no núcleo; ciclo, obra e
-// leitura passam o módulo frota na chamada.
-const MODULO_POR_TABELA = {
-  ordens_servico: 'os',
-  os_assumir: 'os',
-  os_abrir_pelo_qr: 'os',
-  os_pecas_previstas: 'os',
-  apontamentos_os: 'os',
-  equipamentos: 'nucleo',
-  obras: 'nucleo',
-  lancar_horimetro: 'frota',
-  diario_horimetro: 'frota',
-  pecas_estoque: 'estoque',
-  movimentacoes_almoxarifado: 'estoque',
-  almox_movimentar: 'estoque',
-  planos_preventiva: 'preventivas',
-  execucoes_preventiva: 'preventivas',
-  preventiva_estrategias: 'preventivas',
-  preventiva_pacotes: 'preventivas',
-  preventiva_listas: 'preventivas',
-  preventiva_lista_tarefas: 'preventivas',
-  preventiva_lista_materiais: 'preventivas'
-};
+// Tabela, RPC ou chave de cache -> módulo dono. Vem dos manifestos (offline.*,
+// e tabelas/rpcs como reserva), não de lista fixa: módulo novo não mexe aqui.
+// Ciclo, local e leitura passam o módulo na chamada; o resto cai no dono.
+function manifestosDaPlataforma() {
+  try {
+    const P = typeof window !== 'undefined' ? window.Plataforma : null;
+    if (P && P.modulos && typeof P.modulos.lista === 'function') return P.modulos.lista();
+  } catch (e) { /* sem núcleo carregado */ }
+  return [];
+}
 
-const MODULO_POR_CHAVE = {
-  obras_ativas: 'nucleo',
-  obras: 'nucleo',
-  equipamentos: 'nucleo',
-  os_ativas: 'os',
-  os_concluidas: 'os',
-  mov_por_os: 'os',
-  pecas_estoque: 'estoque',
-  movimentacoes_almoxarifado: 'estoque',
-  kpi_os: 'painel',
-  kpi_movs: 'painel',
-  kpi_leituras: 'painel',
-  execucoes_preventiva: 'preventivas',
-  planos_preventiva: 'preventivas',
-  preventiva_estrategias: 'preventivas',
-  preventiva_pacotes: 'preventivas',
-  preventiva_listas: 'preventivas',
-  preventiva_lista_tarefas: 'preventivas',
-  preventiva_lista_materiais: 'preventivas'
-};
+// Enquanto a página ainda injeta os manifestos, o mapa está incompleto: quem
+// classifica a fila espera (o item não pode ganhar módulo errado nem nulo).
+function manifestosProntosParaFila() {
+  try {
+    const P = typeof window !== 'undefined' ? window.Plataforma : null;
+    if (P && P.modulos && typeof P.modulos.manifestosCarregados === 'function') return P.modulos.manifestosCarregados();
+  } catch (e) { /* sem carregador: os manifestos vieram por tag */ }
+  return true;
+}
+
+// Algum manifesto do índice não carregou (404, sem rede e sem cópia): o item
+// sem dono pode ser desse módulo, então fica suspenso em vez de ir sem módulo.
+function algumManifestoFalhou() {
+  try {
+    const P = typeof window !== 'undefined' ? window.Plataforma : null;
+    if (P && P.modulos && typeof P.modulos.manifestosComFalha === 'function') return P.modulos.manifestosComFalha().length > 0;
+  } catch (e) { /* sem carregador */ }
+  return false;
+}
+
+let mapasOfflineGuardados = null;
+
+function mapasOfflineDosManifestos() {
+  const lista = manifestosDaPlataforma();
+  const assinatura = lista.map((m) => m && m.id).join(',');
+  if (mapasOfflineGuardados && mapasOfflineGuardados.assinatura === assinatura) return mapasOfflineGuardados;
+  const porTabela = Object.create(null);
+  const porChave = Object.create(null);
+  const nomes = (v) => (Array.isArray(v) ? v.map(String) : []);
+  // Primeiro o que vai para a fila (offline.*), depois o dono por tabelas/rpcs.
+  for (const m of lista) {
+    const off = (m && m.offline) || {};
+    for (const t of [...nomes(off.tabelas), ...nomes(off.rpcs)]) if (!porTabela[t]) porTabela[t] = m.id;
+    for (const c of nomes(off.cache)) if (!porChave[c]) porChave[c] = m.id;
+  }
+  for (const m of lista) {
+    for (const t of [...nomes(m && m.tabelas), ...nomes(m && m.rpcs)]) if (!porTabela[t]) porTabela[t] = m.id;
+  }
+  mapasOfflineGuardados = { assinatura, porTabela, porChave };
+  return mapasOfflineGuardados;
+}
 
 let sincronizacaoEmAndamento = false;
 
@@ -125,7 +133,7 @@ function versaoAppAbaixoDaMinima(atual, minima) {
 }
 
 function moduloDaTabela(tabela) {
-  return MODULO_POR_TABELA[tabela] || null;
+  return mapasOfflineDosManifestos().porTabela[tabela] || null;
 }
 
 function sessaoOfflineAtual() {
@@ -202,6 +210,9 @@ function classificarItemFila(item, ctx) {
   if (atual.modulo && Array.isArray(contexto.modulos) && contexto.modulos.indexOf(atual.modulo) < 0) {
     return { destino: 'suspenso', motivo: 'modulo_desligado' };
   }
+  if (!atual.modulo && algumManifestoFalhou()) {
+    return { destino: 'suspenso', motivo: 'manifesto_ausente' };
+  }
   if (atual.motivo === 'vm403' && atual.contexto_id && atual.contexto_id === contextoIdOffline(contexto)) {
     return { destino: 'suspenso', motivo: 'vm403' };
   }
@@ -274,7 +285,7 @@ function montarChaveCache(empresaId, modulo, chave) {
 
 function resolverChaveLeitura(chaveCache, meta) {
   if (meta && meta.chavePronta) return String(chaveCache || '');
-  const modulo = (meta && meta.modulo) || MODULO_POR_CHAVE[chaveCache] || 'nucleo';
+  const modulo = (meta && meta.modulo) || mapasOfflineDosManifestos().porChave[chaveCache] || 'nucleo';
   const nome = meta && meta.periodo ? String(chaveCache) + ':' + String(meta.periodo) : String(chaveCache || '');
   const empresa = (meta && meta.empresaId) || empresaIdDaSessao();
   return montarChaveCache(empresa, modulo, nome);
@@ -715,6 +726,7 @@ function tirarDaFila(idTemp) {
 }
 
 function reclassificarFilaOffline() {
+  if (!manifestosProntosParaFila()) return null;
   const preparado = prepararFila(lerFilaOffline(), lerSuspensosOffline(), contextoDaSessao());
   salvarListaLocal(CHAVE_FILA_OFFLINE, preparado.fila);
   salvarListaLocal(CHAVE_FILA_SUSPENSOS, preparado.suspensos);
@@ -724,6 +736,7 @@ function reclassificarFilaOffline() {
 async function sincronizarFilaOffline() {
   if (sincronizacaoEmAndamento) return;
   if (!navigator.onLine || typeof db === 'undefined' || !db) return;
+  if (!manifestosProntosParaFila()) return;
   // Junta o que uma aba antiga ainda tenha gravado com o nome velho da fila.
   try {
     if (typeof window !== 'undefined' && window.PlataformaProduto && typeof window.PlataformaProduto.migrarAgora === 'function') {
@@ -812,7 +825,7 @@ function revisarSuspensosOffline() {
   if (lista.length === 0) return alert('Nenhum lançamento suspenso.');
   const linhas = textoSuspensos(lista.slice(0, 15));
   const msg = `⏸ ${lista.length} suspensos. Nada foi apagado.\n\n${linhas}\n\n` +
-    'Eles voltam sozinhos quando o módulo ligar, a empresa for a desta sessão ou o aplicativo atualizar. Deseja exportar a lista?';
+    'Eles voltam sozinhos quando o módulo ligar, a empresa for a desta sessão ou o aplicativo atualizar (ou carregar por completo). Deseja exportar a lista?';
   if (!confirm(msg)) return;
   const texto = textoSuspensos(lista);
   try {
@@ -915,12 +928,19 @@ window.addEventListener('offline', atualizarBadgeStatusRede);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') sincronizarFilaOffline();
 });
+function iniciarFilaDaPagina() {
+  reclassificarFilaOffline();
+  atualizarBadgeStatusRede();
+  sincronizarFilaOffline();
+}
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    reclassificarFilaOffline();
-    atualizarBadgeStatusRede();
-    sincronizarFilaOffline();
-  }, 1500);
+  const P = window.Plataforma;
+  // Assim que os manifestos chegam (o dono de cada item vem deles).
+  if (P && P.modulos && typeof P.modulos.manifestosProntos === 'function') {
+    P.modulos.manifestosProntos().then(() => setTimeout(iniciarFilaDaPagina, 300));
+  } else {
+    setTimeout(iniciarFilaDaPagina, 1500);
+  }
 });
 // "online" do navegador nem sempre avisa: tenta de novo sozinho enquanto houver pendência.
 setInterval(() => { if (lerFilaOffline().length > 0) sincronizarFilaOffline(); }, INTERVALO_TENTATIVA_MS);

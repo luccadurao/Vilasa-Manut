@@ -33,7 +33,7 @@ function memoria(inicial) {
  * @param {{ versao?: string }} [opcoes]
  */
 function carregarFila(inicial, opcoes) {
-  const { sandbox, contexto } = carregarPlataforma(raiz, { manifestos: false });
+  const { sandbox, contexto } = carregarPlataforma(raiz);
   const store = memoria(inicial);
   sandbox.localStorage = store;
   sandbox.PLATAFORMA_VERSAO_APP = (opcoes && opcoes.versao) || 'v25';
@@ -213,4 +213,43 @@ test('trocar de empresa ou desligar módulo apaga só o cache correspondente', (
     'kpi_os'
   ].sort());
   assert.equal(apagar.includes(`${EMPRESA}:os:os_ativas`), false);
+});
+
+test('o dono do item vem dos manifestos: diesel e admin deixam de ficar sem módulo', () => {
+  const { sandbox } = carregarFila();
+  sessao(sandbox);
+  assert.equal(sandbox.enfileirarOperacaoOffline('diesel_abastecimentos', 'INSERT', { litros: 10 }).modulo, 'diesel');
+  assert.equal(sandbox.enfileirarOperacaoOffline('admin_auditoria', 'INSERT', { acao: 'x' }).modulo, 'admin');
+  assert.equal(sandbox.enfileirarOperacaoOffline('equipamentos', 'INSERT', { nome: 'A' }).modulo, 'nucleo');
+  assert.equal(sandbox.enfileirarOperacaoOffline('preventiva_gerar_os', 'RPC', { p_id: 'p' }).modulo, 'preventivas');
+  assert.equal(sandbox.enfileirarOperacaoOffline('tabela_que_nao_existe', 'INSERT', { a: 1 }).modulo, null);
+  assert.match(sandbox.resolverChaveLeitura('kpi_os'), /:painel:kpi_os$/);
+  assert.match(sandbox.resolverChaveLeitura('chave_solta'), /:nucleo:chave_solta$/);
+});
+
+test('enquanto os manifestos chegam, a fila não é reclassificada nem enviada', async () => {
+  const { sandbox, store } = carregarFila();
+  sessao(sandbox, { modulos: [{ id: 'os' }] });
+  const fila = [{ id_temp: 'a', tabela: 'ordens_servico', operacao: 'INSERT', payload: { id: 'a' }, empresa_id: EMPRESA, modulo: 'os', versao_app: 'v25', criado_em: '2026-02-01T00:00:00.000Z' }];
+  store.setItem('plat_fila_sync_v2', JSON.stringify(fila));
+  let prontos = false;
+  sandbox.Plataforma.modulos.manifestosCarregados = () => prontos;
+  assert.equal(sandbox.reclassificarFilaOffline(), null);
+  sandbox.db = { from() { throw new Error('não devia enviar'); }, rpc() { throw new Error('não devia enviar'); } };
+  await sandbox.sincronizarFilaOffline();
+  assert.equal(JSON.parse(store.getItem('plat_fila_sync_v2')).length, 1);
+  prontos = true;
+  assert.notEqual(sandbox.reclassificarFilaOffline(), null);
+});
+
+test('com manifesto faltando, item sem dono fica suspenso em vez de ir sem módulo', () => {
+  const { sandbox } = carregarFila();
+  sessao(sandbox, { modulos: [{ id: 'os' }] });
+  sandbox.Plataforma.modulos.manifestosComFalha = () => [{ id: 'diesel', motivo: 'não consegui baixar o manifesto' }];
+  const r = sandbox.classificarItemFila({ tabela: 'tabela_de_quem_falhou', operacao: 'INSERT', payload: { id: 'x' }, empresa_id: EMPRESA, versao_app: 'v25' }, sandbox.contextoDaSessao());
+  assert.equal(r.destino, 'suspenso');
+  assert.equal(r.motivo, 'manifesto_ausente');
+  sandbox.Plataforma.modulos.manifestosComFalha = () => [];
+  const ok = sandbox.classificarItemFila({ tabela: 'tabela_de_quem_falhou', operacao: 'INSERT', payload: { id: 'x' }, empresa_id: EMPRESA, versao_app: 'v25' }, sandbox.contextoDaSessao());
+  assert.equal(ok.destino, 'enviar');
 });
