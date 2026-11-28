@@ -68,6 +68,17 @@
       classificar_rep_pcm: 'os.classificar_rep'
     },
     abas_legadas: { os: 'os.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['ordens_servico', 'os_pecas_previstas', 'apontamentos_os', 'itens_os_estoque'],
+    rpcs: ['os_assumir', 'os_abrir_pelo_qr'],
+    fornece: { 'os.ordens': 'Ordens de serviço abertas e concluídas, por local' },
+    consome: ['estoque.movimentos'],
+    eventos: { emite: ['os.concluida'] },
+    offline: {
+      tabelas: ['ordens_servico', 'os_pecas_previstas', 'apontamentos_os'],
+      rpcs: ['os_assumir', 'os_abrir_pelo_qr'],
+      cache: ['os_ativas', 'os_concluidas', 'mov_por_os']
+    },
     telas: [{
       id: 'os',
       rotulo: 'Ordens & REP',
@@ -91,8 +102,7 @@
         exige_login: true,
         permissao: 'os.abrir',
         funcao: 'enviarOSViaQRCode'
-      }],
-      emite: ['os.concluida']
+      }]
     }
   };
 

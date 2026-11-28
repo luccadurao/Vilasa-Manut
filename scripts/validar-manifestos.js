@@ -276,8 +276,11 @@ function validarCatalogoSql(sql, manifestos, matriz) {
     if (linha.obrigatorio !== manifesto.obrigatorio) erros.push(`Catálogo SQL: obrigatorio de ${id} divergiu.`);
     if (linha.versao !== manifesto.versao) erros.push(`Catálogo SQL: versão de ${id} divergiu.`);
     if (linha.estagio !== manifesto.estagio) erros.push(`Catálogo SQL: estágio de ${id} divergiu.`);
-    const depende = Object.keys(manifesto.depende || {}).sort();
-    if (JSON.stringify(linha.depende) !== JSON.stringify(depende)) erros.push(`Catálogo SQL: depende de ${id} divergiu.`);
+    // O núcleo é dependência implícita de todo módulo: o catálogo da 0002 nem
+    // sempre o lista, então a comparação ignora o núcleo dos dois lados.
+    const depende = Object.keys(manifesto.depende || {}).filter((dep) => dep !== 'nucleo').sort();
+    const dependeSql = (linha.depende || []).filter((dep) => dep !== 'nucleo').sort();
+    if (JSON.stringify(dependeSql) !== JSON.stringify(depende)) erros.push(`Catálogo SQL: depende de ${id} divergiu.`);
     for (const [pid, descricao] of Object.entries(manifesto.permissoes || {})) {
       const gravada = permissoesSql.get(pid);
       if (!gravada) erros.push(`Catálogo SQL: falta a permissão ${pid}.`);

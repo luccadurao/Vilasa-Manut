@@ -61,6 +61,19 @@
       dar_baixa_estoque: 'estoque.baixar'
     },
     abas_legadas: { estoque: 'estoque.ver' },
+    // Contrato v2: o que o módulo é dono, oferece e usa.
+    tabelas: ['pecas_estoque', 'movimentacoes_almoxarifado', 'lotes_estoque', 'servicos_almoxarifado', 'notas_fora_do_custo'],
+    rpcs: ['almox_movimentar'],
+    fornece: {
+      'estoque.pecas': 'Catálogo de peças e saldo',
+      'estoque.movimentos': 'Entradas e baixas do almoxarifado'
+    },
+    consome: ['os.ordens'],
+    offline: {
+      tabelas: ['pecas_estoque', 'movimentacoes_almoxarifado'],
+      rpcs: ['almox_movimentar'],
+      cache: ['pecas_estoque', 'movimentacoes_almoxarifado']
+    },
     telas: [{
       id: 'estoque',
       rotulo: 'Almoxarifado',
