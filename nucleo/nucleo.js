@@ -24,6 +24,14 @@
   let resultadoCarga = null;
   /** @type {Promise<import('./tipos.js').ResultadoCarga> | null} */
   let cargaPromise = null;
+  /** O que cada módulo entregou por definirModulo. */
+  /** @type {Map<string, any>} */
+  const implementacoes = new Map();
+  /** ctx entregue a cada módulo carregado (para o parar). */
+  /** @type {Map<string, any>} */
+  const contextos = new Map();
+  /** Módulos que já receberam o aviso de compatibilidade. */
+  const avisosGlobal = new Set();
 
   const VERSAO_NUCLEO = '1.0.0';
 
@@ -82,12 +90,73 @@
    */
   function resolverFuncao(nome, moduloId) {
     if (!nome) return null;
+    // 1. O que o módulo entregou por definirModulo (contrato v2).
+    const impl = moduloId ? implementacoes.get(moduloId) : null;
+    if (impl) {
+      for (const grupo of ['telas', 'relatorios', 'qr', 'funcoes']) {
+        const mapa = impl[grupo];
+        if (mapa && typeof mapa[nome] === 'function') return mapa[nome];
+      }
+    }
+    // 2. PlataformaMod[<id>][nome] (forma intermediária, ainda aceita).
     const grupos = root.PlataformaMod;
     if (moduloId && grupos && grupos[moduloId] && typeof grupos[moduloId][nome] === 'function') {
       return grupos[moduloId][nome];
     }
-    if (typeof root[nome] === 'function') return root[nome];
+    // 3. Compatibilidade: função global solta. Avisa uma vez por módulo.
+    if (typeof root[nome] === 'function') {
+      const chaveAviso = moduloId || '(sem módulo)';
+      if (moduloId && !implementacoes.has(moduloId) && !avisosGlobal.has(chaveAviso)) {
+        avisosGlobal.add(chaveAviso);
+        if (root.console) root.console.info(`Módulo ${moduloId} usa funções globais (compatibilidade). Migre para Plataforma.definirModulo.`);
+      }
+      return root[nome];
+    }
     return null;
+  }
+
+  /**
+   * Contrato v2: o módulo entrega ao núcleo o que ele implementa, em vez de
+   * deixar funções soltas no window. Chame no script do módulo, depois que o
+   * manifesto dele foi registrado.
+   * @param {string} id
+   * @param {import('./tipos.js').ImplementacaoModulo} impl
+   */
+  function definirModulo(id, impl) {
+    const manifesto = registros.find((item) => item.id === id);
+    if (!manifesto) throw new Error(`definirModulo("${id}"): o manifesto desse módulo não foi registrado.`);
+    if (!impl || typeof impl !== 'object') throw new Error(`definirModulo("${id}"): passe um objeto.`);
+    if (implementacoes.has(id)) throw new Error(`definirModulo("${id}"): o módulo já foi definido.`);
+    const fornece = manifesto.fornece || {};
+    /** @type {Record<string, any>} */
+    const servicos = {};
+    for (const [nome, valor] of Object.entries(impl.servicos || {})) {
+      if (!Object.prototype.hasOwnProperty.call(fornece, nome)) {
+        throw new Error(`definirModulo("${id}"): o serviço "${nome}" não está em fornece do manifesto.`);
+      }
+      servicos[nome] = valor;
+    }
+    implementacoes.set(id, Object.freeze({
+      iniciar: typeof impl.iniciar === 'function' ? impl.iniciar : null,
+      parar: typeof impl.parar === 'function' ? impl.parar : null,
+      telas: Object.assign({}, impl.telas || {}),
+      relatorios: Object.assign({}, impl.relatorios || {}),
+      qr: Object.assign({}, impl.qr || {}),
+      funcoes: Object.assign({}, impl.funcoes || {}),
+      servicos: Object.freeze(servicos)
+    }));
+  }
+
+  /**
+   * Manifestos que valem agora: depois da carga, só o núcleo e os módulos
+   * carregados para a empresa; antes dela, todos os registrados (o qr.html,
+   * por exemplo, filtra pelos módulos ativos que o servidor devolve).
+   * @returns {import('./tipos.js').Manifesto[]}
+   */
+  function manifestosAtivos() {
+    if (!resultadoCarga) return registros;
+    const ok = new Set(['nucleo', ...resultadoCarga.carregados]);
+    return registros.filter((m) => ok.has(m.id));
   }
 
   /**
@@ -670,7 +739,7 @@
   function telasDe(manifestos) {
     /** @type {import('./tipos.js').TelaResolvida[]} */
     const telas = [];
-    for (const manifesto of manifestosUsados(manifestos)) {
+    for (const manifesto of (Array.isArray(manifestos) ? manifestos : manifestosAtivos())) {
       const listaTelas = Array.isArray(manifesto.telas) ? manifesto.telas : [];
       for (const tela of listaTelas) {
         telas.push({
@@ -729,7 +798,7 @@
         try { fn(dados); } catch (erro) { console.error(erro); }
       }
     }
-    for (const manifesto of registros) {
+    for (const manifesto of manifestosAtivos()) {
       // Contrato v2: eventos.ouve; o antigo extensoes.ouve continua aceito.
       const v2 = manifesto.eventos && manifesto.eventos.ouve;
       const v1 = manifesto.extensoes && manifesto.extensoes.ouve;
@@ -758,7 +827,7 @@
   function relatoriosDaTela(telaId) {
     /** @type {import('./tipos.js').RelatorioResolvido[]} */
     const listaRel = [];
-    for (const manifesto of registros) {
+    for (const manifesto of manifestosAtivos()) {
       const relatorios = manifesto.extensoes && manifesto.extensoes.relatorios;
       if (!Array.isArray(relatorios)) continue;
       for (const rel of relatorios) {
@@ -817,6 +886,8 @@
     const doc = container.ownerDocument || root.document;
     if (!doc) return;
     for (const rel of relatoriosDaTela(telaId)) {
+      // Cada relatório tem a própria permissão (antes só valia a global).
+      if (rel.permissao && !pode(rel.permissao)) continue;
       const botao = doc.createElement('button');
       botao.type = 'button';
       botao.id = `rel-${rel.id}`;
@@ -837,7 +908,7 @@
   function acoesQr() {
     /** @type {{ moduloId: string, id: string, rotulo: string, exige_login: boolean, permissao: string | null, funcao: string }[]} */
     const acoes = [];
-    for (const manifesto of registros) {
+    for (const manifesto of manifestosAtivos()) {
       const listaQr = manifesto.extensoes && manifesto.extensoes.qr;
       if (!Array.isArray(listaQr)) continue;
       for (const acao of listaQr) {
@@ -1134,7 +1205,7 @@
   /**
    * @param {import('./tipos.js').ResultadoResolucao} resolucao
    * @param {import('./tipos.js').Manifesto[]} manifestos
-   * @param {{ carregarScript: (src: string, tipo: import('./tipos.js').TipoScriptModulo) => Promise<void> }} io
+   * @param {{ carregarScript: (src: string, tipo: import('./tipos.js').TipoScriptModulo) => Promise<void>, criarCtx?: (manifesto: import('./tipos.js').Manifesto) => any }} io
    * @returns {Promise<import('./tipos.js').ResultadoCarga>}
    */
   async function carregar(resolucao, manifestos, io) {
@@ -1197,8 +1268,16 @@
           }
           await baixarUm(script.src, script.tipo);
         }
-        const iniciar = resolverFuncao('iniciar', id);
-        if (typeof iniciar === 'function') await iniciar({ id });
+        // iniciar só do próprio módulo (definirModulo ou PlataformaMod), nunca
+        // uma função global solta chamada "iniciar", que valeria para todos.
+        const impl = implementacoes.get(id);
+        const grupos = root.PlataformaMod;
+        const iniciar = (impl && impl.iniciar)
+          || (grupos && grupos[id] && typeof grupos[id].iniciar === 'function' ? grupos[id].iniciar : null);
+        const fabrica = io && typeof io.criarCtx === 'function' ? io.criarCtx : criarCtxPadrao;
+        const ctx = fabrica(manifesto);
+        contextos.set(id, ctx);
+        if (typeof iniciar === 'function') await iniciar(ctx);
         carregados.push(id);
       } catch (erro) {
         const detalhe = erro && /** @type {Error} */ (erro).message ? /** @type {Error} */ (erro).message : String(erro);
@@ -1206,6 +1285,9 @@
         bloqueados.push({ id, motivo });
         bloqueadosIds.add(id);
         avisos.push(`Módulo "${id}" bloqueado: ${motivo}`);
+        const ctxFalho = contextos.get(id);
+        if (ctxFalho && typeof ctxFalho.__soltar === 'function') ctxFalho.__soltar();
+        contextos.delete(id);
       }
     }
 
@@ -1253,8 +1335,38 @@
   }
 
   /**
-   * @returns {Promise<import('./tipos.js').ResultadoCarga>}
+   * ctx do módulo. O completo vem de nucleo/ctx.js (Plataforma.modulos.criarCtx);
+   * sem ele, um ctx mínimo só com o id.
+   * @param {import('./tipos.js').Manifesto} manifesto
    */
+  function criarCtxPadrao(manifesto) {
+    const fabrica = root.Plataforma && root.Plataforma.modulos && root.Plataforma.modulos.criarCtx;
+    if (typeof fabrica === 'function') return fabrica(manifesto);
+    return { id: manifesto.id };
+  }
+
+  /**
+   * Para os módulos carregados (parar de cada um, ouvintes soltos) e zera a
+   * carga, para a próxima pessoa ou empresa carregar de novo.
+   */
+  async function descarregar() {
+    const ids = resultadoCarga ? resultadoCarga.carregados.slice().reverse() : [];
+    for (const id of ids) {
+      const impl = implementacoes.get(id);
+      const ctx = contextos.get(id);
+      try {
+        if (impl && impl.parar) await impl.parar(ctx);
+      } catch (erro) {
+        if (root.console) root.console.error(`Módulo ${id}: erro no parar`, erro);
+      }
+      if (ctx && typeof ctx.__soltar === 'function') ctx.__soltar();
+    }
+    contextos.clear();
+    resultadoCarga = null;
+    resolucaoGuardada = null;
+    cargaPromise = null;
+  }
+
   /**
    * @param {any} [usuario]
    * @returns {Promise<import('./tipos.js').ResultadoCarga>}
@@ -1265,7 +1377,8 @@
       cargaPromise = (async () => {
         const resolucao = resolverEGuardar(contratoDe(pessoa));
         const resultado = await carregar(resolucao, registros.slice(), {
-          carregarScript: carregarScriptNoDocumento
+          carregarScript: carregarScriptNoDocumento,
+          criarCtx: criarCtxPadrao
         });
         resultadoCarga = resultado;
         for (const bloqueio of resultado.bloqueados) {
@@ -1426,6 +1539,10 @@
       resolverEGuardar,
       carregar,
       garantirCarregados,
+      descarregar,
+      definir: definirModulo,
+      implementacao: (/** @type {string} */ id) => implementacoes.get(id) || null,
+      carregados: () => (resultadoCarga ? resultadoCarga.carregados.slice() : []),
       ultimaResolucao: () => resolucaoGuardada,
       ultimaCarga: () => resultadoCarga
     },
@@ -1457,6 +1574,7 @@
     extensoes: { relatoriosDaTela, montarBarra, qr: acoesQr },
     telas: { ordenadas: () => telasDe(), montarMenu, garantirSecoes, primeiraVisivel },
     resolverFuncao,
+    definirModulo,
     qr: { get URL_BASE() { return urlBaseQr(); }, urlCanonica, lerUrl: lerUrlQr },
     marca: { nome: nomeDaMarca, prefixoArquivo, site: siteAtual, aplicar: aplicarMarca },
     termo
