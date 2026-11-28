@@ -49,6 +49,16 @@ function manifestosProntosParaFila() {
   return true;
 }
 
+// Algum manifesto do índice não carregou (404, sem rede e sem cópia): o item
+// sem dono pode ser desse módulo, então fica suspenso em vez de ir sem módulo.
+function algumManifestoFalhou() {
+  try {
+    const P = typeof window !== 'undefined' ? window.Plataforma : null;
+    if (P && P.modulos && typeof P.modulos.manifestosComFalha === 'function') return P.modulos.manifestosComFalha().length > 0;
+  } catch (e) { /* sem carregador */ }
+  return false;
+}
+
 let mapasOfflineGuardados = null;
 
 function mapasOfflineDosManifestos() {
@@ -199,6 +209,9 @@ function classificarItemFila(item, ctx) {
   }
   if (atual.modulo && Array.isArray(contexto.modulos) && contexto.modulos.indexOf(atual.modulo) < 0) {
     return { destino: 'suspenso', motivo: 'modulo_desligado' };
+  }
+  if (!atual.modulo && algumManifestoFalhou()) {
+    return { destino: 'suspenso', motivo: 'manifesto_ausente' };
   }
   if (atual.motivo === 'vm403' && atual.contexto_id && atual.contexto_id === contextoIdOffline(contexto)) {
     return { destino: 'suspenso', motivo: 'vm403' };
@@ -812,7 +825,7 @@ function revisarSuspensosOffline() {
   if (lista.length === 0) return alert('Nenhum lançamento suspenso.');
   const linhas = textoSuspensos(lista.slice(0, 15));
   const msg = `⏸ ${lista.length} suspensos. Nada foi apagado.\n\n${linhas}\n\n` +
-    'Eles voltam sozinhos quando o módulo ligar, a empresa for a desta sessão ou o aplicativo atualizar. Deseja exportar a lista?';
+    'Eles voltam sozinhos quando o módulo ligar, a empresa for a desta sessão ou o aplicativo atualizar (ou carregar por completo). Deseja exportar a lista?';
   if (!confirm(msg)) return;
   const texto = textoSuspensos(lista);
   try {
@@ -915,12 +928,19 @@ window.addEventListener('offline', atualizarBadgeStatusRede);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') sincronizarFilaOffline();
 });
+function iniciarFilaDaPagina() {
+  reclassificarFilaOffline();
+  atualizarBadgeStatusRede();
+  sincronizarFilaOffline();
+}
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    reclassificarFilaOffline();
-    atualizarBadgeStatusRede();
-    sincronizarFilaOffline();
-  }, 1500);
+  const P = window.Plataforma;
+  // Assim que os manifestos chegam (o dono de cada item vem deles).
+  if (P && P.modulos && typeof P.modulos.manifestosProntos === 'function') {
+    P.modulos.manifestosProntos().then(() => setTimeout(iniciarFilaDaPagina, 300));
+  } else {
+    setTimeout(iniciarFilaDaPagina, 1500);
+  }
 });
 // "online" do navegador nem sempre avisa: tenta de novo sozinho enquanto houver pendência.
 setInterval(() => { if (lerFilaOffline().length > 0) sincronizarFilaOffline(); }, INTERVALO_TENTATIVA_MS);

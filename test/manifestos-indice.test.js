@@ -104,7 +104,9 @@ test('o service worker monta o precache dos manifestos pelo índice', () => {
   const indice = ler('modulos/indice.js');
   // Roda o topo do sw.js (até a lista) com o índice de verdade.
   const topo = sw.slice(sw.indexOf('const ARQUIVOS_NUCLEO'), sw.indexOf('];', sw.indexOf('const ARQUIVOS_NUCLEO')) + 2);
+  /** @type {any} */
   const sandbox = {};
+  sandbox.self = sandbox;
   vm.runInContext(`${indice}\n${topo}\nthis.lista = ARQUIVOS_NUCLEO;`, vm.createContext(sandbox));
   const lista = /** @type {any} */ (sandbox).lista;
   const ids = /** @type {any} */ (sandbox).PLATAFORMA_MODULOS;
@@ -122,4 +124,24 @@ test('o portal QR chama a ação pelo manifesto e não testa nome de cargo', () 
   assert.equal(/cargos?\w*\s*===\s*'/.test(html), false);
   assert.equal(/CARGOS_QUE_ABREM_OS/.test(html), false);
   assert.match(html, /pode\('os\.executar', sessao\)/);
+});
+
+test('manifesto que não responde vira falha por tempo e a página segue', async () => {
+  const { sandbox, contexto } = carregarPlataforma(raiz, { manifestos: false });
+  const doc = documentoFalso();
+  /** @type {Array<() => void>} */
+  const relogio = [];
+  sandbox.document = doc;
+  sandbox.setTimeout = (/** @type {() => void} */ fn) => { relogio.push(fn); return relogio.length; };
+  sandbox.clearTimeout = () => {};
+  sandbox.PLATAFORMA_MODULOS = Object.freeze(['os']);
+  sandbox.console = { warn() {}, info() {}, error() {}, log() {} };
+  vm.runInContext(ler('nucleo/manifestos.js'), contexto, { filename: 'nucleo/manifestos.js' });
+  assert.equal(relogio.length, 1);
+  relogio[0]();
+  await sandbox.Plataforma.modulos.manifestosProntos();
+  assert.match(sandbox.Plataforma.modulos.manifestosComFalha()[0].motivo, /tempo esgotado/);
+  // O arquivo que chega atrasado não muda o resultado nem quebra.
+  doc.injetados[0].onload();
+  assert.equal(sandbox.Plataforma.modulos.manifestosComFalha().length, 1);
 });

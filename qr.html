@@ -210,8 +210,9 @@
     }
     const CHAVE_FUNCAO_QR = (window.PlataformaProduto ? PlataformaProduto.chave('qr_funcao') : 'plat_qr_funcao');
     function funcaoQrLembrada() {
-      // Sem escolha guardada, quem pode executar já assume (como era para o mecânico).
-      try { return localStorage.getItem(CHAVE_FUNCAO_QR) === 'encarregado' ? 'encarregado' : 'mecanico'; } catch (e) { return 'mecanico'; }
+      // Sem escolha guardada, ninguém assume sem querer: começa como encarregado
+      // e o aparelho lembra a última escolha (o mecânico escolhe uma vez).
+      try { return localStorage.getItem(CHAVE_FUNCAO_QR) === 'mecanico' ? 'mecanico' : 'encarregado'; } catch (e) { return 'encarregado'; }
     }
     function lembrarFuncaoQr(valor) {
       try { localStorage.setItem(CHAVE_FUNCAO_QR, valor === 'mecanico' ? 'mecanico' : 'encarregado'); } catch (e) { /* sem armazenamento */ }

@@ -181,7 +181,7 @@ function validarContratoV2(manifestos, fontes) {
   }
   const sw = fontes.paginas.sw;
   if (!/importScripts\([^)]*['"]\.\/modulos\/indice\.js['"]/.test(sw)) erros.push('Índice: sw.js não faz importScripts de ./modulos/indice.js.');
-  if (!/PLATAFORMA_MODULOS\.map\(/.test(sw)) erros.push('Índice: sw.js não monta o precache dos manifestos a partir de PLATAFORMA_MODULOS.');
+  if (!/PLATAFORMA_MODULOS(?:\s*\|\|\s*\[\]\))?\.map\(/.test(sw)) erros.push('Índice: sw.js não monta o precache dos manifestos a partir de PLATAFORMA_MODULOS.');
   if (/['"]\.\/modulos\/[^'"\/]+\/manifesto\.js['"]/.test(sw)) erros.push('Índice: sw.js tem manifesto fixo no precache; use PLATAFORMA_MODULOS.');
   for (const id of porId.keys()) {
     if (id !== 'nucleo' && !noIndice.has(id)) erros.push(`Índice: o módulo ${id} está registrado, mas fora de modulos/indice.js.`);

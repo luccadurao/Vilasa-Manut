@@ -9,7 +9,9 @@
 //  • ARQUIVOS_NUCLEO entra sempre no precache. Os scripts dos módulos entram depois,
 //    por postMessage, quando o núcleo resolve o contrato.
 // ============================================================================
-importScripts('./nucleo/versao.js', './modulos/indice.js');
+importScripts('./nucleo/versao.js');
+// Sem o índice o SW ainda instala (só sem os manifestos no precache).
+try { importScripts('./modulos/indice.js'); } catch (e) { /* segue sem a lista */ }
 
 const VERSAO = PLATAFORMA_VERSAO_APP;
 // Mesmo prefixo de nucleo/produto.js (prefixoCacheSw). O antigo "vilasa-pwa-" também é apagado.
@@ -25,7 +27,7 @@ const ARQUIVOS_NUCLEO = [
   './nucleo/versao.js', './nucleo/produto.js', './nucleo/base.js', './nucleo/resolver.js', './nucleo/permissoes.js', './nucleo/sessao.js', './nucleo/telas.js', './nucleo/marca.js', './nucleo/carregador.js', './nucleo/termos.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/ctx.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/manifestos.js', './nucleo/globais.js', './nucleo/tipos.js',
   './modulos/indice.js',
   // Um manifesto por módulo do índice: módulo novo não mexe aqui.
-  ...PLATAFORMA_MODULOS.map((id) => `./modulos/${id}/manifesto.js`),
+  ...(self.PLATAFORMA_MODULOS || []).map((/** @type {string} */ id) => `./modulos/${id}/manifesto.js`),
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
   './vendor/tailwind.css', './vendor/supabase.js', './vendor/html2canvas.min.js',
   './vendor/fa/css/all.min.css', './vendor/fa/webfonts/fa-solid-900.woff2',

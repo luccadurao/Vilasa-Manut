@@ -241,3 +241,15 @@ test('enquanto os manifestos chegam, a fila não é reclassificada nem enviada',
   prontos = true;
   assert.notEqual(sandbox.reclassificarFilaOffline(), null);
 });
+
+test('com manifesto faltando, item sem dono fica suspenso em vez de ir sem módulo', () => {
+  const { sandbox } = carregarFila();
+  sessao(sandbox, { modulos: [{ id: 'os' }] });
+  sandbox.Plataforma.modulos.manifestosComFalha = () => [{ id: 'diesel', motivo: 'não consegui baixar o manifesto' }];
+  const r = sandbox.classificarItemFila({ tabela: 'tabela_de_quem_falhou', operacao: 'INSERT', payload: { id: 'x' }, empresa_id: EMPRESA, versao_app: 'v25' }, sandbox.contextoDaSessao());
+  assert.equal(r.destino, 'suspenso');
+  assert.equal(r.motivo, 'manifesto_ausente');
+  sandbox.Plataforma.modulos.manifestosComFalha = () => [];
+  const ok = sandbox.classificarItemFila({ tabela: 'tabela_de_quem_falhou', operacao: 'INSERT', payload: { id: 'x' }, empresa_id: EMPRESA, versao_app: 'v25' }, sandbox.contextoDaSessao());
+  assert.equal(ok.destino, 'enviar');
+});

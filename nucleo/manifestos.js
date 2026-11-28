@@ -24,6 +24,8 @@
 
   /** @type {Array<{ id: string, motivo: string }>} */
   const falhas = [];
+  // Rede ruim sem service worker não pode deixar a página em branco.
+  const TEMPO_LIMITE_MS = 8000;
   let prontos = false;
 
   /**
@@ -59,19 +61,31 @@
    * @returns {Promise<void>}
    */
   function injetar(id) {
-    return new Promise((resolve) => {
+    return new Promise((fim) => {
       const doc = root.document;
       const registrado = () => P.modulos.lista().some((/** @type {any} */ m) => m && m.id === id);
-      if (registrado()) { resolve(); return; }
+      if (registrado()) { fim(); return; }
+      let terminou = false;
+      const resolve = () => { if (!terminou) { terminou = true; fim(); } };
+      const espera = typeof root.setTimeout === 'function' ? root.setTimeout(() => {
+        if (terminou) return;
+        falhas.push({ id, motivo: 'tempo esgotado ao baixar o manifesto' });
+        resolve();
+      }, TEMPO_LIMITE_MS) : null;
+      const limpar = () => { if (espera != null && typeof root.clearTimeout === 'function') root.clearTimeout(espera); };
       const script = doc.createElement('script');
       script.src = enderecoDoManifesto(id);
       // Ordem garantida entre eles, sem bloquear a página.
       script.async = false;
       script.onload = () => {
+        limpar();
+        if (terminou) return;
         if (!registrado()) falhas.push({ id, motivo: 'o arquivo carregou, mas não registrou o manifesto' });
         resolve();
       };
       script.onerror = () => {
+        limpar();
+        if (terminou) return;
         falhas.push({ id, motivo: 'não consegui baixar o manifesto' });
         resolve();
       };
