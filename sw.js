@@ -22,7 +22,7 @@ const CHAVE_MODULOS = './nucleo/precache-modulos.json';
 const ARQUIVOS_NUCLEO = [
   './', './index.html', './qr.html', './manifest.webmanifest',
   './config.js', './core.js', './offline_sync.js',
-  './nucleo/versao.js', './nucleo/produto.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/ctx.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
+  './nucleo/versao.js', './nucleo/produto.js', './nucleo/base.js', './nucleo/resolver.js', './nucleo/permissoes.js', './nucleo/sessao.js', './nucleo/telas.js', './nucleo/marca.js', './nucleo/carregador.js', './nucleo/termos.js', './nucleo/nucleo.js', './nucleo/contexto.js', './nucleo/ctx.js', './nucleo/qr.js', './nucleo/ativos.js', './nucleo/globais.js', './nucleo/tipos.js',
   './modulos/os/manifesto.js', './modulos/frota/manifesto.js',
   './modulos/preventivas/manifesto.js', './modulos/estoque/manifesto.js',
   './modulos/diesel/manifesto.js', './modulos/painel/manifesto.js',

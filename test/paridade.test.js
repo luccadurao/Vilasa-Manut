@@ -222,7 +222,8 @@ test('empresa sem um módulo contratado não vê a aba dele, nem o admin', async
 });
 
 test('o núcleo não escolhe módulo por nome', () => {
-  const fonte = fs.readFileSync(path.join(raiz, 'nucleo/nucleo.js'), 'utf8');
+  const { PARTES_DO_NUCLEO } = require('../scripts/carregar-sandbox');
+  const fonte = [...PARTES_DO_NUCLEO, 'nucleo'].map((p) => fs.readFileSync(path.join(raiz, `nucleo/${p}.js`), 'utf8')).join('\n');
   for (const nome of ['preventivas', 'diesel', 'estoque', 'frota', 'kpis', 'pcm_sap', 'os_rep']) {
     assert.equal(fonte.includes(nome), false, nome);
   }

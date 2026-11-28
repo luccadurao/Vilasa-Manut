@@ -156,7 +156,7 @@ test('sem localStorage (página fechada ao armazenamento) não quebra', () => {
 });
 
 test('nenhum arquivo entregue ao navegador grava chave com o prefixo antigo', () => {
-  const arquivos = ['core.js', 'offline_sync.js', 'qr.html', 'index.html', 'nucleo/nucleo.js', 'nucleo/contexto.js', 'nucleo/ativos.js', 'nucleo/qr.js'];
+  const arquivos = ['core.js', 'offline_sync.js', 'qr.html', 'index.html', ...['base', 'resolver', 'permissoes', 'sessao', 'telas', 'marca', 'carregador', 'termos'].map((p) => `nucleo/${p}.js`), 'nucleo/nucleo.js', 'nucleo/contexto.js', 'nucleo/ativos.js', 'nucleo/qr.js'];
   for (const rel of arquivos) {
     const texto = fs.readFileSync(path.join(raiz, rel), 'utf8');
     // Única exceção: o nome histórico do IndexedDB (trocar apaga o cache offline).
@@ -165,7 +165,7 @@ test('nenhum arquivo entregue ao navegador grava chave com o prefixo antigo', ()
   for (const pagina of ['index.html', 'qr.html']) {
     const html = fs.readFileSync(path.join(raiz, pagina), 'utf8');
     const produto = html.indexOf('src="nucleo/produto.js"');
-    assert.ok(produto > 0 && produto < html.indexOf('src="nucleo/nucleo.js"'), pagina);
+    assert.ok(produto > 0 && produto < html.indexOf('src="nucleo/base.js"'), pagina);
     assert.ok(produto < html.indexOf('src="offline_sync.js"'), pagina);
   }
 });

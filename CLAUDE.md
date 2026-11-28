@@ -20,6 +20,11 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
   - Homologação: projeto `zqjgruwmqomgguxoxiuv` ("Vilasa Homologação").
 - `nucleo/` — núcleo da plataforma: registro de módulos, contrato, permissões,
   carregador, QR, cadastro de ativos. `nucleo/tipos.js` define o contrato (JSDoc).
+  O núcleo é dividido em partes (`base`, `resolver`, `permissoes`, `sessao`,
+  `telas`, `marca`, `carregador`, `termos`), carregadas nessa ordem antes de
+  `nucleo/nucleo.js`, que monta o `Plataforma`. As partes conversam por um objeto
+  interno que some do `window` no fim; parte nova entra na lista de
+  `scripts/carregar-sandbox.js`, no `index.html`, no `qr.html` e no `sw.js`.
   O objeto global é `Plataforma` (`Vilasa` é só um apelido antigo; não use em
   código novo). `nucleo/produto.js` tem o nome do produto e os prefixos do que
   fica no aparelho (`PlataformaProduto.chave('...')`): nenhuma chave `vilasa_`
@@ -94,7 +99,7 @@ já existe), comentários, mensagens de commit, títulos e textos de PR, telas.
 9. **Termos e nomes genéricos.** O produto é vendido para empresas de qualquer
    ramo. Nada de "Obra", "Equipamento" ou nome de cliente fixo em código ou tela
    nova: use `Plataforma.termo('local.nivel1')`, `Plataforma.termo('ativo')` etc.
-   (chaves em `TERMOS_PADRAO`, `nucleo/nucleo.js`; o padrão é Local/Ativo) e
+   (chaves em `TERMOS_PADRAO`, `nucleo/termos.js`; o padrão é Local/Ativo) e
    `Plataforma.marca.nome()` para o nome da empresa. Variável nova usa `local`,
    não `obra`.
 10. **Sem segredos no repositório.** A chave `anon` no `config.js` é pública por
